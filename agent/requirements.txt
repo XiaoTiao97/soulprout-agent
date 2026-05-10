@@ -1,0 +1,17 @@
+dashscope==1.19.1
+requests
+fastapi
+openai
+motor
+mcp
+pymongo
+beanie
+python-jose
+passlib
+bcrypt==4.0.1
+aiohttp
+aioshutil
+weasyprint
+zai-sdk
+aiofiles
+html2text
