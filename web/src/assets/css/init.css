@@ -1,0 +1,442 @@
+@font-face {
+  font-family: "AlimamaShuHeiTi-Bold";
+  src: url("@/assets/font/AlimamaShuHeiTi-Bold.ttf"); /* Vue 项目 public 下放 font 文件夹 */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  /* overflow: hidden; */
+}
+
+.init-total{
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-image: url("@/assets/images/background.png"); /* Vue public 下 images 文件夹 */
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    justify-content: flex-start;
+    align-items: center;
+    height: 220vh;
+    overflow: hidden;
+}
+
+.load-init {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  transition: 0.5s;
+  /* filter 属性没赋值可删除 */
+}
+
+.load-init-icon {
+  width: 10vh;
+  height: 10vh;
+}
+
+.background-init {
+  width: 100%;
+  height: 100%;
+}
+
+.background {
+  display: flex;
+  flex-direction: row;
+  width: fit-content;
+  position: relative;
+  margin-top: 40px;
+}
+
+#mengya-font {
+  font-size: 18px;
+  font-family: AlimamaShuHeiTi-Bold;
+  color: darkslategray;
+  text-shadow: 1px 0 #dddddd;
+}
+
+.top-container-init {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 60px;
+}
+
+.first-init {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  height: 100vh;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+
+.first-init.visible {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  height: 100vh;
+  opacity: 1;
+}
+
+.second-init {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  height: 100vh;
+}
+
+#mengya-init-container {
+  margin-top: 30vh;
+  margin-left: 13vh;
+}
+
+#mengya-sentence-init-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-direction: row;
+  width: 78vh;
+  margin-left: 13vh;
+  border: 3px solid #dddddd;
+  border-radius: 2em;
+  padding: 8px 20px;
+}
+
+.mengya-init-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  height: 100%;
+  width: 100%;
+}
+
+#mengya-init-p {
+  font-family: "AlimamaShuHeiTi-Bold";
+  font-size: 12rem;
+  color: #dddddd;
+  margin: 0;
+  text-shadow: 4px 0 darkslategray;
+}
+
+#mengya-sentence-init-p {
+  font-family: "AlimamaShuHeiTi-Bold";
+  font-size: 2rem;
+  color: #dddddd;
+  left: 10vh;
+  margin: 0;
+  text-shadow: 3px 0 darkslategray;
+}
+
+#mengya-sentence-init-p::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 2rem;
+  margin-left: 10px;
+  margin-bottom: 3px;
+  background: #dddddd;
+  vertical-align: middle;
+  animation: typingCursor 1s infinite;
+  box-shadow: 2px 0 darkslategray;
+}
+
+@keyframes typingCursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.second-init-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%;
+  height: 80%;
+}
+
+.init-select {
+  display: flex;
+  height: 10%;
+  width: 100%;
+  position: relative;
+  gap: 15px;
+}
+
+#mengya-quickstart {
+  margin-top: 2vh;
+}
+
+.init-select-font {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: fit-content;
+  height: 1em;
+  padding: 10px 20px;
+  font-size: 20px;
+  transition: all 0.3s ease;
+  font-family: "AlimamaShuHeiTi-Bold";
+  color: #dddddd;
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-underline-position: under;
+  margin-left: 12vh;
+  cursor: pointer;
+}
+
+.init-select-font:hover {
+  color: rgb(255, 255, 255);
+}
+
+:root {
+  --white: #e9e9e9;
+  --gray: #333;
+  --blue: #42b983;
+  --lightblue: #008997;
+  --button-radius: 0.7rem;
+  --max-width: 758px;
+  --max-height: 420px;
+
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+.form__title {
+  font-weight: 300;
+  color: darkslategray;
+  margin: 0 0 1.25rem 0;
+  text-shadow: 1px 0 #dddddd;
+}
+
+.link {
+  color: var(--gray);
+  font-size: 0.9rem;
+  margin: 1.5rem 0;
+  text-decoration: none;
+}
+
+.container {
+  background-color: transparent;
+  border-radius: var(--button-radius);
+  box-shadow: 0 0.9rem 1.7rem rgba(0, 0, 0, 0.25),
+    0 0.7rem 0.7rem rgba(0, 0, 0, 0.22);
+  height: var(--max-height);
+  max-width: var(--max-width);
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  margin-left: 20vh;
+  margin-top: 30vh;
+}
+
+.container__form {
+  height: 100%;
+  position: absolute;
+  top: 0;
+  transition: all 0.6s ease-in-out;
+}
+
+.container--signin {
+  left: 0;
+  width: 50%;
+  z-index: 2;
+}
+
+.container.right-panel-active .container--signin {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.container--signup {
+  left: 0;
+  opacity: 0;
+  width: 50%;
+  z-index: 1;
+}
+
+.container.right-panel-active .container--signup {
+  /* animation: show 0.6s; */
+  opacity: 1;
+  transform: translateX(100%);
+  z-index: 5;
+}
+
+.container__overlay {
+  height: 100%;
+  left: 50%;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  transition: transform 0.6s ease-in-out;
+  width: 50%;
+  z-index: 100;
+}
+
+.container.right-panel-active .container__overlay {
+  transform: translateX(-100%);
+}
+
+.overlay {
+  background-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(15px);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  height: 100%;
+  left: -100%;
+  position: relative;
+  transform: translateX(0);
+  transition: transform 0.6s ease-in-out;
+  width: 200%;
+}
+
+.container.right-panel-active .overlay {
+  transform: translateX(50%);
+}
+
+.overlay__panel {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  position: absolute;
+  text-align: center;
+  top: 0;
+  transform: translateX(0);
+  transition: transform 0.6s ease-in-out;
+  width: 50%;
+}
+
+.overlay--left {
+  transform: translateX(-20%);
+  gap: 10px;
+}
+
+.container.right-panel-active .overlay--left {
+  transform: translateX(0);
+}
+
+.overlay--right {
+  right: 0;
+  transform: translateX(0);
+}
+
+.container.right-panel-active .overlay--right {
+  transform: translateX(20%);
+}
+
+.btn {
+  font-family: "AlimamaShuHeiTi-Bold";
+  background-color: rgba(221, 221, 221, 0.5);
+  border-radius: 15px;
+  color: darkslategray;
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: bold;
+  letter-spacing: 0.1rem;
+  padding: 0.9rem 4rem;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 2px solid antiquewhite;
+}
+
+.btn:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+.form > .btn {
+  margin-top: 1.5rem;
+}
+
+.btn:active {
+  transform: scale(0.95);
+}
+
+.btn:focus {
+  outline: none;
+}
+
+.form {
+  font-family: "AlimamaShuHeiTi-Bold";
+  background-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 0 3rem;
+  height: 100%;
+  text-align: center;
+}
+
+input[type="checkbox"] {
+margin: 10px 0 0 10px;
+}
+
+.link--info {
+font-size: 1rem;
+margin-top: 0.2rem;
+color: #666;
+}
+
+.link--info a {
+color: #008997;
+text-decoration: none;
+}
+
+.link--info a:hover {
+text-decoration: underline;
+}
+
+.beian {
+    color: #dddddd;
+    font-size: 12px;
+    outline: none;
+}
+
+@keyframes show {
+0% {
+opacity: 0;
+transform: translateX(50%);
+}
+100% {
+opacity: 1;
+transform: translateX(0);
+}
+}
+
+a {
+  color: #2c3e50; /* 深灰色，更高端 */
+  text-decoration: none; /* 移除下划线 */
+  transition: color 0.3s ease, text-decoration 0.3s ease;
+}
+
+a:hover {
+  color: #3498db; /*  hover时变为蓝色 */
+  text-decoration: underline; /* hover时添加下划线 */
+}
