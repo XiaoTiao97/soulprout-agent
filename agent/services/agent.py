@@ -1078,22 +1078,16 @@ class Chat:
         if self.input_message_id:
             await self.edit_message_process()
 
-        if self.agent_id and isinstance(self.agent_id, str):
-            agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
-            self.agent_card = AgentCard(**agent_card)
-            self.agent_name = self.agent_card.name_zh if self.agent_card.name_zh else self.agent_card.name
-
-        # process conversation_init
-        conversation_init, abstract = await self.conversation_init()
-        if conversation_init:
-            yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract).model_dump_json()
-
         # Process expert pick
         if self.agent_use in ["expert-agent"]:
             # TODO 更改前端对应的模式
             tools = await self.expert_agent_init_process()
+            if self.agent_id and isinstance(self.agent_id, str):
+                agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
+                self.agent_card = AgentCard(**agent_card)
+                self.agent_name = self.agent_card.name_zh if self.agent_card.name_zh else self.agent_card.name
 
-        # 处理所有未选择智能体或多选智能体的情况，即C端使用萌芽，需使用萌芽定义的工具和智能体范围
+        # 处理所有未选择智能体或多选智能体的情况
         else:
             if self.agent_use == "select-agent":
                 # process multi-expert
@@ -1102,13 +1096,18 @@ class Chat:
                 tools = await self.mcp_list_tools()
                 tools = tools if self.tools_use else []
 
+        # process conversation_init
+        conversation_init, abstract = await self.conversation_init()
+        if conversation_init:
+            yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract).model_dump_json()
+
         # 对于知识库的系统提示词处理
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
         print("system_prompt:", self.system_prompt)
         # 对于上传文件的User Input处理
         self.input_text += f"\n\nFILE: 上传文件 -> {self.file_name_list}" if len(self.file_name_list) > 0 else ""
         tool_name_list = [tool.get("function").get("name") for tool in tools]
-        print(f"加载tools数量：{len(tools)}，加载的tool:{tool_name_list}")
+        print(f"load tools:{tool_name_list}")
 
         self.model_config = ModelConfig(model_source=self.model_source, model=self.model, tools=tools, stream=True)
         print("model_source:", self.model_source, "model:", self.model)
