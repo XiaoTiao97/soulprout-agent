@@ -90,3 +90,21 @@ async def delete_local_files(conversation_id: str):
     if await os.path.exists(local_file_path):
         shutil.rmtree(local_file_path)
     return None
+
+async def save_message(data, is_sub_agent, session_id):
+    if is_sub_agent:
+        payload = data.model_dump(exclude={"id"}, exclude_none=True)
+        payload["session_id"] = session_id
+        return await create_sub_agent_message(SubAgentMessage(**payload))
+    else:
+        return await create_message(data)
+
+async def get_runtime_history(is_sub_agent, session_id, conversation_id):
+    if is_sub_agent:
+        return await get_sub_agent_message_by_conv_id_name(conversation_id, session_id)
+    return await get_message_by_conv_id(conversation_id)
+
+async def delete_runtime_messages(is_sub_agent, message_ids):
+    if is_sub_agent:
+        return await delete_sub_agent_messages_by_ids(message_ids)
+    return await delete_messages_by_ids(message_ids)

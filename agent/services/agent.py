@@ -11,6 +11,9 @@ from agent.database.crud.message import (
     delete_sub_agent_messages_by_ids,
     get_message_by_conv_id,
     get_sub_agent_message_by_conv_id_name,
+    save_message,
+    get_runtime_history,
+    delete_runtime_messages
 )
 from agent.database.crud.conversation import (
     create_conversation,
@@ -24,6 +27,7 @@ from agent.skill.manager import load_skill_to_workspace
 from agent.skill.skill_server import SkillServer
 from agent.tool.tools import ToolExecutor
 from agent.services import prompt
+from agent.services.compress import Compress
 from uuid import uuid4
 from datetime import datetime
 import json
@@ -96,21 +100,13 @@ class Chat:
         return await self.tool_executor.call_tool(name=name, arguments=arguments)
 
     async def save_message(self, data):
-        if not self.is_sub_agent:
-            return await create_message(data)
-        payload = data.model_dump(exclude={"id"}, exclude_none=True)
-        payload["session_id"] = self.session_id
-        return await create_sub_agent_message(SubAgentMessage(**payload))
+        return await save_message(data, self.is_sub_agent, self.session_id)
 
     async def get_runtime_history(self):
-        if self.is_sub_agent:
-            return await get_sub_agent_message_by_conv_id_name(self.conversation_id, self.session_id)
-        return await get_message_by_conv_id(self.conversation_id)
+        return await get_runtime_history(self.is_sub_agent, self.session_id, self.conversation_id)
 
     async def delete_runtime_messages(self, message_ids):
-        if self.is_sub_agent:
-            return await delete_sub_agent_messages_by_ids(message_ids)
-        return await delete_messages_by_ids(message_ids)
+        return await delete_runtime_messages(self.is_sub_agent, message_ids)
 
     # llm_stream/大模型流式输出
     async def llm_stream(self, messages, model_config):
@@ -792,7 +788,7 @@ class Chat:
         await aioshutil.rmtree(source_dir)
         print("已移动临时文件，删除临时目录")
 
-    async def short_memory_process(self):
+    async def compress_process(self):
         context_window = next(
             (model.get("context_window")
              for source in self.config.models_info_list
@@ -801,9 +797,6 @@ class Chat:
             None  # 默认值
         )
         print(f"模型最大长度：{context_window}")
-        tokens = 0
-        history_memory = []
-        _id_list = []
         history = await self.get_runtime_history()
         history_list = [
             {
@@ -817,49 +810,10 @@ class Chat:
 
         history_token = len(str(history_list))/2
         print("token估计: ", history_token)
-        memory = False
         if history_token > 0.7 * context_window:
             print(f"{history_token}大于预设值{0.7 * context_window}，启动压缩")
-            for item in reversed(history):
-                if item.role != "agent":
-                    item_dict = {
-                                    'role': item.role,
-                                    'content': item.content,
-                                    **({'tool_calls': item.tool_calls} if hasattr(item, 'tool_calls') and item.tool_calls is not None else {}),
-                                    **({'tool_call_id': item.tool_call_id} if hasattr(item, 'tool_call_id') and item.tool_call_id is not None else {})
-                                }
-                    tokens += len(str(item_dict))/2
-                    if memory:
-                        _id_list.append(item.id)
-                        history_memory.insert(0,{
-                            'role': item.role,
-                            'content': item.content,
-                            **({'tool_calls': item.tool_calls} if hasattr(item,'tool_calls') and item.tool_calls is not None else {}),
-                            **({'tool_call_id': item.tool_call_id} if hasattr(item,'tool_call_id') and item.tool_call_id is not None else {})
-                        })
-                    if tokens > 0.5 * context_window and item.role == "assistant":
-                        print("识别到压缩分界点: ", item_dict)
-                        memory = True
-
-            create_time = history[0].created_at
-
-            # 限制最大压缩次数
-            retries = 3
-            while retries > 0:
-                try:
-                    short_memory_model_source = self.config.short_memory_model_source + "_no_stream"
-                    model_config = ModelConfig(model_source=short_memory_model_source, model=self.config.short_memory_model, tools=[], stream=False)
-                    message = [{"role": "system", "content": prompt.COMPRESS_PROMPT}]
-                    message.append({"role": "user", "content": f"Complete Content：<{history_memory}>. Now output the summary content of this conversation"})
-                    llm = getattr(self.llm, model_config.model_source)
-                    abstract = await llm(message, model_config)
-                    print(abstract)
-                    await self.delete_runtime_messages(_id_list)
-                    await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant", content=f"历史消息总结：{abstract}", created_at=create_time))
-                    retries = -1
-                except Exception as e:
-                    retries -= 1
-            return True if retries == -1 else False
+            compress = Compress(history, context_window, self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id)
+            return await compress.run()
         else:
             return True
 
@@ -982,7 +936,7 @@ class Chat:
             message_total = ""
             reasoning_content_total = ""
             await self.history_check()
-            memory_process_result = await self.short_memory_process()
+            memory_process_result = await self.compress_process()
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
             if self.agent_card and self.agent_card.supervisor_history:
@@ -1001,7 +955,7 @@ class Chat:
             async for message in self.llm_stream(self.messages, self.model_config):
                 if message.role == "assistant" and message.tool_calls:
                     self.messages.append(message.__dict__)
-                    save_message = {
+                    message_save = {
                         "user_id": self.user_id,
                         "conversation_id": self.conversation_id,
                         "type": "get_tools",
@@ -1009,7 +963,7 @@ class Chat:
                         "content": "",
                         "created_at": datetime.utcnow(),
                     }
-                    save_message["tool_calls"] = [
+                    message_save["tool_calls"] = [
                         tool_call.model_dump() if hasattr(tool_call, "model_dump")
                         else (
                             tool_call.dict() if hasattr(tool_call, "dict")
@@ -1020,14 +974,14 @@ class Chat:
                     ] if message.tool_calls else None
                     if len(message_total) > 0:
                         self.messages[-1]["content"] = message_total
-                        save_message["content"] = message_total
+                        message_save["content"] = message_total
                         message_total = ""
                     if len(reasoning_content_total) > 0:
                         self.messages[-1]["reasoning_content"] = reasoning_content_total
-                        save_message["reasoning_content"] = reasoning_content_total
+                        message_save["reasoning_content"] = reasoning_content_total
                         reasoning_content_total = ""
-                    await self.save_message(AgentMessage(**save_message))
-                    yield ChatResponse(**save_message).model_dump_json()
+                    await self.save_message(AgentMessage(**message_save))
+                    yield ChatResponse(**message_save).model_dump_json()
                     try:
                         name_list = [tool_call.function.name for tool_call in message.tool_calls]
                         arguments_list = [json.loads(tool_call.function.arguments) for tool_call in message.tool_calls]
@@ -1080,7 +1034,6 @@ class Chat:
 
         # Process expert pick
         if self.agent_use in ["expert-agent"]:
-            # TODO 更改前端对应的模式
             tools = await self.expert_agent_init_process()
             if self.agent_id and isinstance(self.agent_id, str):
                 agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
@@ -1120,7 +1073,7 @@ class Chat:
             message_total = ""
             reasoning_content_total = ""
             await self.history_check()
-            memory_process_result = await self.short_memory_process()     # 上下文压缩
+            memory_process_result = await self.compress_process()     # 上下文压缩
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
             self.messages = history
@@ -1136,7 +1089,7 @@ class Chat:
                 if message.role == "assistant" and message.tool_calls:
                     self.messages.append(message.__dict__)
                     tool_calls_type = "get_agents" if message.tool_calls[0].function.name in ("soulprout_kb_agent", "call_sub_agent") else "get_tools"
-                    save_message = {
+                    message_save = {
                         "user_id": self.user_id,
                         "conversation_id": self.conversation_id,
                         "type": tool_calls_type,
@@ -1145,7 +1098,7 @@ class Chat:
                         "created_at": datetime.utcnow()
                     }
                     if hasattr(message, 'tool_calls') and message.tool_calls:
-                        save_message["tool_calls"] = [
+                        message_save["tool_calls"] = [
                             tool_call.model_dump() if hasattr(tool_call, 'model_dump')
                             else (
                                 tool_call.dict() if hasattr(tool_call, 'dict')
@@ -1155,17 +1108,17 @@ class Chat:
                             for tool_call in message.tool_calls
                         ]
                     else:
-                        save_message["tool_calls"] = None
+                        message_save["tool_calls"] = None
                     if len(message_total) > 0:
                         self.messages[-1]["content"] = message_total
-                        save_message["content"] = message_total
+                        message_save["content"] = message_total
                         message_total = ""
                     if len(reasoning_content_total) > 0:
                         self.messages[-1]["reasoning_content"] = reasoning_content_total
-                        save_message["reasoning_content"] = reasoning_content_total
+                        message_save["reasoning_content"] = reasoning_content_total
                         reasoning_content_total = ""
-                    await self.save_message(AgentMessage(**save_message))
-                    yield ChatResponse(**save_message).model_dump_json()
+                    await self.save_message(AgentMessage(**message_save))
+                    yield ChatResponse(**message_save).model_dump_json()
 
                     try:
                         print(message.tool_calls)
