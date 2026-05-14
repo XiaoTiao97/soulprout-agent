@@ -45,8 +45,10 @@ class Config:
         self.deepthink_model = os.getenv("DEEPTHINK_MODEL")
         self.plan_model_source = os.getenv("PLAN_MODEL_SOURCE")
         self.plan_model = os.getenv("PLAN_MODEL")
-        self.short_memory_model_source = os.getenv("SHORT_MEMORY_MODEL_SOURCE")
-        self.short_memory_model = os.getenv("SHORT_MEMORY_MODEL")
+        self.compact_model_source = os.getenv("COMPACT_MODEL_SOURCE")
+        self.compact_model = os.getenv("COMPACT_MODEL")
+        self.collapse_model_source = os.getenv("COLLAPSE_MODEL_SOURCE")
+        self.collapse_model = os.getenv("COLLAPSE_MODEL")
 
         default_key = "sk-xxx"
         self.models_info_list = [

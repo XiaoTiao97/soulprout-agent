@@ -336,7 +336,7 @@ class Chat:
             skills = await self.get_skill_info(query=False)
             tools_use_final = []
             for tool in tools:
-                if tool.get("function").get("name") in self.soulprout_tools_use_list:
+                if tool.get("function").get("name") in self.soulprout_tools:
                     tools_use_final.append(tool)
                 elif tool.get("function").get("name") in ["soulprout_kb_agent", "soulprout_kb_tool"]:
                     tools_use_final.append(tool)
@@ -789,33 +789,8 @@ class Chat:
         print("已移动临时文件，删除临时目录")
 
     async def compress_process(self):
-        context_window = next(
-            (model.get("context_window")
-             for source in self.config.models_info_list
-             for model in source.get("models", [])
-             if model.get("name") == self.model),
-            None  # 默认值
-        )
-        print(f"模型最大长度：{context_window}")
-        history = await self.get_runtime_history()
-        history_list = [
-            {
-                'role': item.role,
-                'content': item.content if isinstance(item.content, str) else "",
-                **({'tool_calls': item.tool_calls} if hasattr(item, 'tool_calls') and item.tool_calls is not None else {}),
-                **({'tool_call_id': item.tool_call_id} if hasattr(item, 'tool_call_id') and item.tool_call_id is not None else {})
-            }
-            for item in history if item.role != "agent"
-        ]
-
-        history_token = len(str(history_list))/2
-        print("token估计: ", history_token)
-        if history_token > 0.7 * context_window:
-            print(f"{history_token}大于预设值{0.7 * context_window}，启动压缩")
-            compress = Compress(history, context_window, self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id)
-            return await compress.run()
-        else:
-            return True
+        compress = Compress(self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id, self.model)
+        return await compress.run()
 
     async def history_check(self):
         history = await self.get_runtime_history()

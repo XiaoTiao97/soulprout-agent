@@ -153,7 +153,7 @@ Please conduct analysis and planning as required."""
 # 若无以上信息则不需输出。
 # # OutputFormat
 # 仅输出该段对话的概括内容，不要输出其他任何过程或思考内容。
-COMPRESS_PROMPT = """# Task
+COMPACT_PROMPT = """# Task
 The following fields are the complete content of the historical conversation between the user and the Agent. Your task is to conduct a complete summary of this conversation content, and the information that must be retained is as follows:
 1. The conversation flow order between user and assistant,
 2. Tool call information: output the tool call situation in order
@@ -162,3 +162,44 @@ If there is no above information, no output is required.
 
 # OutputFormat
 Only output the summary content of this conversation, do not output any other process or thinking content."""
+
+# COLLAPSE_REC_PROMPT_CHINESE:
+# Background
+# 你将会得到用户与Agent的完整历史对话，在对话的过程中，Agent通常会调用工具和大量的中间过程来完成任务。而当该任务已经完成/阶段性完成后，中间过程反而会占用大量上下文空间，此时可以对该过程进行折叠压缩。
+# Task
+# 你的任务是在完整的对话中，找到其中是否存在已解决问题/已完成任务，并识别它的中间过程内容，最终输出start-id与end-id，以及该中间过程的折叠压缩内容collapse_content。
+# Intermediate process
+# 1. 中间过程通常是用户提出问题/明确任务后，到Agent给出最终结果，且用户无意见或开启下一话题之前，这段Agent调用了大量工具、技能的过程。
+# 2. 用户对同一问题或任务的纠正或反馈仍然处于中间过程。
+# 3. 一段历史对话可能存在多段不同任务的中间过程。
+# 4. 用户提出问题/任务和最终Agent输出的结果不视为中间过程，不要纳入需要压缩的id范围。
+# Collapse Compress
+# 你需要将中间过程折叠压缩为简略的语言描述，其中需要包括：
+# 1. 使用了哪些工具/技能/文件/知识库等参考资料（如包含该内容）
+# 2. 参考整个对话的状态，精简概括该流程。
+# Restrict
+# 1. tool_calls信息与role=tool即工具结果信息要同时保留或不保留，禁止拆分。
+# 2. 不同start_id与end_id之间不允许重叠
+# Output Format
+# 以字符串形式的列表输出:
+# [{'start_id': 'xxx', 'end_id': 'xxx', 'collapse_content': 'xxx'}, {...}]
+COLLAPSE_PROMPT = """# Background
+You will receive the complete conversation history between the user and the Agent. During the conversation, the Agent usually calls tools and goes through a large amount of intermediate processes to complete tasks. Once the task has been completed or partially completed, these intermediate processes instead occupy a large amount of context space, so they can be collapsed and compressed.
+# Task
+Your task is to determine whether there are any resolved problems or completed tasks in the complete conversation history, identify the intermediate process content, and finally output the start-id, end-id, and the collapse_content for that intermediate process.
+# Intermediate process
+1. The intermediate process usually refers to the period after the user raises a question or specifies a task, until the Agent provides the final result and the user has no objections or starts a new topic. During this period, the Agent may call many tools and skills.
+2. The user's corrections or feedback on the same problem or task are still considered part of the intermediate process.
+3. A conversation history may contain multiple intermediate processes for different tasks.
+4. The user's question/task and the Agent's final result should not be regarded as part of the intermediate process, and should not be included in the id range that needs to be compressed.
+# Collapse Compress
+You need to collapse and compress the intermediate process into a brief summary, which should include:
+1. Which tools/skills/files/knowledge bases/references were used (if any)
+2. Based on the overall conversation state, briefly summarize the process.
+# Restrict
+1. tool_calls information and role=tool tool result information must either both be kept or both be removed. Splitting them is prohibited.
+2. Overlaps between different start_id and end_id ranges are not allowed.
+# Output Format
+Output as a string-form list:
+[{'start_id': 'xxx', 'end_id': 'xxx', 'collapse_content': 'xxx'}, {...}]
+"""
