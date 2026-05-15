@@ -15,3 +15,4 @@ weasyprint
 zai-sdk
 aiofiles
 html2text
+pymilvus
