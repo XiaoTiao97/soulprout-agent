@@ -28,6 +28,7 @@ from agent.skill.skill_server import SkillServer
 from agent.tool.tools import ToolExecutor
 from agent.services import prompt
 from agent.services.compress import Compress
+from agent.services.memory import Memory
 from uuid import uuid4
 from datetime import datetime
 import json
@@ -792,6 +793,10 @@ class Chat:
         compress = Compress(self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id, self.model)
         return await compress.run()
 
+    async def recall_memory_process(self):
+        memory = Memory(self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id, self.input_text)
+        return await memory.recall()
+
     async def history_check(self):
         history = await self.get_runtime_history()
         del_id_list = []
@@ -1032,6 +1037,8 @@ class Chat:
         # 对于知识库的系统提示词处理
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
         print("system_prompt:", self.system_prompt)
+        # 召回相关记忆（hybrid_search Top10 & score>0.7 & 排除已加载），命中后写入 memory 类型消息
+        await self.recall_memory_process()
         # 对于上传文件的User Input处理
         self.input_text += f"\n\nFILE: 上传文件 -> {self.file_name_list}" if len(self.file_name_list) > 0 else ""
         tool_name_list = [tool.get("function").get("name") for tool in tools]
@@ -1048,7 +1055,7 @@ class Chat:
             message_total = ""
             reasoning_content_total = ""
             await self.history_check()
-            memory_process_result = await self.compress_process()     # 上下文压缩
+            memory_process_result = await self.compress_process()     # 上下文压缩（成功后内部会同步 memory_loaded）
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
             self.messages = history

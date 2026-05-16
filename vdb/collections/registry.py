@@ -59,15 +59,17 @@ COLLECTION_TYPE_CONFIGS: dict[str, dict] = {
     },
 
     # 记忆条目：description 用于 BM25 检索，content 存储完整记忆原文
+    # name 作为记忆的业务唯一标识，由调用方保证（user_id, name）唯一
     "memory": {
         "text_field": "description",
         "extra_fields": [
+            FieldSchema(name="name", dtype=DataType.VARCHAR, max_length=128),
             FieldSchema(name="description", dtype=DataType.VARCHAR, max_length=2048, enable_analyzer=True),
             FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
             FieldSchema(name="user_id", dtype=DataType.VARCHAR, max_length=128),
             FieldSchema(name="memory_type", dtype=DataType.VARCHAR, max_length=64),
         ],
-        "default_output_fields": ["description", "content", "user_id", "memory_type"],
+        "default_output_fields": ["name", "description", "content", "user_id", "memory_type"],
     },
 
     # 通用类型：只有基础字段 + text，其余存入 dynamic field

@@ -237,6 +237,77 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "load_memory",
+            "description": (
+                "根据记忆 name 加载某条记忆的完整内容，并将该 name 记录到当前会话的 memory_loaded，"
+                "后续召回不再重复推送该记忆。返回该记忆的 name、description 与 content。"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string", "description": "记忆的简短英文名称（业务唯一标识）"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_memory",
+            "description": (
+                "新增一条记忆并写入向量库，写入后自动加入当前会话的 memory_loaded。"
+                "同一用户下 name 必须唯一。"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["name", "description", "content"],
+                "properties": {
+                    "name": {"type": "string", "description": "记忆的简短名称，仅使用英文与下划线"},
+                    "description": {"type": "string", "description": "记忆的描述，描述该文件记录哪些记忆内容"},
+                    "content": {"type": "string", "description": "记忆的完整内容"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_memory",
+            "description": (
+                "编辑一条已存在记忆的描述或内容。支持 update（在原内容末尾追加）与 "
+                "replace（按 old_text 精确替换）两种模式。"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["name", "edit_type", "edit_module", "text"],
+                "properties": {
+                    "name": {"type": "string", "description": "目标记忆的 name"},
+                    "edit_type": {
+                        "type": "string",
+                        "enum": ["description", "content"],
+                        "description": "编辑的字段：description 描述 / content 完整内容",
+                    },
+                    "edit_module": {
+                        "type": "string",
+                        "enum": ["update", "replace"],
+                        "description": "编辑方式：update 末尾追加 / replace 文本替换",
+                    },
+                    "old_text": {
+                        "type": "string",
+                        "description": "仅 edit_module=replace 时必填，原文中待替换的文本",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "需要写入的内容（追加内容或替换后的新文本）",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "call_sub_agent",
             "description": "召唤一个agent以执行任务。两种模式：1. 运行一个已存在的agent。2. 创建并运行一个新的agent，并为该agent临时注入信息",
             "parameters": {

@@ -120,6 +120,11 @@ class Config:
         self.agent_file_path = "/home/soulprout_agent_files/"
         self.agent_default_tools = ["read", "write", "edit", "bash", "read_picture"]
 
+        # ─── 记忆模块（vdb memory_collection + 召回参数）──────────────────────
+        self.memory_collection = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
+        self.memory_recall_top_k = int(os.getenv("MEMORY_RECALL_TOP_K", "10"))
+        self.memory_recall_score_threshold = float(os.getenv("MEMORY_RECALL_SCORE", "0.7"))
+
     def kb_agent_card(self):
         return AgentCard(
             user_id="soulprout",

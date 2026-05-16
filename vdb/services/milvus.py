@@ -259,7 +259,13 @@ class MilvusService:
             limit=limit,
             output_fields=output_fields,
         )
-        return [hit.get("entity", hit) for hit in results[0]]
+        # 将 distance（融合后分数）合并进 entity 返回，便于上层做阈值过滤
+        merged: list[dict] = []
+        for hit in results[0]:
+            entity = dict(hit.get("entity", {}) or {})
+            entity["_score"] = hit.get("distance")
+            merged.append(entity)
+        return merged
 
     async def query(
         self,

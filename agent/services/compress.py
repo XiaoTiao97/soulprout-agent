@@ -4,6 +4,7 @@ from agent.utils.llm import LLM
 from agent.api.models.message import ModelConfig
 from agent.database.models.message import AgentMessage
 from agent.services import prompt
+from agent.services.memory import Memory
 from agent.database.crud.message import (
     save_message,
     get_runtime_history,
@@ -150,6 +151,21 @@ class Compress:
         history_token = len(str(history_list)) / 2
         return history_token
 
+    async def _sync_memory_after_compress(self):
+        """compress（collapse 或 compact）成功后，同步 Conversation.memory_loaded。"""
+        try:
+            memory = Memory(
+                self.config,
+                self.is_sub_agent,
+                self.session_id,
+                self.user_id,
+                self.conversation_id,
+                "",
+            )
+            await memory.sync_with_history()
+        except Exception as e:
+            print(f"sync memory after compress error: {e}")
+
     async def run(self):
         self.context_window = next(
             (model.get("context_window")
@@ -161,17 +177,25 @@ class Compress:
         print(f"模型最大长度：{self.context_window}")
         history_token = await self.history_token_check()
         print("token估计: ", history_token)
-        if history_token > 0.8 * self.context_window:
-            print(f"{history_token}大于预设值{0.8 * self.context_window}，启动压缩")
-
-            # 优先collapse折叠压缩
-            result = await self.collapse()
-
-            # 重新检查collapse折叠情况
-            history_token = await self.history_token_check()
-            print("token估计: ", history_token)
-
-            # 如果collapse成功且总上下文小于60%，则返回，否则启动compact压缩
-            return True if result and history_token < 0.6 * self.context_window else await self.compact()
-        else:
+        if history_token <= 0.8 * self.context_window:
             return True
+
+        print(f"{history_token}大于预设值{0.8 * self.context_window}，启动压缩")
+
+        # 优先collapse折叠压缩
+        collapse_ok = await self.collapse()
+
+        # 重新检查collapse折叠情况
+        history_token = await self.history_token_check()
+        print("token估计: ", history_token)
+
+        # collapse 成功且总上下文小于60%：直接结束，并同步 memory_loaded
+        if collapse_ok and history_token < 0.6 * self.context_window:
+            await self._sync_memory_after_compress()
+            return True
+
+        # 否则启动compact压缩；compact 成功后同步 memory_loaded
+        compact_ok = await self.compact()
+        if compact_ok:
+            await self._sync_memory_after_compress()
+        return compact_ok

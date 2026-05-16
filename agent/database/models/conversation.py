@@ -19,6 +19,7 @@ class Conversation(Document):
     agent_use: Union[None, str] = Field(default=None, description="是否使用智能体及类型")
     agent_id: Union[None, str, List] = Field(default=None, description="智能体id")
     agent_name: Union[None, str, List] = Field(default=None, description="智能体名称")
+    memory_loaded: List[str] = Field(default_factory=list, description="当前会话已加载的记忆 name 列表，用于召回去重与 compress 后同步")
     create_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
 

@@ -7,39 +7,23 @@ import aiofiles
 import html2text
 import httpx
 import requests
-from openai import AsyncOpenAI
-from pymilvus import AsyncMilvusClient
+from datetime import datetime
 from zai import ZhipuAiClient
 
 from agent.tool.file_process import AsyncFileProcess
 from agent.tool.registry import get_all_tool_schemas, get_registered_tool_names
+from agent.utils.vdb_client import VDBClient
 
 
-class KBMilvusCRUD:
-    def __init__(self):
-        self.collection_name = "kb_collection"
-        self.dashscope_api_key = os.getenv("DASHSCOPE_API_KEY")
-
-    async def embedding(self, text):
-        client = AsyncOpenAI(api_key=self.dashscope_api_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
-        completion = await client.embeddings.create(model="text-embedding-v4", input=text, dimensions=1536, encoding_format="float")
-        return completion.data[0].embedding
-
-    async def connect(self):
-        client = AsyncMilvusClient()
-        if not await client.has_collection(self.collection_name):
-            await client.create_collection(collection_name=self.collection_name, dimension=1536, id_type="string", auto_id=True, max_length=128)
-        return client
-
-    async def search(self, milvus_client, data, filter="", output_fields=None, limit=5):
-        return await milvus_client.search(collection_name=self.collection_name, data=data, limit=limit, filter=filter, output_fields=output_fields)
+KB_COLLECTION = os.getenv("VDB_KB_COLLECTION", "kb_collection")
+MEMORY_COLLECTION = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
 
 
 class SoulproutToolFunction:
     def __init__(self, config):
         self.config = config
         self.file_process = AsyncFileProcess()
-        self.milvus_crud = KBMilvusCRUD()
+        self.vdb_client = VDBClient()
         host = os.getenv("DOCKER_SERVER_HOST", "localhost")
         self.agent_base_url = f"http://{host}:8080"
         self.main_base_url = f"http://{host}:8080"
@@ -208,10 +192,18 @@ class SoulproutToolFunction:
             return f"错误: {e}"
 
     async def soulprout_kb_tool(self, purpose, kb_id):
-        client = await self.milvus_crud.connect()
-        embedding = await self.milvus_crud.embedding(text=purpose)
-        result = await self.milvus_crud.search(client, data=[embedding], filter=f"kb_id == '{kb_id}'", output_fields=["chunk_id", "content"], limit=5)
-        return str([row.get("entity") for row in result[0]])
+        try:
+            await self.vdb_client.ensure_collection(KB_COLLECTION, "kb")
+            results = await self.vdb_client.hybrid_search(
+                KB_COLLECTION,
+                query=purpose,
+                limit=5,
+                filter=f'kb_id == "{kb_id}"',
+                output_fields=["chunk_id", "content"],
+            )
+            return str(results)
+        except Exception as e:
+            return f"错误：知识库检索失败，失败原因：{e}"
 
     async def kb_chunk_abstract(self, kb_id):
         rows = self.config.db_documents.find({"kb_id": kb_id})
@@ -220,6 +212,131 @@ class SoulproutToolFunction:
     async def chunk_content(self, chunk_id):
         rows = self.config.db_chunks.find({"chunk_id": chunk_id})
         return str([row.get("content") async for row in rows])
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 记忆相关工具：load_memory / create_memory / edit_memory
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _escape_filter_value(value: str) -> str:
+        """转义 Milvus filter 表达式中的双引号与反斜杠。"""
+        return value.replace("\\", "\\\\").replace('"', '\\"')
+
+    async def _add_memory_loaded(self, conversation_id, name):
+        """将 name 写入 Conversation.memory_loaded（已存在则跳过）。"""
+        if not conversation_id or not name:
+            return
+        conv = await self.config.db_conversation.find_one({"conversation_id": conversation_id})
+        if not conv:
+            return
+        memory_loaded = list(conv.get("memory_loaded") or [])
+        if name in memory_loaded:
+            return
+        memory_loaded.append(name)
+        await self.config.db_conversation.update_one(
+            {"conversation_id": conversation_id},
+            {"$set": {"memory_loaded": memory_loaded, "updated_at": datetime.utcnow()}},
+        )
+
+    async def _query_memory_by_name(self, name, user_id):
+        """按 (user_id, name) 精确查询一条记忆。"""
+        name_esc = self._escape_filter_value(name)
+        user_esc = self._escape_filter_value(user_id)
+        results = await self.vdb_client.query(
+            MEMORY_COLLECTION,
+            filter=f'name == "{name_esc}" and user_id == "{user_esc}"',
+            limit=1,
+            output_fields=["id", "name", "description", "content", "memory_type"],
+        )
+        return results[0] if results else None
+
+    async def load_memory(self, name, conversation_id):
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            await self.vdb_client.ensure_collection(MEMORY_COLLECTION, "memory")
+            memory = await self._query_memory_by_name(name, user_id)
+            if not memory:
+                return f"错误：未找到名为 {name} 的记忆"
+            await self._add_memory_loaded(conversation_id, name)
+            return {
+                "name": memory.get("name"),
+                "description": memory.get("description"),
+                "content": memory.get("content"),
+            }
+        except Exception as e:
+            return f"错误：加载记忆失败，失败原因：{e}"
+
+    async def create_memory(self, name, description, content, conversation_id):
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            await self.vdb_client.ensure_collection(MEMORY_COLLECTION, "memory")
+            existing = await self._query_memory_by_name(name, user_id)
+            if existing:
+                return f"错误：记忆 {name} 已存在，请改用 edit_memory"
+            await self.vdb_client.insert(
+                MEMORY_COLLECTION,
+                {
+                    "name": name,
+                    "description": description,
+                    "content": content,
+                    "user_id": user_id,
+                    "memory_type": "user",
+                },
+            )
+            await self._add_memory_loaded(conversation_id, name)
+            return f"成功创建记忆 {name}"
+        except Exception as e:
+            return f"错误：创建记忆失败，失败原因：{e}"
+
+    async def edit_memory(self, name, edit_type, edit_module, text, conversation_id, old_text=None):
+        if edit_type not in ("description", "content"):
+            return "错误：edit_type 仅支持 description 或 content"
+        if edit_module not in ("update", "replace"):
+            return "错误：edit_module 仅支持 update 或 replace"
+        if edit_module == "replace" and not old_text:
+            return "错误：replace 模式必须填写 old_text"
+
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            await self.vdb_client.ensure_collection(MEMORY_COLLECTION, "memory")
+            memory = await self._query_memory_by_name(name, user_id)
+            if not memory:
+                return f"错误：未找到名为 {name} 的记忆"
+
+            current = memory.get(edit_type) or ""
+            if edit_module == "update":
+                new_value = f"{current}{text}"
+            else:
+                if old_text not in current:
+                    return f"错误：未在原 {edit_type} 中找到 old_text"
+                new_value = current.replace(old_text, text)
+
+            payload = {
+                "name": memory.get("name") or name,
+                "description": memory.get("description") or "",
+                "content": memory.get("content") or "",
+                "user_id": user_id,
+                "memory_type": memory.get("memory_type") or "user",
+            }
+            payload[edit_type] = new_value
+
+            # Milvus 不支持基于 dynamic field 的就地 update；先按 (user_id, name) 删除再插入
+            name_esc = self._escape_filter_value(name)
+            user_esc = self._escape_filter_value(user_id)
+            await self.vdb_client.delete(
+                MEMORY_COLLECTION,
+                filter=f'name == "{name_esc}" and user_id == "{user_esc}"',
+            )
+            await self.vdb_client.insert(MEMORY_COLLECTION, payload)
+            return f"成功编辑记忆 {name}"
+        except Exception as e:
+            return f"错误：编辑记忆失败，失败原因：{e}"
 
 class ToolExecutor:
     def __init__(self, config):
