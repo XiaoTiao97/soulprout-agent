@@ -18,15 +18,14 @@ from agent.database.crud.message import (
 from agent.database.crud.conversation import (
     create_conversation,
     create_sub_agent_conversation,
-    get_conversation_by_id,
     get_sub_agent_conversation,
     update_conversation_by_conv_for_tools_and_kb,
     update_sub_agent_conversation,
 )
 from agent.skill.manager import load_skill_to_workspace
-from agent.skill.skill_server import SkillServer
 from agent.tool.tools import ToolExecutor
 from agent.services import prompt
+from agent.services.blueprint import Blueprint
 from agent.services.compress import Compress
 from agent.services.memory import Memory
 from uuid import uuid4
@@ -39,14 +38,12 @@ import os
 import aiofiles
 import aiofiles.os
 from pathlib import Path
-import ast
 
 class Chat:
     def __init__(self, request):
         self.config = Config()
         self.local_file_path = self.config.local_file_path
         self.tool_executor = ToolExecutor(self.config)
-        self.skill_server = SkillServer()
         self.llm = LLM(self.config)
 
         self.messages = []
@@ -80,14 +77,15 @@ class Chat:
         self.agents_dict = {}
         self.total_tokens = 0
         self.round_limit = 200
-        self._last_blueprint_text = ""
         self.soulprout_tools = [
             "read",
             "write",
             "edit",
             "read_picture",
             "bash",
+            "skills_preview",
             "load_skill",
+            "close_skills_preview",
             "web_search",
             "web_fetch",
             "soulprout_kb_tool",
@@ -294,85 +292,19 @@ class Chat:
         print("kb_prompt: ", kb_prompt)
         return kb_prompt
 
-    async def get_skill_info(self, query):
-        """
-        获取 skill 信息
-        """
-        skills = self.skill_server.get_merged_skills(user_id=self.user_id)
-
-        if query:
-            skills_abstract_model_source = self.config.abstract_model_source + "_no_stream"
-            try:
-                model_config = ModelConfig(model_source=skills_abstract_model_source, model=self.config.abstract_model,
-                                           tools=[], stream=False)
-                # Chinese Translation: 你是技能路由助手。根据用户输入，从可用技能列表中选出最相关的技能。
-                message = [{"role": "system",
-                            "content": "You are a skill routing assistant. Select the most relevant skill from the available skill list based on user input."}]
-
-                # Chinese Translation: f"用户输入：{self.input_text}\n\n可用技能：{skills}\n\n规则：\n1. 只选与用户意图直接相关的技能，最多5个\n2. 如果可用技能中没有匹配用户需求的，输出 None\n3. 输出格式：仅以列表形式输出选中技能的name，如['name_1', 'name_2']无则输出 None\n4. 禁止输出任何解释、理由或额外内容"
-                message.append({"role": "user", "content": f"""User input: {self.input_text}
-
-                Available skills: {skills}
-
-                Rules:
-                1. Only select skills directly related to the user's intent, with a maximum of 5 skills.
-                2. If none of the available skills match the user's needs, output None.
-                3. Output format: Only output the names of the selected skills in list form, e.g. ['name_1', 'name_2']. If there are none, output None.
-                4. It is forbidden to output any explanations, reasons or additional content."""})
-                llm = getattr(self.llm, model_config.model_source)
-                str_data = await llm(message, model_config)
-                result = ast.literal_eval(str_data)
-                skills = [skill for skill in skills if skill['name'] in result]
-                return skills
-            except Exception as e:
-                print(f"Error: No Recommend skill")
-                return "No Recommend skill"
-        else:
-            return skills
-
-    async def stream_action_blueprint(self):
-        try:
-            model_config = ModelConfig(model_source=self.config.plan_model_source, model=self.config.plan_model, tools=[], stream=False)
-            tools = await self.mcp_list_tools()
-            skills = await self.get_skill_info(query=False)
-            tools_use_final = []
-            for tool in tools:
-                if tool.get("function").get("name") in self.soulprout_tools:
-                    tools_use_final.append(tool)
-                elif tool.get("function").get("name") in ["soulprout_kb_agent", "soulprout_kb_tool"]:
-                    tools_use_final.append(tool)
-            plan_prompt = prompt.PLAN_PROMPT
-            message = [{"role": "system", "content": plan_prompt}]
-            history = await self.get_runtime_history()
-            history_list = [{'role': item.role, 'content': item.content} for item in history if item.role not in ["agent", "plan"]]
-            summary_info = await self._summary_history(self.input_text, history_list)
-            if len(self.kb_use) > 0:
-                message.append({"role": "user", "content": await self.get_kb_prompt()})
-            message.append({"role": "user", "content": prompt.PLAN_INFO_PROMPT.format(time_now=self.time_now, tools_use_final=tools_use_final, skills=skills)})
-            message.append({"role": "user", "content": prompt.PLAN_HISTORY_PROMPT.format(summary_info=summary_info)})
-            llm = getattr(self.llm, model_config.model_source)
-            plan = ""
-            async for chunk in llm(message, model_config):
-                if len(chunk.choices) > 0:
-                    plan += chunk.choices[0].delta.content
-                    yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="plan",content=chunk.choices[0].delta.content).model_dump_json()
-            self._last_blueprint_text = plan
-            plan_prompt_final = f"BLUEPRINT：{plan}"
-            old_plan_id = [item.id for item in history if item.type == "plan"]
-            await self.delete_runtime_messages(old_plan_id)
-            await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="plan", role="user", content=plan_prompt_final, created_at=datetime.utcnow()))
-            conv = await get_conversation_by_id(self.conversation_id)
-            if conv:
-                conv.action_blueprint = plan
-                conv.updated_at = datetime.utcnow()
-                await conv.save()
-            print("action_blueprint:", plan)
-
-        except Exception as e:
-            self._last_blueprint_text = ""
-            plan = ""
-            yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="plan", content=plan).model_dump_json()
-            print(f"Blueprint Error: {e}")
+    def _build_blueprint(self):
+        return Blueprint(
+            config=self.config,
+            is_sub_agent=self.is_sub_agent,
+            session_id=self.session_id,
+            user_id=self.user_id,
+            conversation_id=self.conversation_id,
+            input_text=self.input_text,
+            kb_use=self.kb_use,
+            time_now=self.time_now,
+            soulprout_tools=self.soulprout_tools,
+            tool_executor=self.tool_executor,
+        )
 
     async def agent_files_process(self):
         """递归复制，跳过已存在的"""
@@ -476,7 +408,7 @@ class Chat:
             print(f"检查文件夹错误: {e}")
             return False
 
-    async def load_skills(self, skills):
+    async def expert_load_skills(self, skills):
         """
         POST /skill - 加载技能到会话工作区
 
@@ -554,7 +486,7 @@ class Chat:
                 tools_use_list.append("call_sub_agent")
 
         skills_use_dict = agent_card.skills
-        skills_list = await self.load_skills(skills_use_dict) if skills_use_dict else []
+        skills_list = await self.expert_load_skills(skills_use_dict) if skills_use_dict else []
         self.system_prompt += f"\nThe following skills has been loaded to workspace: {skills_list}" if skills_use_dict else ""
         self.model_source = agent_card.model_source
         self.model = agent_card.model
@@ -711,9 +643,10 @@ class Chat:
             yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[tool_id].id).model_dump_json()
             await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[tool_id].id, created_at=datetime.utcnow()))
         elif name == "get_action_blueprint":
-            async for chunk in self.stream_action_blueprint():
+            blueprint = self._build_blueprint()
+            async for chunk in blueprint.stream_action_blueprint():
                 yield chunk
-            content = (self._last_blueprint_text or "").strip()
+            content = (blueprint.last_blueprint_text or "").strip()
             if not content:
                 content = "Blueprint generation produced no content."
             self.messages.append({"role": "tool", "content": content, "tool_call_id": message.tool_calls[tool_id].id})
@@ -854,7 +787,7 @@ class Chat:
         self.system_prompt = agent_card.system_prompt
         self.system_prompt += f"\n当前时间：{self.time_now}"
         skills_use_dict = agent_card.skills
-        skills_list = await self.load_skills(skills_use_dict) if skills_use_dict else []
+        skills_list = await self.expert_load_skills(skills_use_dict) if skills_use_dict else []
         self.system_prompt += f"\n已加载以下skills至工作区: {skills_list}" if skills_use_dict else ""
         self.model_source = agent_card.model_source
         self.model = agent_card.model

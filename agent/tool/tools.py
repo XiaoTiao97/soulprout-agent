@@ -17,6 +17,8 @@ from agent.utils.vdb_client import VDBClient
 
 KB_COLLECTION = os.getenv("VDB_KB_COLLECTION", "kb_collection")
 MEMORY_COLLECTION = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
+SKILL_COLLECTION = os.getenv("VDB_SKILL_COLLECTION", "skill_collection")
+SKILLS_PREVIEW_CLOSED_TEXT = "Skills Preview Closed"
 
 
 class SoulproutToolFunction:
@@ -153,6 +155,71 @@ class SoulproutToolFunction:
         except Exception as e:
             return f"错误：获取子智能体列表失败，失败原因：{e}"
 
+    async def skills_preview(self, query, conversation_id):
+        """
+        返回两类 skill：
+            1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>0.5
+            2. 个人 skill 库：按当前 user_id 直接列出全部
+        每条返回 name 与 description 两个字段。
+        """
+        from agent.skill.skill_server import load_skills_from_subfolders, get_user_skills_root
+
+        # 系统 skill：向量召回
+        system_skills: list[dict] = []
+        try:
+            await self.vdb_client.ensure_collection(SKILL_COLLECTION, "skill")
+            results = await self.vdb_client.hybrid_search(
+                SKILL_COLLECTION,
+                query=query or "",
+                limit=20,
+                output_fields=["name", "description"],
+            )
+            for item in results:
+                score = item.get("_score")
+                if score is None or score < 0.5:
+                    continue
+                name = item.get("name")
+                if not name:
+                    continue
+                system_skills.append({
+                    "name": name,
+                    "description": item.get("description") or "",
+                })
+        except Exception as e:
+            system_skills = []
+            system_error = f"系统 skill 召回失败：{e}"
+        else:
+            system_error = None
+
+        # 个人 skill：按 user_id 全量列出
+        user_skills: list[dict] = []
+        try:
+            user_id = await self._get_user_id_by_conversation_id(conversation_id)
+            if user_id:
+                raw_user_skills = load_skills_from_subfolders(get_user_skills_root(user_id), "user")
+                for item in raw_user_skills:
+                    name = (item.get("name") or "").strip()
+                    if not name:
+                        continue
+                    user_skills.append({
+                        "name": name,
+                        "description": item.get("description") or "",
+                    })
+        except Exception as e:
+            user_error = f"个人 skill 列表获取失败：{e}"
+        else:
+            user_error = None
+
+        payload = {
+            "system_skills": system_skills,
+            "user_skills": user_skills,
+        }
+        if system_error:
+            payload["system_skills_error"] = system_error
+        if user_error:
+            payload["user_skills_error"] = user_error
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+
     async def load_skill(self, source, skill_name, conversation_id):
         from agent.skill.manager import load_skill_to_workspace
 
@@ -160,6 +227,23 @@ class SoulproutToolFunction:
         skills = {"system": [skill_name]} if source == "system" else {"user": [skill_name]}
         result = await load_skill_to_workspace(conversation_id=conversation_id, user_id=user_id, skills=skills, workspace_base=self.config.local_file_path)
         return result.get("data") if result.get("success") else result.get("error", "加载失败")
+
+    async def close_skills_preview(self, conversation_id):
+        """
+        关闭技能预览：将本会话历史中所有 skills_preview 工具结果替换为占位字符串，
+        以节省后续轮次的上下文占用。
+        """
+        from agent.database.crud.message import replace_tool_results_by_function_name
+
+        try:
+            updated = await replace_tool_results_by_function_name(
+                conversation_id=conversation_id,
+                function_name="skills_preview",
+                new_content=SKILLS_PREVIEW_CLOSED_TEXT,
+            )
+            return SKILLS_PREVIEW_CLOSED_TEXT if updated else "未找到可关闭的 skills_preview 结果"
+        except Exception as e:
+            return f"错误：关闭技能预览失败，失败原因：{e}"
 
     async def web_search(self, query, count=10, conversation_id=None):
         def search():

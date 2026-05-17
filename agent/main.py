@@ -17,6 +17,7 @@ from agent.database.models.agent_subscription import AgentSub
 from agent.database.models.conversation import Conversation, COTConversation, SubAgentConversation
 from agent.database.models.message import AgentMessage, COTMessage, SubAgentMessage
 from agent.core.config import Config
+from agent.skill.skill_indexer import init_skill_collection
 from contextlib import asynccontextmanager
 from agent.api.routers import router as api_router
 
@@ -45,6 +46,13 @@ async def lifespan(app: FastAPI):
         await update_or_create_agent_card_by_agent_id(
             AgentCard(**agent_card.model_dump(exclude_unset=True))
         )
+
+    try:
+        count = await init_skill_collection()
+        print(f"系统技能向量化完成: 共 {count} 条")
+    except Exception as e:
+        print(f"系统技能向量化失败: {e}")
+
     yield  # Keep the app running
     # Shutdown event (if needed, you can add cleanup here)
     client.close()

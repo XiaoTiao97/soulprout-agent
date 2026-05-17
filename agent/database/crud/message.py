@@ -53,6 +53,69 @@ async def update_tool_message_by_tool_call_id(
         # 如果没有找到，可以返回None或者抛出异常
         return None
 
+
+def _extract_tool_call_function_name(tool_call) -> str | None:
+    """从 tool_call 项（dict 或 pydantic）中提取 function.name。"""
+    if isinstance(tool_call, dict):
+        fn = tool_call.get("function") or {}
+        if isinstance(fn, dict):
+            return fn.get("name")
+        return getattr(fn, "name", None)
+    fn = getattr(tool_call, "function", None)
+    if fn is None:
+        return None
+    if isinstance(fn, dict):
+        return fn.get("name")
+    return getattr(fn, "name", None)
+
+
+def _extract_tool_call_id(tool_call) -> str | None:
+    if isinstance(tool_call, dict):
+        return tool_call.get("id")
+    return getattr(tool_call, "id", None)
+
+
+async def replace_tool_results_by_function_name(
+        conversation_id: str,
+        function_name: str,
+        new_content: str,
+) -> int:
+    """
+    将历史中所有由 `function_name` 工具产生的 role=tool 消息内容替换为 new_content。
+
+    实现：
+        1. 在 agent_messages 与 sub_agent_messages 两个集合中查找该 conversation_id 下
+           assistant 消息里 tool_calls.function.name == function_name 的所有 tool_call.id；
+        2. 把对应集合中 role=tool 且 tool_call_id 命中的消息 content 替换为 new_content。
+
+    Returns:
+        被更新的工具结果消息数量（两个集合之和）。
+    """
+    updated = 0
+    for model in (AgentMessage, SubAgentMessage):
+        history = await model.find(model.conversation_id == conversation_id).to_list()
+        target_ids: set[str] = set()
+        for msg in history:
+            if not getattr(msg, "tool_calls", None):
+                continue
+            for tc in msg.tool_calls:
+                if _extract_tool_call_function_name(tc) == function_name:
+                    tc_id = _extract_tool_call_id(tc)
+                    if tc_id:
+                        target_ids.add(tc_id)
+        if not target_ids:
+            continue
+        for msg in history:
+            if msg.role != "tool":
+                continue
+            if not getattr(msg, "tool_call_id", None):
+                continue
+            if msg.tool_call_id in target_ids and msg.content != new_content:
+                msg.content = new_content
+                await msg.save()
+                updated += 1
+    return updated
+
 async def delete_message_by_conv_id(conversation_id: str):
     return await AgentMessage.find(AgentMessage.conversation_id == conversation_id).delete()
 

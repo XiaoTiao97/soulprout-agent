@@ -141,8 +141,34 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "skills_preview",
+            "description": (
+                "预览可用的 skill 列表，用于挑选后续要加载的 skill。"
+                "返回两部分：1) 系统 skill 库——基于用户意图对 description 做 hybrid_search（Top20 & score>0.5）召回；"
+                "2) 个人 skill 库——直接返回当前用户的全部个人 skill。"
+                "每条 skill 返回 name 与 description 两个字段，供 load_skill 后续调用使用。"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "用于系统 skill 召回的检索语句，通常为用户意图或任务关键词",
+                    }
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "load_skill",
-            "description": "首次使用某个skill前，加载指定skill文件夹到工作区。",
+            "description": (
+                "首次使用某个 skill 前，加载指定 skill 文件夹到工作区。"
+                "当系统 skill 与个人 skill 功能相似时（注意是功能相似，并不要求同名），"
+                "应优先选择 source=user 加载个人 skill。"
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["source", "skill_name"],
@@ -151,6 +177,16 @@ TOOL_SCHEMAS = [
                     "skill_name": {"type": "string", "description": "skill名称"},
                 },
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "close_skills_preview",
+            "description": (
+                "关闭技能预览。当本轮已经通过 load_skill 加载完所需 skill 后调用，避免技能列表持续占用上下文。"
+            ),
+            "parameters": {"type": "object", "required": [], "properties": {}},
         },
     },
     {
