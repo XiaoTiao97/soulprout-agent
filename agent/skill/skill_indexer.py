@@ -5,7 +5,7 @@
     - 扫描 agent/skill/skills/ 下所有内置 skill
     - 解析 SKILL.md frontmatter 取出 name 和 description
     - 写入 vdb 的 skill_collection
-    - 后续 skills_preview 工具通过 description 的 hybrid_search 召回
+    - 后续 skills(module=preview) 工具通过 description 的 hybrid_search 召回
 
 用户技能（个人 skill）不入向量库——按要求每次直接列举返回。
 """

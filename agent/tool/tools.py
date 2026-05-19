@@ -44,30 +44,55 @@ class SoulproutToolFunction:
             "If you see this message, the call was routed incorrectly."
         )
 
-    async def read(self, file_name, conversation_id):
-        target = os.path.join(self._workspace_dir(conversation_id), file_name).replace("\\", "/")
+    # NOTE: read 的分页读取（offset/limit）参考自 hermes 项目（claude-engineer / hermes）
+    # 的 read 工具实现：纯文本/源代码文件按行切片返回，二进制/富文本文件（pdf/doc(x)/
+    # ppt(x)/xlsx）走整体解析，offset/limit 不生效。
+    async def read(self, file_path, conversation_id, offset=1, limit=500):
         try:
-            if file_name.endswith((".pdf", ".docx", ".doc", ".json", ".txt", ".pptx", ".xlsx")):
-                return str(await self.file_process.file_parse(file_name, target))
-            async with aiofiles.open(target, "r", encoding="utf-8") as f:
-                return await f.read()
-        except Exception as e:
-            return f"错误：阅读{file_name}失败，失败原因：{e}"
+            try:
+                offset = int(offset) if offset is not None else 1
+            except (TypeError, ValueError):
+                offset = 1
+            try:
+                limit = int(limit) if limit is not None else 500
+            except (TypeError, ValueError):
+                limit = 500
+            offset = max(1, offset)
+            limit = max(1, min(limit, 2000))
 
-    async def write(self, file_name, content, conversation_id):
+            target = os.path.join(self._workspace_dir(conversation_id), file_path).replace("\\", "/")
+            if file_path.endswith((".pdf", ".docx", ".doc", ".pptx", ".xlsx")):
+                return str(await self.file_process.file_parse(file_path, target))
+
+            async with aiofiles.open(target, "r", encoding="utf-8") as f:
+                lines = await f.readlines()
+            total = len(lines)
+            if offset > total:
+                return f"<file is empty or offset({offset}) > total lines({total})>"
+            start = offset - 1
+            end = min(start + limit, total)
+            selected = lines[start:end]
+            numbered = [f"{start + idx + 1:6}\u2502{line.rstrip(chr(10))}" for idx, line in enumerate(selected)]
+            header = f"# {file_path} (lines {start + 1}-{end} of {total})\n"
+            footer = "" if end >= total else f"\n<... {total - end} more lines, call read again with offset={end + 1} to continue ...>"
+            return header + "\n".join(numbered) + footer
+        except Exception as e:
+            return f"错误：阅读{file_path}失败，失败原因：{e}"
+
+    async def write(self, file_path, content, conversation_id):
         try:
             root = self._workspace_dir(conversation_id)
-            os.makedirs(root, exist_ok=True)
-            target = os.path.join(root, file_name)
+            target = os.path.join(root, file_path)
+            os.makedirs(os.path.dirname(target) or root, exist_ok=True)
             async with aiofiles.open(target, "a", encoding="utf-8") as f:
                 await f.write(content)
-            return f"成功写入{file_name}"
+            return f"成功写入{file_path}"
         except Exception as e:
-            return f"错误：写入{file_name}失败，失败原因：{e}"
+            return f"错误：写入{file_path}失败，失败原因：{e}"
 
-    async def edit(self, file_name, past_text, replace_text, conversation_id):
+    async def edit(self, file_path, past_text, replace_text, conversation_id):
         try:
-            target = os.path.join(self._workspace_dir(conversation_id), file_name)
+            target = os.path.join(self._workspace_dir(conversation_id), file_path)
             async with aiofiles.open(target, "r", encoding="utf-8") as f:
                 src = await f.read()
             dst = src.replace(past_text, replace_text)
@@ -75,9 +100,9 @@ class SoulproutToolFunction:
                 return "文本替换失败，请检查past_text是否对应原文内容"
             async with aiofiles.open(target, "w", encoding="utf-8") as f:
                 await f.write(dst)
-            return f"成功修改{file_name}"
+            return f"成功修改{file_path}"
         except Exception as e:
-            return f"错误：修改{file_name}失败，失败原因：{e}"
+            return f"错误：修改{file_path}失败，失败原因：{e}"
 
     async def read_picture(self, file_name, conversation_id):
         target = os.path.join(self._workspace_dir(conversation_id), file_name)
@@ -101,7 +126,7 @@ class SoulproutToolFunction:
             proc.kill()
             return "错误: 命令执行超时"
 
-    async def create_agent(self, name, description, system_prompt, model, model_source, name_zh=None, tools=None, kbs=None, agents=None, supervisor_history=True, file_names=None, conversation_id=None):
+    async def create_agent(self, name, description, system_prompt, model, model_source, name_zh=None, tools=None, skills=None, kbs=None, agents=None, supervisor_history=True, file_names=None, conversation_id=None):
         try:
             user_id = await self._get_user_id_by_conversation_id(conversation_id)
             if not user_id:
@@ -115,6 +140,7 @@ class SoulproutToolFunction:
                 "description": description,
                 "system_prompt": system_prompt,
                 "tools": tools or [],
+                "skills": skills or None,
                 "agents": agents,
                 "kbs": kbs or [],
                 "supervisor_history": supervisor_history,
@@ -129,33 +155,48 @@ class SoulproutToolFunction:
         except Exception as e:
             return f"错误：创建智能体失败，失败原因：{e}"
 
-    async def get_models_list(self, conversation_id):
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{self.main_base_url}/message/models", timeout=10.0)
-            return json.dumps(resp.json(), ensure_ascii=False, indent=2)
-        except Exception as e:
-            return f"错误：获取模型列表失败，失败原因：{e}"
+    async def list_info(self, category, conversation_id):
+        """统一信息列表查询：models / tools / agent_cards。"""
+        if category == "models":
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"{self.main_base_url}/message/models", timeout=10.0)
+                return json.dumps(resp.json(), ensure_ascii=False, indent=2)
+            except Exception as e:
+                return f"错误：获取模型列表失败，失败原因：{e}"
+        if category == "tools":
+            rows = []
+            for item in get_all_tool_schemas():
+                fn = item.get("function", {})
+                rows.append({"name": fn.get("name"), "description": fn.get("description"), "inputSchema": fn.get("parameters")})
+            return json.dumps(rows, ensure_ascii=False, indent=2)
+        if category == "agent_cards":
+            try:
+                user_id = await self._get_user_id_by_conversation_id(conversation_id)
+                if not user_id:
+                    return "错误：无法获取user_id"
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"{self.agent_base_url}/agent_cards/{user_id}", timeout=10.0)
+                return json.dumps(resp.json(), ensure_ascii=False, indent=2)
+            except Exception as e:
+                return f"错误：获取子智能体列表失败，失败原因：{e}"
+        return f"错误：未知的 category={category}，仅支持 models / tools / agent_cards"
 
-    async def get_tools_list(self, conversation_id):
-        rows = []
-        for item in get_all_tool_schemas():
-            fn = item.get("function", {})
-            rows.append({"name": fn.get("name"), "description": fn.get("description"), "inputSchema": fn.get("parameters")})
-        return json.dumps(rows, ensure_ascii=False, indent=2)
+    async def skills(self, module, conversation_id, query=None, source=None, skill_name=None):
+        """统一 skills 工具：module=preview/load/close_preview。"""
+        if module == "preview":
+            if not query or not str(query).strip():
+                return "错误：module=preview 时 query 必填且不能为空，请传入用于检索 skill 的关键词"
+            return await self._skills_preview(query, conversation_id)
+        if module == "load":
+            if not source or not skill_name:
+                return "错误：module=load 时必须填写 source 与 skill_name"
+            return await self._skills_load(source, skill_name, conversation_id)
+        if module == "close_preview":
+            return await self._skills_close_preview(conversation_id)
+        return f"错误：未知的 module={module}，仅支持 preview / load / close_preview"
 
-    async def get_agent_cards_list(self, conversation_id):
-        try:
-            user_id = await self._get_user_id_by_conversation_id(conversation_id)
-            if not user_id:
-                return "错误：无法获取user_id"
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{self.agent_base_url}/agent_cards/{user_id}", timeout=10.0)
-            return json.dumps(resp.json(), ensure_ascii=False, indent=2)
-        except Exception as e:
-            return f"错误：获取子智能体列表失败，失败原因：{e}"
-
-    async def skills_preview(self, query, conversation_id):
+    async def _skills_preview(self, query, conversation_id):
         """
         返回两类 skill：
             1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>0.5
@@ -220,7 +261,7 @@ class SoulproutToolFunction:
             payload["user_skills_error"] = user_error
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
-    async def load_skill(self, source, skill_name, conversation_id):
+    async def _skills_load(self, source, skill_name, conversation_id):
         from agent.skill.manager import load_skill_to_workspace
 
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
@@ -228,9 +269,9 @@ class SoulproutToolFunction:
         result = await load_skill_to_workspace(conversation_id=conversation_id, user_id=user_id, skills=skills, workspace_base=self.config.local_file_path)
         return result.get("data") if result.get("success") else result.get("error", "加载失败")
 
-    async def close_skills_preview(self, conversation_id):
+    async def _skills_close_preview(self, conversation_id):
         """
-        关闭技能预览：将本会话历史中所有 skills_preview 工具结果替换为占位字符串，
+        关闭技能预览：将本会话历史中所有 skills(module=preview) 工具结果替换为占位字符串，
         以节省后续轮次的上下文占用。
         """
         from agent.database.crud.message import replace_tool_results_by_function_name
@@ -238,10 +279,10 @@ class SoulproutToolFunction:
         try:
             updated = await replace_tool_results_by_function_name(
                 conversation_id=conversation_id,
-                function_name="skills_preview",
+                function_name="skills",
                 new_content=SKILLS_PREVIEW_CLOSED_TEXT,
             )
-            return SKILLS_PREVIEW_CLOSED_TEXT if updated else "未找到可关闭的 skills_preview 结果"
+            return SKILLS_PREVIEW_CLOSED_TEXT if updated else "未找到可关闭的 skills 预览结果"
         except Exception as e:
             return f"错误：关闭技能预览失败，失败原因：{e}"
 

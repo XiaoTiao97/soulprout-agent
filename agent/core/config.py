@@ -195,7 +195,7 @@ class Config:
 如果缺少关键信息，先说明需要补充的内容。""",
                 supervisor_history=True,
                 files=[],
-                tools=["load_skill", "bash", "read", "write", "edit"],
+                tools=["skills", "bash", "read", "write", "edit"],
                 skills={"system": ["pptx"]},
                 kbs=[],
                 agents=None,

@@ -1455,16 +1455,17 @@ const handleFileStreaming = async (message: AgentMessage) => {
   }
   
   if (fileType === 'read') {
-    // read: 第一次识别到 file_name 时定位到预览文件
-    if (jsonTable.file_name) {
-      const fileName = jsonTable.file_name
+    // read: 第一次识别到 file_path 时定位到预览文件
+    const readFilePath = jsonTable.file_path || jsonTable.file_name
+    if (readFilePath) {
+      const fileName = readFilePath
       
       // 确保文件在列表中
       if (!files.value.includes(fileName)) {
         files.value.push(fileName)
       }
       
-      // 第一次识别到 file_name，定位到预览文件
+      // 第一次识别到 file_path，定位到预览文件
       activeTab.value = 'files'
       selectedFile.value = fileName
       await nextTick()
@@ -1478,7 +1479,7 @@ const handleFileStreaming = async (message: AgentMessage) => {
     }
   } else if (fileType === 'write') {
     // write: 流式追加 content
-    const fileName = jsonTable.file_name
+    const fileName = jsonTable.file_path || jsonTable.file_name
     const content = jsonTable.content
     
     if (!fileName) {
@@ -1495,7 +1496,7 @@ const handleFileStreaming = async (message: AgentMessage) => {
       currentFileOperation.value = 'write'
       streamingFileInitialized.value = false
       
-      // 第一次识别到 file_name，定位到预览文件
+      // 第一次识别到 file_path，定位到预览文件
       if (isNewFile) {
         files.value.push(fileName)
       }
@@ -1564,9 +1565,9 @@ const handleFileStreaming = async (message: AgentMessage) => {
     }
   } else if (fileType === 'edit') {
     // edit: 处理 past_text 和 replace_text
-    const fileName = jsonTable.file_name
+    const fileName = jsonTable.file_path || jsonTable.file_name
     
-    // 如果有 file_name，初始化流式状态并定位
+    // 如果有 file_path，初始化流式状态并定位
     if (fileName) {
       // 确保文件在列表中
       if (!files.value.includes(fileName)) {
@@ -1581,7 +1582,7 @@ const handleFileStreaming = async (message: AgentMessage) => {
         currentFileOperation.value = 'edit'
         streamingFileInitialized.value = false
         
-        // 第一次识别到 file_name，定位到预览文件
+        // 第一次识别到 file_path，定位到预览文件
         activeTab.value = 'files'
         selectedFile.value = fileName
         await nextTick()

@@ -1,7 +1,7 @@
 """
 Blueprint 模块：负责行动蓝图（action blueprint）规划，以及为规划所需的 skill 信息召回。
 
-- get_skill_info: 与 skills_preview 工具同模式
+- get_skill_info: 与 skills(module=preview) 工具同模式
     1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>0.5
     2. 个人 skill 库：按当前 user_id 直接列出全部
 - stream_action_blueprint: 调用规划专家模型，基于历史对话、可用工具与召回的 skill

@@ -17,15 +17,31 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "read",
-            "description": "阅读文件，获取该文件的全部内容，可阅读的文件类型为docx/doc/pdf/pptx/json/xlsx/txt/md",
+            "description": (
+                "阅读工作区内的文件，可阅读的文件类型为 docx/doc/pdf/pptx/xlsx/txt/md/"
+                "py/json/html 等。对纯文本/代码类文件支持按行分页读取（offset/limit），"
+                "返回结果会带行号；对 pdf/doc(x)/ppt(x)/xlsx 等富文本/二进制文件走整体解析，"
+                "offset/limit 不生效。"
+            ),
             "parameters": {
                 "type": "object",
-                "required": ["file_name"],
+                "required": ["file_path"],
                 "properties": {
-                    "file_name": {
+                    "file_path": {
                         "type": "string",
-                        "description": "带有后缀的文件名，如xxx.txt",
-                    }
+                        "description": "相对于会话工作区的文件相对路径，如 dir/sub/xxx.txt",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "开始读取的行号（1-indexed），默认 1，最小值 1",
+                        "minimum": 1,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "最大读取行数，默认 500，最大 2000",
+                        "minimum": 1,
+                        "maximum": 2000,
+                    },
                 },
             },
         },
@@ -37,9 +53,12 @@ TOOL_SCHEMAS = [
             "description": "在md/txt/py/json/html等文本文件写入内容，多次调用时则在末尾追加内容",
             "parameters": {
                 "type": "object",
-                "required": ["file_name", "content"],
+                "required": ["file_path", "content"],
                 "properties": {
-                    "file_name": {"type": "string", "description": "带有后缀的文件名，如xxx.txt"},
+                    "file_path": {
+                        "type": "string",
+                        "description": "相对于会话工作区的文件相对路径，如 dir/sub/xxx.txt",
+                    },
                     "content": {"type": "string", "description": "需要在末尾追加的内容"},
                 },
             },
@@ -52,9 +71,12 @@ TOOL_SCHEMAS = [
             "description": "在md/txt/py/json/html等文本文件中修改/替换其中的内容，原理基于replace(past_text, replace_text)",
             "parameters": {
                 "type": "object",
-                "required": ["file_name", "past_text", "replace_text"],
+                "required": ["file_path", "past_text", "replace_text"],
                 "properties": {
-                    "file_name": {"type": "string", "description": "带有后缀的文件名，如xxx.txt"},
+                    "file_path": {
+                        "type": "string",
+                        "description": "相对于会话工作区的文件相对路径，如 dir/sub/xxx.txt",
+                    },
                     "past_text": {"type": "string", "description": "需要替换掉的内容"},
                     "replace_text": {"type": "string", "description": "需要覆盖的内容"},
                 },
@@ -94,7 +116,11 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "create_agent",
-            "description": "创建智能体（Agent）。可选附加工具、知识库、子智能体和文件列表。",
+            "description": (
+                "在专家库中永久实例化一个新的智能体（Agent），可附加工具、技能、知识库、子智能体和初始文件。"
+                "注意：该工具用于把智能体长期沉淀到专家库中以便后续被反复检索调用，"
+                "本身**并不具备调用子智能体执行任务的能力**。如需立即让子智能体执行任务，请改用 call_sub_agent。"
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["name", "description", "system_prompt", "model", "model_source"],
@@ -105,11 +131,41 @@ TOOL_SCHEMAS = [
                     "model": {"type": "string", "description": "模型名称"},
                     "model_source": {"type": "string", "description": "模型来源"},
                     "name_zh": {"type": "string", "description": "中文显示名"},
-                    "tools": {"type": "array", "items": {"type": "string"}},
-                    "kbs": {"type": "array", "items": {"type": "string"}},
-                    "agents": {"type": "array", "items": {"type": "string"}},
-                    "supervisor_history": {"type": "boolean"},
-                    "file_names": {"type": "array", "items": {"type": "string"}},
+                    "tools": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "绑定的工具名列表",
+                    },
+                    "skills": {
+                        "type": "object",
+                        "description": (
+                            "绑定的技能（skill）集合，按来源分组：system 为系统技能名列表，user 为个人技能名列表。"
+                            "对应 AgentCard.skills: Dict[Literal['system','user'], list]"
+                        ),
+                        "properties": {
+                            "system": {"type": "array", "items": {"type": "string"}},
+                            "user": {"type": "array", "items": {"type": "string"}},
+                        },
+                    },
+                    "kbs": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "绑定的知识库 id 列表",
+                    },
+                    "agents": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "绑定的子智能体 agent_id 列表（结构关系，非临时召唤）",
+                    },
+                    "supervisor_history": {
+                        "type": "boolean",
+                        "description": "是否继承主智能体历史，默认 true",
+                    },
+                    "file_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "初始注入到该智能体文件库的文件名列表",
+                    },
                 },
             },
         },
@@ -117,44 +173,21 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "get_models_list",
-            "description": "获取所有支持的大模型列表。",
-            "parameters": {"type": "object", "required": [], "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_tools_list",
-            "description": "获取所有支持调用的工具列表。",
-            "parameters": {"type": "object", "required": [], "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_agent_cards_list",
-            "description": "获取当前用户可调用的子智能体列表。",
-            "parameters": {"type": "object", "required": [], "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "skills_preview",
+            "name": "list_info",
             "description": (
-                "预览可用的 skill 列表，用于挑选后续要加载的 skill。"
-                "返回两部分：1) 系统 skill 库——基于用户意图对 description 做 hybrid_search（Top20 & score>0.5）召回；"
-                "2) 个人 skill 库——直接返回当前用户的全部个人 skill。"
-                "每条 skill 返回 name 与 description 两个字段，供 load_skill 后续调用使用。"
+                "统一信息列表查询入口，根据 category 返回对应的列表：\n"
+                "- category=models：返回当前服务支持的大模型列表\n"
+                "- category=tools：返回所有支持调用的工具列表\n"
+                "- category=agent_cards：返回当前用户可调用的子智能体（专家）列表"
             ),
             "parameters": {
                 "type": "object",
-                "required": ["query"],
+                "required": ["category"],
                 "properties": {
-                    "query": {
+                    "category": {
                         "type": "string",
-                        "description": "用于系统 skill 召回的检索语句，通常为用户意图或任务关键词",
+                        "enum": ["models", "tools", "agent_cards"],
+                        "description": "列表分类：models / tools / agent_cards",
                     }
                 },
             },
@@ -163,30 +196,45 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "load_skill",
+            "name": "skills",
             "description": (
-                "首次使用某个 skill 前，加载指定 skill 文件夹到工作区。"
-                "当系统 skill 与个人 skill 功能相似时（注意是功能相似，并不要求同名），"
-                "应优先选择 source=user 加载个人 skill。"
+                "统一的技能（skill）入口，通过 module 切换子动作：\n"
+                "- module=preview：基于 query 预览可用 skill（系统 skill 走向量召回 Top20 & score>0.5，"
+                "个人 skill 直接全量返回 name+description），用于挑选后续要加载的 skill。"
+                "**此模式下 query 必填且不能为空**——预览的目的就是按当前意图召回最相关的 skill，"
+                "- module=load：将指定 skill 文件夹加载到工作区，需配合 source(system|user) 与 skill_name。"
+                "当系统 skill 与个人 skill 功能相似时，优先选择 source=user。\n"
+                "- module=close_preview：本轮 skill 选择完成后调用，将历史中的 preview 结果替换为占位字符串，"
+                "避免技能列表持续占用上下文。"
             ),
             "parameters": {
                 "type": "object",
-                "required": ["source", "skill_name"],
+                "required": ["module"],
                 "properties": {
-                    "source": {"type": "string", "description": "system或user"},
-                    "skill_name": {"type": "string", "description": "skill名称"},
+                    "module": {
+                        "type": "string",
+                        "enum": ["preview", "load", "close_preview"],
+                        "description": "子动作：preview / load / close_preview",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "[module=preview 必填，非空] 用于系统 skill 召回的检索语句，"
+                            "应为当前用户意图或任务关键词；不可传空字符串"
+                        ),
+                        "minLength": 1,
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["system", "user"],
+                        "description": "[module=load 必填] skill 来源：system 或 user",
+                    },
+                    "skill_name": {
+                        "type": "string",
+                        "description": "[module=load 必填] 要加载的 skill 名称",
+                    },
                 },
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "close_skills_preview",
-            "description": (
-                "关闭技能预览。当本轮已经通过 load_skill 加载完所需 skill 后调用，避免技能列表持续占用上下文。"
-            ),
-            "parameters": {"type": "object", "required": [], "properties": {}},
         },
     },
     {

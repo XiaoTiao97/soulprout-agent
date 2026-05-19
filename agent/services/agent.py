@@ -83,9 +83,7 @@ class Chat:
             "edit",
             "read_picture",
             "bash",
-            "skills_preview",
-            "load_skill",
-            "close_skills_preview",
+            "skills",
             "web_search",
             "web_fetch",
             "soulprout_kb_tool",
@@ -184,31 +182,31 @@ class Chat:
                     tool_message.tool_calls[tool_id].function.arguments += function.arguments
 
                     if function_name in ["read", "write", "edit"]:
-                        pattern_file_name = r'"file_name":\s*"([^"]*)"\s*,'
+                        pattern_file_path = r'"file_path":\s*"([^"]*)"\s*,'
                         arguments_total += function.arguments
                         if function_name == "write":
                             if not update_file_match:
-                                pattern = r'\{"file_name":\s*"([^"]*)"\s*,\s*"content":\s*"'
+                                pattern = r'\{"file_path":\s*"([^"]*)"\s*,\s*"content":\s*"'
                                 match = re.search(pattern, arguments_total)
                                 if match:
                                     update_file_match = True
-                                    match_file_name = re.search(pattern_file_name, arguments_total)
-                                    if match_file_name:
-                                        print(f"file_name匹配结果: {match_file_name.group(1)}")
-                                        file_name = match_file_name.group(1)
+                                    match_file_path = re.search(pattern_file_path, arguments_total)
+                                    if match_file_path:
+                                        print(f"file_path匹配结果: {match_file_path.group(1)}")
+                                        file_name = match_file_path.group(1)
                             else:
-                                file_tool_message.json_table = {"file_name": file_name, "content": function.arguments}
+                                file_tool_message.json_table = {"file_path": file_name, "content": function.arguments}
                                 yield file_tool_message
                         elif function_name == "edit":
                             if not correct_file_match:
-                                pattern = r'\{"file_name":\s*"([^"]*)"\s*,\s*"past_text":\s*"'
+                                pattern = r'\{"file_path":\s*"([^"]*)"\s*,\s*"past_text":\s*"'
                                 match = re.search(pattern, arguments_total)
                                 if match:
                                     correct_file_match = True
-                                    match_file_name = re.search(pattern_file_name, arguments_total)
-                                    if match_file_name:
-                                        print(f"file_name匹配结果: {match_file_name.group(1)}")
-                                        file_name = match_file_name.group(1)
+                                    match_file_path = re.search(pattern_file_path, arguments_total)
+                                    if match_file_path:
+                                        print(f"file_path匹配结果: {match_file_path.group(1)}")
+                                        file_name = match_file_path.group(1)
                             elif not past_text_match:
                                 past_text += function.arguments
                                 pattern = r'^(.*?)"\s*,\s*"replace_text":\s*"'
@@ -217,10 +215,10 @@ class Chat:
                                     past_text_match = True
                                     past_text = match_past_text.group(1)
                                     print(f"past_text匹配结果: {match_past_text.group(1)}")
-                                    file_tool_message.json_table = {"file_name": file_name, "past_text": past_text}
+                                    file_tool_message.json_table = {"file_path": file_name, "past_text": past_text}
                                     yield file_tool_message
                             else:
-                                file_tool_message.json_table = {"file_name": file_name, "replace_text": function.arguments}
+                                file_tool_message.json_table = {"file_path": file_name, "replace_text": function.arguments}
                                 yield file_tool_message
 
             elif isinstance(delta.content, str):
