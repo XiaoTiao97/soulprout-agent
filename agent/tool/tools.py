@@ -199,7 +199,7 @@ class SoulproutToolFunction:
     async def _skills_preview(self, query, conversation_id):
         """
         返回两类 skill：
-            1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>0.5
+            1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
             2. 个人 skill 库：按当前 user_id 直接列出全部
         每条返回 name 与 description 两个字段。
         """
@@ -217,7 +217,7 @@ class SoulproutToolFunction:
             )
             for item in results:
                 score = item.get("_score")
-                if score is None or score < 0.5:
+                if score is None or score < self.config.hybrid_search_score_threshold:
                     continue
                 name = item.get("name")
                 if not name:

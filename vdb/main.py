@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# `python vdb/main.py` 只把 vdb/ 放进 sys.path，无法解析顶层包 vdb；补上仓库根目录
+_root = Path(__file__).resolve().parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI

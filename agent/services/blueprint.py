@@ -2,7 +2,7 @@
 Blueprint 模块：负责行动蓝图（action blueprint）规划，以及为规划所需的 skill 信息召回。
 
 - get_skill_info: 与 skills(module=preview) 工具同模式
-    1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>0.5
+    1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
     2. 个人 skill 库：按当前 user_id 直接列出全部
 - stream_action_blueprint: 调用规划专家模型，基于历史对话、可用工具与召回的 skill
   流式输出主 Agent 可直接执行的结构化蓝图，并将蓝图持久化到会话历史与 Conversation 表。
@@ -98,7 +98,7 @@ class Blueprint:
     async def get_skill_info(self):
         """
         返回供规划专家参考的 skill 列表：
-        1. 系统 skill：通过 description 的 hybrid_search 召回 Top20 且 _score>0.5
+        1. 系统 skill：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
         2. 个人 skill：按当前 user_id 全量列出
         """
         system_skills: list[dict] = []
@@ -112,7 +112,7 @@ class Blueprint:
             )
             for item in results:
                 score = item.get("_score")
-                if score is None or score < 0.5:
+                if score is None or score < self.config.hybrid_search_score_threshold:
                     continue
                 name = item.get("name")
                 if not name:

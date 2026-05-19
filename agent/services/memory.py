@@ -14,7 +14,7 @@ class Memory:
     记忆模块：负责对话级别的记忆召回与同步。
 
     - recall: 在用户每一轮输入处理前调用，对 memory_collection 执行 hybrid_search，
-      Top-K & score > threshold & 排除已在 Conversation.memory_loaded 中的记忆，
+      Top-K & score >= 0.4（可通过 MEMORY_RECALL_SCORE 配置）& 排除已在 memory_loaded 中的记忆，
       命中后以 type="memory" / role="user" 的消息写入历史。
     - sync_with_history: compress 之后调用，扫描当前 runtime history 里
       所有 load_memory 工具调用的 name，把 Conversation.memory_loaded 中
@@ -85,6 +85,11 @@ class Memory:
                 filter=f'user_id == "{user_esc}"',
                 output_fields=["name", "description"],
             )
+            for i, item in enumerate(results[:5], start=1):
+                print(
+                    f"[Memory recall] top{i}: score={item.get('_score')}, "
+                    f"name={item.get('name')}, description={item.get('description') or ''}"
+                )
             for item in results:
                 name = item.get("name")
                 if not name or name in memory_loaded:

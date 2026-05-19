@@ -7,7 +7,7 @@ load_dotenv()
 class VDBConfig:
     def __init__(self):
         # Milvus 连接配置
-        self.milvus_uri = os.getenv("MILVUS_URI", "http://localhost:27017")
+        self.milvus_uri = os.getenv("MILVUS_URI", "http://localhost:19530")
         self.milvus_token = os.getenv("MILVUS_TOKEN", "")
 
         # Embedding 服务配置（通义千问兼容 OpenAI 接口）

@@ -3,7 +3,7 @@ Milvus CRUD 核心服务。
 
 MilvusService 负责：
   1. 维护与 Milvus 的单一异步连接（整个进程共享）。
-  2. 按需创建/加载 collection（schema 来自 collections/registry.py）。
+  2. 按需创建/加载 collection（schema 来自 schemas/registry.py）。
   3. 提供 insert / upsert / search / hybrid_search / query / delete 操作。
 
 设计原则：
@@ -15,7 +15,7 @@ from typing import Any, Optional, Union
 from pymilvus import AsyncMilvusClient, AnnSearchRequest, WeightedRanker
 
 from vdb.core.config import VDBConfig
-from vdb.collections.registry import get_schema, COLLECTION_TYPE_CONFIGS
+from vdb.schemas.registry import get_schema, COLLECTION_TYPE_CONFIGS
 from vdb.services.embedding import EmbeddingService
 
 
@@ -224,8 +224,8 @@ class MilvusService:
         limit: int = 5,
         filter: str = "",
         output_fields: Optional[list[str]] = None,
-        dense_weight: float = 0.5,
-        sparse_weight: float = 0.5,
+        dense_weight: float = 0.7,
+        sparse_weight: float = 0.3,
     ) -> list[dict]:
         """
         Hybrid Search：dense embedding + BM25 稀疏检索，通过 WeightedRanker 融合。

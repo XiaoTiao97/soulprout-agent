@@ -123,7 +123,11 @@ class Config:
         # ─── 记忆模块（vdb memory_collection + 召回参数）──────────────────────
         self.memory_collection = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
         self.memory_recall_top_k = int(os.getenv("MEMORY_RECALL_TOP_K", "10"))
-        self.memory_recall_score_threshold = float(os.getenv("MEMORY_RECALL_SCORE", "0.7"))
+        # hybrid_search 融合分阈值：score >= 该值视为可匹配（默认 0.4）
+        self.hybrid_search_score_threshold = float(os.getenv("HYBRID_SEARCH_SCORE", "0.4"))
+        self.memory_recall_score_threshold = float(
+            os.getenv("MEMORY_RECALL_SCORE", str(self.hybrid_search_score_threshold))
+        )
 
     def kb_agent_card(self):
         return AgentCard(

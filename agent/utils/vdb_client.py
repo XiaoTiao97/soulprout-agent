@@ -137,8 +137,8 @@ class VDBClient:
         limit: int = 5,
         filter: str = "",
         output_fields: Optional[list[str]] = None,
-        dense_weight: float = 0.5,
-        sparse_weight: float = 0.5,
+        dense_weight: float = 0.7,
+        sparse_weight: float = 0.3,
     ) -> list[dict]:
         """
         Hybrid Search（embedding + BM25）。只需传原始文本，服务端自动向量化并融合检索。

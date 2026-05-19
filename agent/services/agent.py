@@ -968,7 +968,7 @@ class Chat:
         # 对于知识库的系统提示词处理
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
         print("system_prompt:", self.system_prompt)
-        # 召回相关记忆（hybrid_search Top10 & score>0.7 & 排除已加载），命中后写入 memory 类型消息
+        # 召回相关记忆（hybrid_search Top10 & score>=0.4 & 排除已加载），命中后写入 memory 类型消息
         await self.recall_memory_process()
         # 对于上传文件的User Input处理
         self.input_text += f"\n\nFILE: 上传文件 -> {self.file_name_list}" if len(self.file_name_list) > 0 else ""
