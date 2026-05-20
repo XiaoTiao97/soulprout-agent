@@ -145,6 +145,14 @@
                   </button>
                   <div class="mode-selector">
                     <div class="mode-column">
+                      <div
+                        class="mode-item"
+                        @mouseenter="currentMode = null"
+                        @click="selectSoulprout"
+                        :class="{ 'active': props.chat_request.agent_use === 'soulprout' }"
+                      >
+                        Soulprout
+                      </div>
                       <div 
                         class="mode-item" 
                         @mouseenter="currentMode = 'expert'"
@@ -417,6 +425,9 @@ const selectedAgentDisplay = computed(() => {
   if (!props.chat_request.agent_use) return '专家模式'
   const agentId = props.chat_request.agent_id
   const agentName = props.chat_request.agent_name
+  if (props.chat_request.agent_use === 'soulprout') {
+    return 'Soulprout'
+  }
   if (props.chat_request.agent_use === 'expert-agent') {
     if (typeof agentName === 'string' && agentName) return agentName
     if (typeof agentId === 'string') return getAgentNameById(agentId) || agentId
@@ -565,6 +576,23 @@ function selectNone() {
     emit('selectModel', first.model_source, first.models[0].id)
   }
   showAgentSelector.value = false
+  selectedSingle.value = ''
+  selectedSelect.value = []
+}
+
+// 选择 Soulprout 模式：无需二级 agent_id 选择，直接生效
+function selectSoulprout() {
+  emit('selectAgent', 'soulprout', null)
+  emit('selectKB', [])
+  // Soulprout 模式同样使用默认模型
+  const providers = modelProviders.value
+  if (providers.length > 0 && providers[0].models.length > 0) {
+    const first = providers[0]
+    emit('selectModel', first.model_source, first.models[0].id)
+  }
+  showAgentSelector.value = false
+  currentMode.value = null
+  keepRightDropdownOpen.value = false
   selectedSingle.value = ''
   selectedSelect.value = []
 }

@@ -17,7 +17,7 @@ class Memory:
       Top-K & score >= 0.4（可通过 MEMORY_RECALL_SCORE 配置）& 排除已在 memory_loaded 中的记忆，
       命中后以 type="memory" / role="user" 的消息写入历史。
     - sync_with_history: compress 之后调用，扫描当前 runtime history 里
-      所有 load_memory 工具调用的 name，把 Conversation.memory_loaded 中
+      所有 base_memory(module=load) 工具调用的 name，把 Conversation.memory_loaded 中
       已经被压缩掉、不再出现的记忆移除，便于下一轮重新召回。
     """
 
@@ -98,7 +98,7 @@ class Memory:
                 if score is None or score < self.score_threshold:
                     continue
                 description = item.get("description") or ""
-                content = f"name: {name}\ndescription: {description}"
+                content = f"MEMORY: name: {name}\ndescription: {description}"
                 await save_message(
                     AgentMessage(
                         user_id=self.user_id,
@@ -120,7 +120,7 @@ class Memory:
 
     async def sync_with_history(self):
         """
-        扫描当前 runtime history 中所有 load_memory 工具调用的 name，
+        扫描当前 runtime history 中所有 base_memory(module=load) 工具调用的 name，
         与 Conversation.memory_loaded 求交集；
         被 compress 折叠/截断掉的记忆从 memory_loaded 中移除。
         """
@@ -143,7 +143,7 @@ class Memory:
                                 "name": getattr(raw_fn, "name", None),
                                 "arguments": getattr(raw_fn, "arguments", None),
                             }
-                    if not fn or fn.get("name") != "load_memory":
+                    if not fn or fn.get("name") != "base_memory":
                         continue
                     raw_args = fn.get("arguments")
                     if not raw_args:
@@ -151,6 +151,8 @@ class Memory:
                     try:
                         args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
                     except Exception:
+                        continue
+                    if args.get("module") != "load":
                         continue
                     name = args.get("name")
                     if name:

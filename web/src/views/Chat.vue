@@ -22,7 +22,6 @@
       <div class="chat-main" :class="{ 'with-extra': showExtraInfo }">
         <div class="chat-window-wrapper" :style="{ width: showExtraInfo ? chatWindowWidth : '100%' }">
           <ChatWindow
-            :agentname="agentname"
             :chat_request="chat_request"
             :agent_message_list="agent_message_list"
             :currentStreamingMessage="currentStreamingMessage"
@@ -117,7 +116,6 @@ const router = useRouter()
 
 // ✅ 定义响应式变量并加类型
 const conversation_list = ref<ConversationBase[]>([])
-const agentname = ref<string>('萌芽')
 const chat_request = ref<Partial<ChatRequest>>({})
 const agent_message_list = ref<AgentMessage[]>([])
 chat_request.value.tools_use = true

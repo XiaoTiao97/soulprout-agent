@@ -351,7 +351,6 @@ import BuyImg from '@/assets/images/buy.png'
 
 interface Props {
   agent_message_list: AgentMessage[];
-  agentname: string;
   chat_request: any;
   currentStreamingMessage: AgentMessage | null;
   isGenerating?: boolean;

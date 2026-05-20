@@ -10,6 +10,7 @@ import requests
 from datetime import datetime
 from zai import ZhipuAiClient
 
+from agent.database.models.user import UserInfo
 from agent.tool.file_process import AsyncFileProcess
 from agent.tool.registry import get_all_tool_schemas, get_registered_tool_names
 from agent.utils.vdb_client import VDBClient
@@ -339,7 +340,10 @@ class SoulproutToolFunction:
         return str([row.get("content") async for row in rows])
 
     # ─────────────────────────────────────────────────────────────────────────
-    # 记忆相关工具：load_memory / create_memory / edit_memory
+    # 记忆相关工具：
+    #   - base_memory：基础操作 load / search / remove
+    #   - create_memory：独立的创建工具
+    #   - edit_memory：独立的编辑工具
     # ─────────────────────────────────────────────────────────────────────────
 
     @staticmethod
@@ -363,6 +367,22 @@ class SoulproutToolFunction:
             {"$set": {"memory_loaded": memory_loaded, "updated_at": datetime.utcnow()}},
         )
 
+    async def _remove_memory_loaded(self, conversation_id, name):
+        """从 Conversation.memory_loaded 中移除 name（不存在则跳过）。"""
+        if not conversation_id or not name:
+            return
+        conv = await self.config.db_conversation.find_one({"conversation_id": conversation_id})
+        if not conv:
+            return
+        memory_loaded = list(conv.get("memory_loaded") or [])
+        if name not in memory_loaded:
+            return
+        memory_loaded = [n for n in memory_loaded if n != name]
+        await self.config.db_conversation.update_one(
+            {"conversation_id": conversation_id},
+            {"$set": {"memory_loaded": memory_loaded, "updated_at": datetime.utcnow()}},
+        )
+
     async def _query_memory_by_name(self, name, user_id):
         """按 (user_id, name) 精确查询一条记忆。"""
         name_esc = self._escape_filter_value(name)
@@ -375,7 +395,23 @@ class SoulproutToolFunction:
         )
         return results[0] if results else None
 
-    async def load_memory(self, name, conversation_id):
+    async def base_memory(self, module, conversation_id, name=None, query=None):
+        """统一 memory 工具：module=load/search/remove。"""
+        if module == "load":
+            if not name:
+                return "错误：module=load 时 name 必填"
+            return await self._memory_load(name, conversation_id)
+        if module == "search":
+            if not query or not str(query).strip():
+                return "错误：module=search 时 query 必填且不能为空，请传入用于检索记忆的关键短句"
+            return await self._memory_search(query, conversation_id)
+        if module == "remove":
+            if not name:
+                return "错误：module=remove 时 name 必填"
+            return await self._memory_remove(name, conversation_id)
+        return f"错误：未知的 module={module}，仅支持 load / search / remove"
+
+    async def _memory_load(self, name, conversation_id):
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         if not user_id:
             return "错误：无法获取用户信息"
@@ -392,6 +428,68 @@ class SoulproutToolFunction:
             }
         except Exception as e:
             return f"错误：加载记忆失败，失败原因：{e}"
+
+    async def _memory_search(self, query, conversation_id):
+        """
+        基于 query 在当前 user_id 的记忆库做向量召回，返回相关记忆的 name 与 description 列表。
+        仅返回元数据；如需 content，请再调用 module=load。
+        """
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            await self.vdb_client.ensure_collection(MEMORY_COLLECTION, "memory")
+            user_esc = self._escape_filter_value(user_id)
+            results = await self.vdb_client.hybrid_search(
+                MEMORY_COLLECTION,
+                query=query,
+                limit=self.config.memory_recall_top_k,
+                filter=f'user_id == "{user_esc}"',
+                output_fields=["name", "description"],
+            )
+            threshold = self.config.memory_recall_score_threshold
+            hits: list[dict] = []
+            for item in results:
+                score = item.get("_score")
+                if score is None or score < threshold:
+                    continue
+                name = item.get("name")
+                if not name:
+                    continue
+                hits.append({
+                    "name": name,
+                    "description": item.get("description") or "",
+                    "score": score,
+                })
+            if not hits:
+                return json.dumps(
+                    {"memories": [], "message": "未召回任何相关记忆"},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            return json.dumps({"memories": hits}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return f"错误：检索记忆失败，失败原因：{e}"
+
+    async def _memory_remove(self, name, conversation_id):
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            await self.vdb_client.ensure_collection(MEMORY_COLLECTION, "memory")
+            memory = await self._query_memory_by_name(name, user_id)
+            if not memory:
+                return f"错误：未找到名为 {name} 的记忆"
+            name_esc = self._escape_filter_value(name)
+            user_esc = self._escape_filter_value(user_id)
+            await self.vdb_client.delete(
+                MEMORY_COLLECTION,
+                filter=f'name == "{name_esc}" and user_id == "{user_esc}"',
+            )
+            await self._remove_memory_loaded(conversation_id, name)
+            return f"成功删除记忆 {name}"
+        except Exception as e:
+            return f"错误：删除记忆失败，失败原因：{e}"
 
     async def create_memory(self, name, description, content, conversation_id):
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
@@ -462,6 +560,53 @@ class SoulproutToolFunction:
             return f"成功编辑记忆 {name}"
         except Exception as e:
             return f"错误：编辑记忆失败，失败原因：{e}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 用户个性化配置工具：user_option
+    #   - info_type=userinfo / agentinfo
+    #   - module=add（末尾追加）/ edit（按 old_text 精确替换）
+    # ─────────────────────────────────────────────────────────────────────────
+
+    USER_OPTION_MAX_LEN = 1024
+
+    async def user_option(self, info_type, module, content, conversation_id, old_text=None):
+        if info_type not in ("userinfo", "agentinfo"):
+            return "错误：info_type 仅支持 userinfo 或 agentinfo"
+        if module not in ("add", "edit"):
+            return "错误：module 仅支持 add 或 edit"
+        if module == "edit" and not old_text:
+            return "错误：module=edit 时必须填写 old_text"
+        if content is None:
+            return "错误：content 不能为空"
+
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            user = await UserInfo.find_one(UserInfo.user_id == user_id)
+            if not user:
+                return f"错误：未找到用户 {user_id}"
+
+            current = getattr(user, info_type, "") or ""
+            if module == "add":
+                new_value = f"{current}\n{content}" if current else content
+            else:
+                if old_text not in current:
+                    return f"错误：未在原 {info_type} 中找到 old_text，无法替换"
+                new_value = current.replace(old_text, content)
+
+            if len(new_value) > self.USER_OPTION_MAX_LEN:
+                return (
+                    f"错误：{info_type} 写入后将超过 {self.USER_OPTION_MAX_LEN} 字符上限"
+                    f"（当前长度 {len(new_value)}），请精简后再写入"
+                )
+
+            setattr(user, info_type, new_value)
+            await user.save()
+            return f"成功更新用户的 {info_type}（当前长度 {len(new_value)}）"
+        except Exception as e:
+            return f"错误：更新用户 {info_type} 失败，失败原因：{e}"
+
 
 class ToolExecutor:
     def __init__(self, config):

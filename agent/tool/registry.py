@@ -321,16 +321,41 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "load_memory",
+            "name": "base_memory",
             "description": (
-                "根据记忆 name 加载某条记忆的完整内容，并将该 name 记录到当前会话的 memory_loaded，"
-                "后续召回不再重复推送该记忆。返回该记忆的 name、description 与 content。"
+                "记忆（memory）的基础操作工具，仅承担 load / search / remove 三个轻量子动作，"
+                "通过 module 切换；**创建与编辑请使用独立的 create_memory / edit_memory 工具**。\n"
+                "- module=load：根据记忆 name 加载某条记忆的完整内容，并将该 name 记录到当前会话的 "
+                "memory_loaded，后续召回不再重复推送该记忆；返回该记忆的 name、description 与 content。\n"
+                "- module=search：基于 query 在当前用户的记忆库中做向量召回，返回相关记忆的 name 与 "
+                "description 列表（不返回 content，content 需再调用 module=load 获取）。"
+                "**此模式下 query 必填且不能为空**——应为当前用户意图或检索关键短句。\n"
+                "- module=remove：根据记忆 name 永久删除当前用户的一条记忆，并从会话的 memory_loaded "
+                "中移除该 name。"
             ),
             "parameters": {
                 "type": "object",
-                "required": ["name"],
+                "required": ["module"],
                 "properties": {
-                    "name": {"type": "string", "description": "记忆的简短英文名称（业务唯一标识）"},
+                    "module": {
+                        "type": "string",
+                        "enum": ["load", "search", "remove"],
+                        "description": "子动作：load / search / remove",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": (
+                            "[module=load / module=remove 必填] 记忆的简短英文名称（业务唯一标识）"
+                        ),
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "[module=search 必填，非空] 用于记忆向量召回的检索短句，"
+                            "应为当前用户意图或任务关键词；不可传空字符串"
+                        ),
+                        "minLength": 1,
+                    },
                 },
             },
         },
@@ -384,6 +409,47 @@ TOOL_SCHEMAS = [
                     "text": {
                         "type": "string",
                         "description": "需要写入的内容（追加内容或替换后的新文本）",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "user_option",
+            "description": (
+                "用户个性化配置工具，把对话过程中暴露出来的「用户个人信息」与「用户希望的智能体形象」"
+                "持久化到该用户的档案中\n"
+                "- info_type=userinfo：当用户透露了自己的身份、职业、所在地、兴趣爱好、口味偏好、"
+                "等个人信息时调用，把信息存入 userinfo 字段，用于后续对话中保持记忆与个性化。\n"
+                "- info_type=agentinfo：当用户表达了对当前 Soulprout 智能体的期望（比如希望被叫什么名字、"
+                "性格、语气、说话风格、定位等）时调用，把信息存入 agentinfo 字段。\n"
+                "- module=add：在原内容末尾追加 content（首次写入时直接写入）。\n"
+                "- module=edit：在原内容中将 old_text 精确替换为 content，此时 old_text 必填。\n"
+                "注意：userinfo 与 agentinfo 单字段上限 1024 字符"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["info_type", "module", "content"],
+                "properties": {
+                    "info_type": {
+                        "type": "string",
+                        "enum": ["userinfo", "agentinfo"],
+                        "description": "目标字段：userinfo（用户个人信息）/ agentinfo（智能体个性化信息）",
+                    },
+                    "module": {
+                        "type": "string",
+                        "enum": ["add", "edit"],
+                        "description": "操作：add 末尾追加 / edit 精确替换",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "add 时为要追加的内容；edit 时为替换后的新文本",
+                    },
+                    "old_text": {
+                        "type": "string",
+                        "description": "[module=edit 必填] 原内容中需要被替换掉的文本",
                     },
                 },
             },

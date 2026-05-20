@@ -23,7 +23,7 @@ export interface ChatRequest {
   tools_use?: boolean; // 是否使用工具
   skills_use?: boolean; // 是否使用技能
   kb_use?: Array<string>; // 是否使用知识库
-  agent_use?: 'expert-agent' | 'select-agent' | null;
+  agent_use?: 'expert-agent' | 'select-agent' | 'soulprout' | null;
   agent_id?: string | string[] | null;  // 传递时使用 agent_id
   agent_name?: string | string[] | null;  // 仅用于展示，从 agent_card_list 根据 agent_id 查找
   files?: File[];

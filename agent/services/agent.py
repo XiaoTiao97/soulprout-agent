@@ -22,6 +22,7 @@ from agent.database.crud.conversation import (
     update_conversation_by_conv_for_tools_and_kb,
     update_sub_agent_conversation,
 )
+from agent.database.models.user import UserInfo
 from agent.skill.manager import load_skill_to_workspace
 from agent.tool.tools import ToolExecutor
 from agent.services import prompt
@@ -87,7 +88,8 @@ class Chat:
             "web_search",
             "web_fetch",
             "soulprout_kb_tool",
-            "call_sub_agent"
+            "call_sub_agent",
+            "user_option",
         ]
 
     async def mcp_list_tools(self):
@@ -494,6 +496,47 @@ class Chat:
         tools_use_final = [tool for tool in tools if tool.get("function").get("name") in tools_use_list]
         if len(tools_use_final) > 0:
             # TODO 核实这个tools_use是否有必要
+            self.tools_use = True
+        return tools_use_final
+
+    async def soulprout_agent_process(self):
+        """
+        Soulprout 模式：
+        - 拉取当前 user 的 userinfo / agentinfo
+        - 以 USERINFO: 和 AGENTINFO: 为前缀拼入 system_prompt
+        - 若 DB 中 agentinfo 已设置，则把它放到 AGENTINFO 段的开头；
+          否则用 AGENT_INFO_PERSONA_REMINDER 提醒用户可以个性化自己的 Soulprout
+        - 工具集仅暴露 soulprout_tools
+        """
+        userinfo_text = ""
+        agentinfo_text = ""
+        try:
+            user = await UserInfo.find_one(UserInfo.user_id == self.user_id)
+            if user:
+                userinfo_text = (getattr(user, "userinfo", "") or "").strip()
+                agentinfo_text = (getattr(user, "agentinfo", "") or "").strip()
+        except Exception as e:
+            print(f"加载 UserInfo 失败：{e}")
+
+        userinfo_section = f"USERINFO: {userinfo_text}" if userinfo_text else "USERINFO: (empty)"
+        if agentinfo_text:
+            agentinfo_section = f"AGENTINFO: {agentinfo_text}\n\n{prompt.AGENT_INFO}"
+        else:
+            agentinfo_section = f"AGENTINFO: {prompt.AGENT_INFO_PERSONA_REMINDER}\n\n{prompt.AGENT_INFO}"
+
+        self.system_prompt = (
+            f"{userinfo_section}\n\n"
+            f"{agentinfo_section}\n"
+            f"{self.capabilities_prompt}\n"
+            f"Current time:{self.time_now}\n"
+        )
+
+        tools = await self.mcp_list_tools()
+        tools_use_final = [
+            tool for tool in tools
+            if tool.get("function", {}).get("name") in self.soulprout_tools
+        ]
+        if len(tools_use_final) > 0:
             self.tools_use = True
         return tools_use_final
 
@@ -950,6 +993,10 @@ class Chat:
                 agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
                 self.agent_card = AgentCard(**agent_card)
                 self.agent_name = self.agent_card.name_zh if self.agent_card.name_zh else self.agent_card.name
+
+        # Soulprout 模式：注入 USERINFO / AGENTINFO 并使用 soulprout_tools
+        elif self.agent_use == "soulprout":
+            tools = await self.soulprout_agent_process()
 
         # 处理所有未选择智能体或多选智能体的情况
         else:
