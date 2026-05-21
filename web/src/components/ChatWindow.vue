@@ -270,8 +270,8 @@
           </div>
         </template>
 
-        <!-- 无对话历史时显示欢迎界面 -->
-        <template v-else>
+        <!-- 无对话历史时显示欢迎界面（Soulprout 模式暂不展示任何引导内容） -->
+        <template v-else-if="chatMode !== 'soulprout'">
           <div :style="{ display: isVisible ? 'flex' : 'none' }" class="no-history-container" @mouseenter="showSuggestions = true">
             <div class="no-history-title-row" @mouseenter="showViewHint = false">
               <p :class="['no-history-content1', { active: showContent1 }]">你好{{ username }}，需要我做些什么？🌱</p>
@@ -306,6 +306,7 @@
         :agent_card_list="agent_card_list"
         :userId="userId"
         :kb_list="kb_list"
+        :chatMode="chatMode"
         @sendMessage="handleSendMessage" 
         @changeToolsUse="handleToolsUseChange"
         @changeSkillsUse="handleSkillsUseChange"
@@ -364,6 +365,8 @@ interface Props {
   username: string;
   /** 父组件在 reload_history 时递增，用于清空流式块 UI */
   reloadStreamingUiToken?: number;
+  /** 当前聊天模式：'soulprout' | 'task'；Soulprout 模式下隐藏欢迎页与高级设置入口 */
+  chatMode?: 'soulprout' | 'task';
 }
 
 interface StreamBlock {
@@ -385,6 +388,7 @@ const props = withDefaults(defineProps<Props>(), {
   planStreamContent: '',
   planFoldAfterNonPlan: false,
   reloadStreamingUiToken: 0,
+  chatMode: 'task',
 })
 const emit = defineEmits<{
   sendMessage: [message: string, files: File[], options?: { input_message_id?: string }]

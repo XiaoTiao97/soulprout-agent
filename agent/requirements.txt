@@ -16,3 +16,12 @@ zai-sdk
 aiofiles
 html2text
 pymilvus
+beanie==1.26.0
+pyyaml
+python-pptx
+pdfminer.six
+python-docx
+openpyxl
+alibabacloud_tea_openapi
+alibabacloud_docmind_api20220711==1.4.7
+alibabacloud_credentials

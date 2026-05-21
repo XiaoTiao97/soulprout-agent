@@ -42,7 +42,60 @@
             </div>
         </div>
         <div class="conversation-select" :class="{ 'disabled-select': isGenerating }" :title="isGenerating ? '正在生成中，无法操作' : ''">
-            <div class="create-conversation">
+            <div
+              class="chat-mode-section"
+              :class="{ 'chat-mode-section--collapsed': isExpanded }"
+            >
+              <div class="chat-mode-header">
+                <span class="chat-mode-header-title">对话模式</span>
+                <span class="chat-mode-header-hint">
+                  {{ chatMode === 'soulprout' ? '越用越懂你' : '专业打工人' }}
+                </span>
+              </div>
+              <div
+                class="chat-mode-switch"
+                role="tablist"
+                aria-label="对话模式切换"
+                :data-active="chatMode"
+              >
+                <span class="chat-mode-switch-thumb" aria-hidden="true"></span>
+                <button
+                  type="button"
+                  role="tab"
+                  class="chat-mode-option"
+                  :class="{ 'chat-mode-option--active': chatMode === 'soulprout' }"
+                  :aria-selected="chatMode === 'soulprout'"
+                  :tabindex="chatMode === 'soulprout' ? 0 : -1"
+                  title="Soul 模式：日常陪伴对话"
+                  @click="handleSwitchMode('soulprout')"
+                >
+                  <svg class="chat-mode-option-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M8 13.5V7.5" />
+                    <path d="M8 7.5c0-2.2 1.7-4 4-4 0 2.2-1.8 4-4 4z" />
+                    <path d="M8 8.5c0-1.8-1.5-3.3-3.3-3.3 0 1.8 1.5 3.3 3.3 3.3z" />
+                  </svg>
+                  <span class="chat-mode-option-label">Soul</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  class="chat-mode-option"
+                  :class="{ 'chat-mode-option--active': chatMode === 'task' }"
+                  :aria-selected="chatMode === 'task'"
+                  :tabindex="chatMode === 'task' ? 0 : -1"
+                  title="Task 模式：任务式多会话协作"
+                  @click="handleSwitchMode('task')"
+                >
+                  <svg class="chat-mode-option-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 4.5h7M3 8h7M3 11.5h4.5" />
+                    <path d="m11.5 10.5 1.6 1.6L15.5 9.5" />
+                  </svg>
+                  <span class="chat-mode-option-label">Task</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="chatMode === 'task'" class="create-conversation">
                 <button
                     class="create-conversation-button-agent"
                     :class="{ 'create-conversation-button-agent--collapsed': isExpanded }"
@@ -51,11 +104,16 @@
                     <div class="create-conversation-logo">
                         <img class="shrink-0 group-hover:scale-105 transition" width="20" height="20" src="@/assets/images/create_conversation.svg" alt="" />
                     </div>
-                    <div v-show="!isExpanded" class="create-conversation-text">新对话</div>
+                    <div v-show="!isExpanded" class="create-conversation-text">新任务</div>
                 </button>
             </div>
 
-            <div class="history-choose" :class="{ 'hidden-text': isExpanded }" ref="conversationListRef">
+            <div
+              v-if="chatMode === 'task'"
+              class="history-choose"
+              :class="{ 'hidden-text': isExpanded }"
+              ref="conversationListRef"
+            >
             <div
                 class="history-agent"
                 v-for="item in conversation_list"
@@ -171,17 +229,31 @@ const emit = defineEmits([
   'openKBOption',
   'openAgentOption',
   'updateConversationAbstract',
+  'switchMode',
 ]);
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   conversation_list: ConversationBase[];
   isExpanded: boolean;
   chat_request: Partial<ChatRequest>;
   isGenerating: boolean;
   username?: string;
-}>();
+  chatMode?: 'soulprout' | 'task';
+}>(), {
+  chatMode: 'task',
+});
 
 const { conversation_list, isExpanded, chat_request, isGenerating } = toRefs(props);
+
+const handleSwitchMode = (mode: 'soulprout' | 'task') => {
+  if (props.isGenerating || props.chatMode === mode) return;
+  emit('switchMode', mode);
+};
+
+const handleToggleMode = () => {
+  const next: 'soulprout' | 'task' = props.chatMode === 'soulprout' ? 'task' : 'soulprout';
+  handleSwitchMode(next);
+};
 
 const router = useRouter();
 const showMenu = ref(false);
@@ -352,6 +424,143 @@ onUnmounted(() => {
   cursor: not-allowed;
   pointer-events: none;
   opacity: 0.7;
+}
+
+/* —— 对话模式切换：分段控件（Segmented Control）形态。
+ * 作为侧边栏的重要功能，承担"在 Soul / Task 两种对话模式之间切换"的角色。
+ * 设计要点：
+ * 1) 顶部分隔线 + 小标题"对话模式"，与上方工具/技能/知识/专家区域做出明确的视觉分块；
+ * 2) 双段按钮 + 黑色 thumb 平滑滑动，激活态高对比，未激活态保留可点击线索；
+ * 3) 沿用全局黑/白/灰色板，不引入新的强调色，保持整体克制。
+ */
+.chat-mode-section {
+  width: 90%;
+  margin: 16px auto 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.chat-mode-section--collapsed {
+  display: none;
+}
+
+.chat-mode-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+  user-select: none;
+}
+
+.chat-mode-header-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: rgb(110, 110, 110);
+  text-transform: uppercase;
+}
+
+.chat-mode-header-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgb(150, 150, 150);
+  letter-spacing: 0.2px;
+}
+
+.chat-mode-switch {
+  position: relative;
+  display: flex;
+  width: 100%;
+  padding: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+/* 滑动 thumb：黑色实块，根据 data-active 切换位置 */
+.chat-mode-switch-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  background-color: rgb(33, 33, 33);
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.chat-mode-switch[data-active="task"] .chat-mode-switch-thumb {
+  transform: translateX(100%);
+}
+
+.chat-mode-option {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 9px;
+  background-color: transparent;
+  color: rgb(110, 110, 110);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.25s ease, transform 0.18s ease;
+}
+
+.chat-mode-option:hover:not(.chat-mode-option--active) {
+  color: rgb(33, 33, 33);
+}
+
+.chat-mode-option:active:not(.chat-mode-option--active) {
+  transform: scale(0.97);
+}
+
+.chat-mode-option--active,
+.chat-mode-option--active:hover {
+  color: #fff;
+}
+
+.chat-mode-option:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.25);
+  outline-offset: 2px;
+}
+
+.chat-mode-option-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.9;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.chat-mode-option--active .chat-mode-option-icon {
+  opacity: 1;
+}
+
+.chat-mode-option:hover:not(.chat-mode-option--active) .chat-mode-option-icon {
+  transform: scale(1.06);
+}
+
+.chat-mode-option-label {
+  line-height: 1;
 }
 
 .user-option {

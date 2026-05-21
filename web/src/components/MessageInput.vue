@@ -34,8 +34,8 @@
             <img src="@/assets/images/file_upload.svg" width="18" height="18" />
           </button>
 
-          <!-- 2. 设置对话 - 多选智能体或无专家时显示，子智能体/主智能体时隐藏 -->
-          <div v-if="!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent'" class="settings-selector" ref="settingsSelectorRef">
+          <!-- 2. 设置对话 - 多选智能体或无专家时显示，子智能体/主智能体时隐藏；Soulprout 模式下不展示 -->
+          <div v-if="!isSoulproutMode && (!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent')" class="settings-selector" ref="settingsSelectorRef">
             <button class="settings-select-btn" :class="{ 'settings-active': showSettingsPanel }" type="button" @click="toggleSettingsPanel">
               <span>⚙️ 设置</span>
               <svg class="dropdown-icon" :class="{ 'rotate': showSettingsPanel }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -121,8 +121,8 @@
             </div>
           </div>
 
-          <!-- 3. 专家模式（第三位）- 毕业帽+专家模式 -->
-          <div class="agent-selector" ref="agentSelectorRef">
+          <!-- 3. 专家模式（第三位）- 毕业帽+专家模式；Soulprout 模式下不展示 -->
+          <div v-if="!isSoulproutMode" class="agent-selector" ref="agentSelectorRef">
                 <button class="agent-select-btn" :class="{ 'agent-active': !!props.chat_request.agent_use }" type="button" @click="toggleAgentSelector">
               <span>🎓 {{ selectedAgentDisplay }}</span>
               <svg class="dropdown-icon" :class="{ 'rotate': showAgentSelector }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -145,14 +145,6 @@
                   </button>
                   <div class="mode-selector">
                     <div class="mode-column">
-                      <div
-                        class="mode-item"
-                        @mouseenter="currentMode = null"
-                        @click="selectSoulprout"
-                        :class="{ 'active': props.chat_request.agent_use === 'soulprout' }"
-                      >
-                        Soulprout
-                      </div>
                       <div 
                         class="mode-item" 
                         @mouseenter="currentMode = 'expert'"
@@ -276,7 +268,7 @@ const PdfIconUrl = new URL('@/assets/images/pdf_update.svg', import.meta.url).hr
 const FileIconUrl = new URL('@/assets/images/file_update.svg', import.meta.url).href
 const DeleteFileIconUrl = new URL('@/assets/images/delete_file.svg', import.meta.url).href
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   chat_request: {
     tools_use?: boolean
     skills_use?: boolean
@@ -292,7 +284,12 @@ const props = defineProps<{
   isGenerating: boolean
   userId: string
   kb_list: { id: string, name: string }[]
-}>()
+  chatMode?: 'soulprout' | 'task'
+}>(), {
+  chatMode: 'task',
+})
+
+const isSoulproutMode = computed(() => props.chatMode === 'soulprout')
 
 const emit = defineEmits<{
   sendMessage: [message: string, files: File[]]
@@ -315,7 +312,7 @@ const textareaRef = ref<HTMLTextAreaElement>()
 const showAgentSelector = ref(false)
 const agentSelectorRef = ref<HTMLElement>()
 const agentListDropdownRef = ref<HTMLElement>()
-const currentMode = ref<'single' | 'multi' | 'select' | null>(null)
+const currentMode = ref<'expert' | 'select' | null>(null)
 const keepRightDropdownOpen = ref(false)
 const selectedSingle = ref<string>('')  // 存储 agent_id
 const showGenerationPrompt = ref(false)
@@ -425,9 +422,6 @@ const selectedAgentDisplay = computed(() => {
   if (!props.chat_request.agent_use) return '专家模式'
   const agentId = props.chat_request.agent_id
   const agentName = props.chat_request.agent_name
-  if (props.chat_request.agent_use === 'soulprout') {
-    return 'Soulprout'
-  }
   if (props.chat_request.agent_use === 'expert-agent') {
     if (typeof agentName === 'string' && agentName) return agentName
     if (typeof agentId === 'string') return getAgentNameById(agentId) || agentId
@@ -576,23 +570,6 @@ function selectNone() {
     emit('selectModel', first.model_source, first.models[0].id)
   }
   showAgentSelector.value = false
-  selectedSingle.value = ''
-  selectedSelect.value = []
-}
-
-// 选择 Soulprout 模式：无需二级 agent_id 选择，直接生效
-function selectSoulprout() {
-  emit('selectAgent', 'soulprout', null)
-  emit('selectKB', [])
-  // Soulprout 模式同样使用默认模型
-  const providers = modelProviders.value
-  if (providers.length > 0 && providers[0].models.length > 0) {
-    const first = providers[0]
-    emit('selectModel', first.model_source, first.models[0].id)
-  }
-  showAgentSelector.value = false
-  currentMode.value = null
-  keepRightDropdownOpen.value = false
   selectedSingle.value = ''
   selectedSelect.value = []
 }

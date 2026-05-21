@@ -3,10 +3,11 @@
   <div class="main-container">
     <div class="main-use-container">
       <ConversationWindow
-        :conversation_list="conversation_list"
+        :conversation_list="taskConversationList"
         :isExpanded="isExpanded"
         :chat_request="chat_request"
         :username="currentUsername"
+        :chatMode="chatMode"
         @createConversation="createConversation"
         @deleteConversation="deleteConversation"
         @pickConversation="pickConversation"
@@ -17,6 +18,7 @@
         @openAgentOption="openAgentOption"
           :isGenerating="isGenerating"
         @updateConversationAbstract="updateConversationAbstract"
+        @switchMode="handleSwitchMode"
       />
 
       <div class="chat-main" :class="{ 'with-extra': showExtraInfo }">
@@ -34,6 +36,7 @@
             :userId="currentUserId"
             :username="currentUsername"
             :reloadStreamingUiToken="reloadStreamingUiToken"
+            :chatMode="chatMode"
             @sendMessage="handleSendMessage"
             @stopGeneration="stopGeneration"
             :class="{ 'compressed': showExtraInfo }"
@@ -118,6 +121,10 @@ const router = useRouter()
 const conversation_list = ref<ConversationBase[]>([])
 const chat_request = ref<Partial<ChatRequest>>({})
 const agent_message_list = ref<AgentMessage[]>([])
+/** 当前聊天模式：'soulprout' 直接对接 user_id 唯一会话；'task' 为常规任务模式 */
+const chatMode = ref<'soulprout' | 'task'>('task')
+/** 切到 Soulprout 模式前缓存任务模式的 chat_request，便于切回任务模式时恢复 */
+const cachedTaskChatRequest = ref<Partial<ChatRequest> | null>(null)
 chat_request.value.tools_use = true
 chat_request.value.skills_use = true
 chat_request.value.agent_use = null
@@ -145,6 +152,13 @@ const showKBOption = ref<boolean>(false)
 const currentUserId = ref<string>('')
 
 const currentUsername = ref<string>('')
+
+/** 任务模式下展示的会话列表（剔除 Soulprout 唯一会话） */
+const taskConversationList = computed<ConversationBase[]>(() =>
+  conversation_list.value.filter(
+    (item) => item.agent_use !== 'soulprout' && item.conversation_id !== currentUserId.value,
+  ),
+)
 
 // 新增函数：获取当前用户ID
 async function fetchCurrentUserId(): Promise<void> {
@@ -241,6 +255,73 @@ function createConversation() {
   // 重置流状态
   isStreamEnded.value = false
   messageQueue.value = []
+}
+
+/**
+ * 切换聊天模式。
+ * - Soulprout 模式：固定 conversation_id = user_id，自动加载历史消息（若已有），
+ *   工具/技能默认开启，知识库不选择，模型由后端环境变量决定，不在前端传递。
+ * - 任务模式：恢复任务模式的常规默认配置。
+ */
+async function handleSwitchMode(mode: 'soulprout' | 'task') {
+  if (mode === chatMode.value) return
+  if (isGenerating.value) {
+    stopGeneration()
+  }
+  if (mode === 'soulprout') {
+    cachedTaskChatRequest.value = { ...chat_request.value }
+    chatMode.value = 'soulprout'
+    await loadSoulproutConversation()
+  } else {
+    chatMode.value = 'task'
+    if (cachedTaskChatRequest.value) {
+      chat_request.value = { ...cachedTaskChatRequest.value }
+      cachedTaskChatRequest.value = null
+    } else {
+      createConversation()
+    }
+    agent_message_list.value = []
+    toolMessages.value = []
+    fileMessages.value = []
+    chatPlanStreamForWindow.value = ''
+    chatPlanFoldAfterNonPlan.value = false
+    currentStreamingMessage.value = null
+    if (chat_request.value.conversation_id) {
+      await pickConversation(chat_request.value.conversation_id)
+    }
+  }
+}
+
+/** Soulprout 唯一会话以 user_id 为 conversation_id：尝试拉取已存在的消息列表，无则置空，由首次发送时后端建会话 */
+async function loadSoulproutConversation() {
+  const userId = currentUserId.value
+  agent_message_list.value = []
+  toolMessages.value = []
+  fileMessages.value = []
+  chatPlanStreamForWindow.value = ''
+  chatPlanFoldAfterNonPlan.value = false
+  currentStreamingMessage.value = null
+  chat_request.value = {
+    conversation_id: userId || '',
+    agent_use: 'soulprout',
+    agent_id: null,
+    agent_name: null,
+    tools_use: true,
+    skills_use: true,
+    kb_use: [],
+  }
+  if (!userId) return
+  try {
+    const response = await axios.get<AgentMessage[]>(`/api/message/${userId}`)
+    agent_message_list.value = normalizeMessagesFromApi(response.data)
+    toolMessages.value = agent_message_list.value.filter(
+      (msg) => (msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools') && msg.role !== 'file',
+    )
+    fileMessages.value = agent_message_list.value.filter((msg) => msg.role === 'file')
+  } catch (error) {
+    // 首次进入 Soulprout 模式时还没有任何会话/消息，忽略即可
+    console.debug('Soulprout 会话尚未建立或拉取失败：', error)
+  }
 }
 
 async function deleteConversation(conversationId) {
@@ -643,6 +724,18 @@ async function handleSendMessage(
       payload.input_message_id = options.input_message_id
     } else {
       delete payload.input_message_id
+    }
+    if (chatMode.value === 'soulprout') {
+      // Soulprout 模式：模型由后端环境变量决定，前端不传递；强制使用唯一 conversation_id
+      delete payload.model_source
+      delete payload.model
+      payload.agent_use = 'soulprout'
+      payload.agent_id = null
+      payload.agent_name = null
+      payload.tools_use = true
+      payload.skills_use = true
+      payload.kb_use = []
+      payload.conversation_id = currentUserId.value
     }
     formData.append('chat_request', JSON.stringify(payload));
     files.forEach(file => formData.append('files', file));

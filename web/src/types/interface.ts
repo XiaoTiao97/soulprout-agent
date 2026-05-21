@@ -8,6 +8,7 @@ export interface ConversationBase {
     kb_use?: Array<string> // 是否使用知识库
     model_source?: string // 模型来源
     model?: string
+    agent_use?: 'expert-agent' | 'select-agent' | 'soulprout' | string | null
     create_at: string
     updated_at: string
 }

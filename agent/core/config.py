@@ -49,6 +49,8 @@ class Config:
         self.compact_model = os.getenv("COMPACT_MODEL")
         self.collapse_model_source = os.getenv("COLLAPSE_MODEL_SOURCE")
         self.collapse_model = os.getenv("COLLAPSE_MODEL")
+        self.soulprout_model_source = os.getenv("SOULPROUT_MODEL_SOURCE")
+        self.soulprout_model = os.getenv("SOULPROUT_MODEL")
 
         default_key = "sk-xxx"
         self.models_info_list = [

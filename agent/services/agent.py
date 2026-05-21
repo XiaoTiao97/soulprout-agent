@@ -18,6 +18,7 @@ from agent.database.crud.message import (
 from agent.database.crud.conversation import (
     create_conversation,
     create_sub_agent_conversation,
+    get_conversation_by_id,
     get_sub_agent_conversation,
     update_conversation_by_conv_for_tools_and_kb,
     update_sub_agent_conversation,
@@ -502,12 +503,34 @@ class Chat:
     async def soulprout_agent_process(self):
         """
         Soulprout 模式：
+        - 强制 conversation_id = user_id（每个用户唯一的 Soulprout 会话），不存在则先建一条
+        - 模型从环境变量 SOULPROUT_MODEL / SOULPROUT_MODEL_SOURCE 读取，忽略前端传入
         - 拉取当前 user 的 userinfo / agentinfo
         - 以 USERINFO: 和 AGENTINFO: 为前缀拼入 system_prompt
         - 若 DB 中 agentinfo 已设置，则把它放到 AGENTINFO 段的开头；
           否则用 AGENT_INFO_PERSONA_REMINDER 提醒用户可以个性化自己的 Soulprout
         - 工具集仅暴露 soulprout_tools
         """
+        self.conversation_id = self.user_id
+        self.model_source = self.config.soulprout_model_source
+        self.model = self.config.soulprout_model
+
+        existing_conversation = await get_conversation_by_id(self.conversation_id)
+        if existing_conversation is None:
+            await create_conversation(Conversation(
+                user_id=self.user_id,
+                conversation_id=self.conversation_id,
+                abstract="Soulprout",
+                tools_use=self.tools_use,
+                skills_use=self.skills_use,
+                kb_use=self.kb_use or [],
+                agent_use=self.agent_use,
+                agent_id=self.agent_id,
+                agent_name=self.agent_name,
+                model_source=self.model_source,
+                model=self.model,
+            ))
+
         userinfo_text = ""
         agentinfo_text = ""
         try:
