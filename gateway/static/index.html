@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Soulprout Gateway</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #06100d;
+      --bg-card:      rgba(14, 26, 22, 0.85);
+      --accent:       #1eb48c;
+      --accent-dim:   rgba(30, 180, 140, 0.12);
+      --accent-border:rgba(30, 180, 140, 0.22);
+      --text:         #dff0e9;
+      --text-sub:     rgba(223, 240, 233, 0.45);
+      --text-muted:   rgba(223, 240, 233, 0.22);
+      --border:       rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(30, 180, 140, 0.28);
+      --shadow:       0 0 60px rgba(30,180,140,0.06), 0 4px 32px rgba(0,0,0,0.35);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Noto Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── BG decoration ─── */
+    .bg-deco {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .bg-radial {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 55% at 50% 38%,
+        rgba(30,180,140,0.055) 0%, transparent 68%);
+    }
+    .bg-ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+    }
+    .bg-ring-1 { width: 900px; height: 900px; border: 1px solid rgba(30,180,140,0.04); }
+    .bg-ring-2 { width: 560px; height: 560px; border: 1px solid rgba(30,180,140,0.06); }
+
+    /* ─── Header ─── */
+    .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 2rem;
+      background: rgba(6, 16, 13, 0.75);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+    .brand-logo {
+      width: 2rem; height: 2rem;
+      background: linear-gradient(135deg, #1eb48c 0%, #0fa06e 100%);
+      border-radius: 0.5rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .brand-name {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .brand-tag {
+      font-size: 0.7rem;
+      color: var(--accent);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-left: 0.375rem;
+      opacity: 0.7;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-border);
+      border-radius: 2rem;
+      padding: 0.3rem 0.75rem 0.3rem 0.3rem;
+    }
+    .user-avatar {
+      width: 1.75rem; height: 1.75rem;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .user-email {
+      font-size: 0.8125rem;
+      color: var(--text-sub);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.375rem 0.875rem;
+      border-radius: 2rem;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+    .btn-logout:hover { border-color: #e55a5a; color: #e55a5a; }
+
+    /* ─── Main layout ─── */
+    .page-main {
+      position: relative;
+      z-index: 10;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6rem 1.5rem 3rem;
+    }
+
+    /* ─── Login card ─── */
+    .login-wrap {
+      width: 100%;
+      max-width: 440px;
+    }
+    .login-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 2.5rem 2.5rem 2rem;
+      box-shadow: var(--shadow);
+    }
+    .card-eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: rgba(30,180,140,0.5);
+      font-weight: 300;
+      margin-bottom: 0.75rem;
+    }
+    .card-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.025em;
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+    }
+    .card-desc {
+      font-size: 0.875rem;
+      color: var(--text-sub);
+      font-weight: 300;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    /* ─── Form ─── */
+    .form { display: flex; flex-direction: column; gap: 0.875rem; }
+    .input-field {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 0.625rem;
+      color: var(--text);
+      font-size: 0.9375rem;
+      font-family: inherit;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      outline: none;
+    }
+    .input-field::placeholder { color: var(--text-muted); }
+    .input-field:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(30,180,140,0.1);
+    }
+    .input-field:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .code-row { display: flex; gap: 0.625rem; }
+    .code-input { flex: 1; }
+    .code-btn {
+      flex-shrink: 0;
+      padding: 0 1rem;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+      border-radius: 0.625rem;
+      font-size: 0.85rem;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      min-width: 7.5rem;
+      transition: all 0.25s;
+    }
+    .code-btn:hover:not(:disabled) {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+    .code-btn:disabled { color: var(--text-muted); border-color: var(--border); cursor: not-allowed; }
+
+    .status-msg { font-size: 0.8125rem; min-height: 1.1rem; }
+    .status-msg.ok  { color: var(--accent); }
+    .status-msg.err { color: #e55a5a; }
+
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 0.875rem 2rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 60px;
+      font-size: 1rem;
+      font-weight: 500;
+      font-family: inherit;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      margin-top: 0.25rem;
+      transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow: 0 4px 20px rgba(30,180,140,0.22);
+    }
+    .cta-btn:hover:not(:disabled) {
+      background: #22c99d;
+      box-shadow: 0 8px 28px rgba(30,180,140,0.32);
+      transform: translateY(-2px);
+    }
+    .cta-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .cta-btn svg { transition: transform 0.3s; }
+    .cta-btn:hover:not(:disabled) svg { transform: translateX(3px); }
+
+    .hint-text {
+      text-align: center;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin-top: 1.5rem;
+      line-height: 1.6;
+    }
+
+    /* ─── Dashboard ─── */
+    .dashboard { width: 100%; max-width: 560px; }
+
+    .dash-header { margin-bottom: 2rem; }
+    .dash-eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: rgba(30,180,140,0.5);
+      font-weight: 300;
+      margin-bottom: 0.5rem;
+    }
+    .dash-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .dash-sub {
+      font-size: 0.875rem;
+      color: var(--text-sub);
+      font-weight: 300;
+      line-height: 1.6;
+    }
+
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 1.25rem;
+      transition: border-color 0.35s;
+    }
+    .section-card:hover { border-color: rgba(30,180,140,0.14); }
+
+    .section-label {
+      font-size: 10px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(30,180,140,0.45);
+      font-weight: 300;
+      margin-bottom: 1.25rem;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.625rem;
+      margin-bottom: 0.625rem;
+    }
+    .input-row .input-field { flex: 1; }
+
+    .btn-sm {
+      flex-shrink: 0;
+      padding: 0 1rem;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+      border-radius: 0.625rem;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.25s;
+    }
+    .btn-sm:hover:not(:disabled) {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+
+    .url-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 0.75rem;
+    }
+    .url-hint code { color: var(--accent); }
+
+    .mode-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .mode-label { font-size: 0.875rem; color: var(--text-sub); }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.05em;
+    }
+    .badge-green  { background: rgba(30,180,140,0.14); color: var(--accent); }
+    .badge-gray   { background: rgba(255,255,255,0.06); color: var(--text-sub); }
+    .badge-blue   { background: rgba(88,166,255,0.12);  color: #58a6ff; }
+
+    .save-msg { font-size: 0.8125rem; min-height: 1.1rem; margin-top: 0.5rem; }
+    .save-msg.ok  { color: var(--accent); }
+    .save-msg.err { color: #e55a5a; }
+
+    /* Platform grid */
+    .platform-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .platform-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.875rem 1rem;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid var(--border);
+      border-radius: 0.875rem;
+      text-decoration: none;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .platform-item:hover {
+      border-color: var(--border-hover);
+      background: rgba(30,180,140,0.05);
+    }
+    .platform-icon {
+      width: 2.5rem; height: 2.5rem;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-border);
+      border-radius: 0.625rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+    .platform-info { flex: 1; }
+    .platform-name {
+      font-size: 0.9375rem;
+      font-weight: 500;
+      margin-bottom: 0.2rem;
+    }
+    .platform-desc { font-size: 0.8125rem; color: var(--text-sub); }
+    .platform-arrow {
+      color: var(--text-muted);
+      transition: transform 0.3s, color 0.3s;
+    }
+    .platform-item:hover .platform-arrow { color: var(--accent); transform: translateX(3px); }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* Loading skeleton */
+    .page-loading {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: dotBounce 1.2s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.15s; }
+    .dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes dotBounce {
+      0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    @media (max-width: 480px) {
+      .login-card { padding: 2rem 1.25rem; border-radius: 1.125rem; }
+      .card-title { font-size: 1.5rem; }
+      .code-row { flex-direction: column; }
+      .code-btn { width: 100%; padding: 0.7rem; text-align: center; }
+      .header { padding: 0.8rem 1rem; }
+      .brand-tag { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- BG -->
+<div class="bg-deco" aria-hidden="true">
+  <div class="bg-radial"></div>
+  <div class="bg-ring bg-ring-1"></div>
+  <div class="bg-ring bg-ring-2"></div>
+</div>
+
+<!-- Page loading -->
+<div id="page-loading" class="page-loading">
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
+
+<!-- Header -->
+<header class="header">
+  <a href="/" class="header-brand">
+    <div class="brand-logo">🌱</div>
+    <span class="brand-name">Soulprout<span class="brand-tag">Gateway</span></span>
+  </a>
+  <div class="header-right" id="header-user" style="display:none">
+    <div class="user-pill">
+      <div class="user-avatar" id="user-avatar-char">?</div>
+      <span class="user-email" id="header-email">—</span>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">退出登录</button>
+  </div>
+</header>
+
+<!-- Main -->
+<main class="page-main">
+
+  <!-- ① Login view -->
+  <div id="view-login" class="login-wrap" style="display:none">
+    <div class="login-card">
+      <p class="card-eyebrow">Gateway · 账号登录</p>
+      <h1 class="card-title">登录 Soulprout</h1>
+      <p class="card-desc">使用你的 Soulprout 账号登录，即可管理 Gateway 平台接入配置。</p>
+
+      <form class="form" onsubmit="return false">
+        <input id="login-email" class="input-field" type="email"
+               placeholder="邮箱地址" autocomplete="email" />
+
+        <div class="code-row">
+          <input id="login-code" class="input-field code-input" type="text"
+                 placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" />
+          <button id="btn-code" class="code-btn" type="button" onclick="sendCode()">获取验证码</button>
+        </div>
+
+        <input id="login-username" class="input-field" type="text"
+               placeholder="昵称（可选，首次登录用）" maxlength="32" />
+
+        <span id="login-msg" class="status-msg"></span>
+
+        <button id="btn-login" class="cta-btn" type="button" onclick="doLogin()">
+          <span>登录 / 注册</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </button>
+      </form>
+
+      <p class="hint-text">未注册的邮箱将自动创建账号</p>
+    </div>
+  </div>
+
+  <!-- ② Dashboard view -->
+  <div id="view-dash" class="dashboard" style="display:none">
+    <div class="dash-header">
+      <p class="dash-eyebrow">Gateway · 管理面板</p>
+      <h1 class="dash-title">服务配置</h1>
+      <p class="dash-sub" id="dash-desc">配置 Agent 服务地址，并管理各平台接入状态。</p>
+    </div>
+
+    <!-- Agent URL card -->
+    <div class="section-card">
+      <p class="section-label">Agent 服务地址</p>
+
+      <div class="input-row">
+        <input id="dash-url" class="input-field" type="text" placeholder="http://localhost:8080" />
+        <button class="btn-sm" onclick="saveUrl()">保存</button>
+        <button class="btn-sm" onclick="testConn()">测试</button>
+      </div>
+
+      <p class="url-hint">
+        自部署：<code>http://localhost:8080</code>（默认）&emsp;
+        官方托管：<code>https://www.mengya.chat</code>
+      </p>
+
+      <div class="mode-row">
+        <span class="mode-label">当前模式</span>
+        <span id="badge-mode" class="badge badge-gray">检测中…</span>
+      </div>
+
+      <div id="url-msg" class="save-msg"></div>
+    </div>
+
+    <!-- Platform card -->
+    <div class="section-card">
+      <p class="section-label">接入平台</p>
+      <div class="platform-list">
+        <a href="/weixin" class="platform-item">
+          <div class="platform-icon">💬</div>
+          <div class="platform-info">
+            <div class="platform-name">微信（个人号）</div>
+            <div class="platform-desc" id="weixin-status-text">加载中…</div>
+          </div>
+          <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ─── Util ─── */
+async function api(url, opts) {
+  const r = await fetch(url, opts || {});
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+function msg(id, text, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = (type ? `${el.className.split(' ')[0]} ${type}` : el.className.split(' ')[0]);
+}
+function setMsg(id, text, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  const base = id === 'url-msg' ? 'save-msg' : 'status-msg';
+  el.className = base + (type ? ' ' + type : '');
+}
+
+/* ─── Init ─── */
+async function init() {
+  try {
+    const d = await api('/api/settings');
+    if (d.has_token && d.agent_user_id) {
+      showDash(d);
+    } else {
+      showLogin();
+    }
+  } catch(e) {
+    showLogin();
+  }
+  document.getElementById('page-loading').style.display = 'none';
+}
+
+function showLogin() {
+  document.getElementById('view-login').style.display = '';
+  document.getElementById('view-dash').style.display = 'none';
+  document.getElementById('header-user').style.display = 'none';
+}
+
+function showDash(d) {
+  document.getElementById('view-login').style.display = 'none';
+  document.getElementById('view-dash').style.display = '';
+  document.getElementById('header-user').style.display = '';
+
+  const label = d.agent_email || d.agent_user_id || '用户';
+  document.getElementById('header-email').textContent = label;
+  document.getElementById('user-avatar-char').textContent = (label[0] || 'U').toUpperCase();
+  document.getElementById('dash-desc').textContent =
+    `当前账号：${label}。配置 Agent 服务地址并管理接入平台。`;
+
+  document.getElementById('dash-url').value = d.agent_url || '';
+  updateModeUI(d.is_local);
+  loadWeixinStatus();
+}
+
+function updateModeUI(isLocal) {
+  const el = document.getElementById('badge-mode');
+  if (!el) return;
+  if (isLocal === true)  { el.className = 'badge badge-blue';  el.textContent = '本地模式'; }
+  else if (isLocal === false) { el.className = 'badge badge-green'; el.textContent = '远端模式'; }
+  else { el.className = 'badge badge-gray'; el.textContent = '检测中…'; }
+}
+
+/* ─── Login ─── */
+let _cdTimer = null;
+function startCD(n) {
+  const btn = document.getElementById('btn-code');
+  btn.disabled = true;
+  btn.textContent = `${n}s 后重发`;
+  if (_cdTimer) clearInterval(_cdTimer);
+  _cdTimer = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(_cdTimer); _cdTimer = null;
+      btn.disabled = false;
+      btn.textContent = '获取验证码';
+    } else { btn.textContent = `${n}s 后重发`; }
+  }, 1000);
+}
+
+async function sendCode() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) { setMsg('login-msg', '请填写邮箱', 'err'); return; }
+  setMsg('login-msg', '发送中…', '');
+  try {
+    const d = await api('/api/auth/email/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (d.success) { setMsg('login-msg', '验证码已发送，请查收邮箱', 'ok'); startCD(60); }
+    else { setMsg('login-msg', d.message || '发送失败', 'err'); }
+  } catch(e) { setMsg('login-msg', '发送失败：' + e.message, 'err'); }
+}
+
+async function doLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const code     = document.getElementById('login-code').value.trim();
+  const username = document.getElementById('login-username').value.trim();
+  if (!email || !code) { setMsg('login-msg', '请填写邮箱和验证码', 'err'); return; }
+
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const d = await api('/api/auth/email/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, username: username || null }),
+    });
+    if (d.success) {
+      const settings = await api('/api/settings');
+      showDash(settings);
+    } else { setMsg('login-msg', d.message || '登录失败', 'err'); }
+  } catch(e) { setMsg('login-msg', '登录失败：' + e.message, 'err'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>登录 / 注册</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+  }
+}
+
+async function doLogout() {
+  if (!confirm('确定要退出登录吗？')) return;
+  await api('/api/settings/logout', { method: 'POST' });
+  showLogin();
+}
+
+/* ─── Dashboard ─── */
+async function saveUrl() {
+  const url = document.getElementById('dash-url').value.trim();
+  try {
+    const d = await api('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_url: url }),
+    });
+    updateModeUI(d.is_local);
+    setMsg('url-msg', '✓ 地址已保存', 'ok');
+  } catch(e) { setMsg('url-msg', '保存失败：' + e.message, 'err'); }
+}
+
+async function testConn() {
+  setMsg('url-msg', '测试连接中…', '');
+  try {
+    const d = await api('/api/settings/test', { method: 'POST' });
+    setMsg('url-msg', (d.success ? '✓ ' : '✗ ') + d.message, d.success ? 'ok' : 'err');
+  } catch(e) { setMsg('url-msg', '测试失败：' + e.message, 'err'); }
+}
+
+async function loadWeixinStatus() {
+  try {
+    const d = await api('/api/status');
+    const el = document.getElementById('weixin-status-text');
+    if (!el) return;
+    if (d.connected) {
+      el.textContent = `已连接 · ${d.account_id || ''}`;
+      el.style.color = 'var(--accent)';
+    } else {
+      el.textContent = '未连接，点击进入配置';
+      el.style.color = 'var(--text-sub)';
+    }
+  } catch(e) {}
+}
+
+/* ─── URL live mode update ─── */
+document.addEventListener('DOMContentLoaded', () => {
+  const ui = document.getElementById('dash-url');
+  if (ui) {
+    ui.addEventListener('input', function() {
+      const v = this.value.toLowerCase().trim();
+      updateModeUI(v === '' || v.startsWith('http://localhost') || v.startsWith('http://127.'));
+    });
+  }
+});
+
+init();
+</script>
+</body>
+</html>

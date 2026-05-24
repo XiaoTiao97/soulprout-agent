@@ -125,8 +125,14 @@ class Config:
         # ─── 记忆模块（vdb memory_collection + 召回参数）──────────────────────
         self.memory_collection = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
         self.memory_recall_top_k = int(os.getenv("MEMORY_RECALL_TOP_K", "10"))
-        # hybrid_search 融合分阈值：score >= 该值视为可匹配（默认 0.4）
-        self.hybrid_search_score_threshold = float(os.getenv("HYBRID_SEARCH_SCORE", "0.4"))
+        # hybrid_search 融合权重：dense=embedding，sparse=BM25（默认 0.7 / 0.3）
+        self.hybrid_search_dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
+        self.hybrid_search_sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
+        # hybrid_search 融合权重：dense=embedding，sparse=BM25（默认 0.7 / 0.3）
+        self.hybrid_search_dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
+        self.hybrid_search_sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
+        # hybrid_search 融合分阈值：score >= 该值视为可匹配（默认 0.6）
+        self.hybrid_search_score_threshold = float(os.getenv("HYBRID_SEARCH_SCORE", "0.6"))
         self.memory_recall_score_threshold = float(
             os.getenv("MEMORY_RECALL_SCORE", str(self.hybrid_search_score_threshold))
         )

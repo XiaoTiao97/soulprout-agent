@@ -91,6 +91,9 @@ class Chat:
             "soulprout_kb_tool",
             "call_sub_agent",
             "user_option",
+            "base_memory",
+            "create_memory",
+            "edit_memory"
         ]
 
     async def mcp_list_tools(self):

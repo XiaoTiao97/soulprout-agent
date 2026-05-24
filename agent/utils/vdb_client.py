@@ -137,12 +137,17 @@ class VDBClient:
         limit: int = 5,
         filter: str = "",
         output_fields: Optional[list[str]] = None,
-        dense_weight: float = 0.7,
-        sparse_weight: float = 0.3,
+        dense_weight: Optional[float] = None,
+        sparse_weight: Optional[float] = None,
     ) -> list[dict]:
         """
         Hybrid Search（embedding + BM25）。只需传原始文本，服务端自动向量化并融合检索。
+        融合权重可通过 HYBRID_SEARCH_DENSE_WEIGHT / HYBRID_SEARCH_SPARSE_WEIGHT 环境变量配置。
         """
+        if dense_weight is None:
+            dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
+        if sparse_weight is None:
+            sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
         payload: dict = {
             "query": query,
             "limit": limit,

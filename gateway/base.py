@@ -1,4 +1,4 @@
-warmingwarming"""
+"""
 Gateway 基础接口模块。
 
 定义所有平台适配器共用的数据结构和抽象基类。
@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -23,9 +24,12 @@ logger = logging.getLogger(__name__)
 class MessageType(Enum):
     TEXT = "text"
     IMAGE = "image"
+    PHOTO = "photo"      # 图片（同 IMAGE，兼容 weixin 适配器）
     VOICE = "voice"
     VIDEO = "video"
     FILE = "file"
+    DOCUMENT = "document"  # 文件/文档（兼容 weixin 适配器）
+    COMMAND = "command"    # 斜杠命令（兼容 weixin 适配器）
     EVENT = "event"
 
 
@@ -38,7 +42,7 @@ class SessionSource:
     """消息来源信息，用于将回复路由回正确的位置。"""
 
     platform: str
-    """平台名称，例如 'wecom_callback'。"""
+    """平台名称，例如 'weixin'。"""
 
     chat_id: str
     """会话唯一标识符（用于发送回复）。"""
@@ -76,7 +80,13 @@ class MessageEvent:
     """平台原始消息体（XML / JSON 等）。"""
 
     media_urls: List[str] = field(default_factory=list)
-    """媒体文件本地路径列表（当前版本暂不使用）。"""
+    """媒体文件本地路径列表。"""
+
+    media_types: List[str] = field(default_factory=list)
+    """媒体文件 MIME 类型列表，与 media_urls 一一对应。"""
+
+    timestamp: Optional[datetime] = None
+    """消息接收时间戳。"""
 
 
 @dataclass

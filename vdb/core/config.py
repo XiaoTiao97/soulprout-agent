@@ -28,3 +28,7 @@ class VDBConfig:
         # 服务端口
         self.port = int(os.getenv("VDB_PORT", "8888"))
         self.host = os.getenv("VDB_HOST", "0.0.0.0")
+
+        # hybrid_search 融合权重：dense=embedding，sparse=BM25（默认 0.7 / 0.3）
+        self.hybrid_search_dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
+        self.hybrid_search_sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))

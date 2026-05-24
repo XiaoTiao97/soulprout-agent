@@ -12,38 +12,61 @@
     <!-- Main -->
     <main class="register-main">
       <div class="register-card">
-        <h1 class="register-title">
-          {{ mode === 'register' ? '创建 Soulprout 账号' : '登录 Soulprout' }}
-        </h1>
+        <h1 class="register-title">登录 / 注册 Soulprout</h1>
         <p class="register-desc">
-          {{ mode === 'register' ? '创建一个账号，开始您的智能之旅' : '输入您的账号信息，继续您的智能之旅' }}
+          输入邮箱即可登录，新邮箱将自动为你创建账号。
         </p>
 
         <form class="register-form" @submit.prevent="submitForm">
           <input
-            v-if="mode === 'register'"
+            class="input-field"
+            type="email"
+            v-model="email"
+            placeholder="邮箱地址"
+            autocomplete="email"
+            required
+          />
+
+          <div class="code-row">
+            <input
+              class="input-field code-input"
+              type="text"
+              v-model="code"
+              placeholder="6 位邮箱验证码"
+              inputmode="numeric"
+              maxlength="6"
+              required
+            />
+            <button
+              type="button"
+              class="code-btn"
+              :disabled="codeBtnDisabled"
+              @click="sendCode"
+            >
+              {{ countdown > 0 ? `${countdown}s 后重发` : (sending ? '发送中…' : '获取验证码') }}
+            </button>
+          </div>
+
+          <input
             class="input-field"
             type="text"
             v-model="username"
-            placeholder="输入昵称"
-            required
+            placeholder="昵称（可选，首次登录用）"
+            maxlength="32"
           />
-          <input class="input-field" type="text" v-model="usernumber" placeholder="输入账号" required />
-          <input class="input-field" type="password" v-model="userpwd" placeholder="输入密码" required />
-          <span class="error-text">{{ errorText }}</span>
-          <button class="submit-btn" type="submit">
-            <span>{{ mode === 'register' ? '创建并登录' : '登录' }}</span>
+
+          <span class="error-text" :class="{ ok: messageOk }">{{ message }}</span>
+
+          <button class="submit-btn" type="submit" :disabled="submitting">
+            <span>{{ submitting ? '登录中…' : '登录 / 注册' }}</span>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </button>
         </form>
 
-        <p class="toggle-text">
-          {{ mode === 'register' ? '已有账号？' : '没有账号？' }}
-          <a class="toggle-link" @click.prevent="toggleMode">
-            {{ mode === 'register' ? '立即登录' : '立即创建' }}
-          </a>
+        <p class="hint-text">
+          首次使用？直接输入邮箱获取验证码即可自动注册。
         </p>
       </div>
     </main>
@@ -57,69 +80,120 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-const mode = ref('register')
+const router = useRouter()
+const email = ref('')
+const code = ref('')
 const username = ref('')
-const usernumber = ref('')
-const userpwd = ref('')
-const errorText = ref('')
 
-const toggleMode = () => {
-  mode.value = mode.value === 'register' ? 'login' : 'register'
-  errorText.value = ''
-  if (mode.value === 'login') {
-    username.value = ''
+const message = ref('')
+const messageOk = ref(false)
+const sending = ref(false)
+const submitting = ref(false)
+const countdown = ref(0)
+let countdownTimer = null
+
+const codeBtnDisabled = computed(
+  () => sending.value || countdown.value > 0 || !email.value.trim(),
+)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/user/me')
+    const data = await res.json()
+    if (data.success) {
+      router.replace('/chat')
+    }
+  } catch {
+    // 未登录或网络错误，继续显示登录页
+  }
+})
+
+function isValidEmail(value) {
+  return /^[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test((value || '').trim())
+}
+
+function startCountdown(seconds = 60) {
+  countdown.value = seconds
+  if (countdownTimer) clearInterval(countdownTimer)
+  countdownTimer = setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+    }
+  }, 1000)
+}
+
+onBeforeUnmount(() => {
+  if (countdownTimer) clearInterval(countdownTimer)
+})
+
+function showMessage(text, ok = false) {
+  message.value = text
+  messageOk.value = ok
+}
+
+async function sendCode() {
+  if (!isValidEmail(email.value)) {
+    showMessage('请填写正确的邮箱地址')
+    return
+  }
+  sending.value = true
+  showMessage('')
+  try {
+    const res = await fetch('/api/user/email/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value.trim() }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      showMessage('验证码已发送，请查收邮箱', true)
+      startCountdown(60)
+    } else {
+      showMessage(data.message || '发送失败，请稍后重试')
+    }
+  } catch (err) {
+    showMessage('网络错误：' + err.message)
+  } finally {
+    sending.value = false
   }
 }
 
-const submitForm = async () => {
-  if (mode.value === 'register') {
-    if (!username.value.trim() || !usernumber.value.trim() || !userpwd.value.trim()) {
-      errorText.value = '所有字段均为必填'
-      return
+async function submitForm() {
+  if (!isValidEmail(email.value)) {
+    showMessage('请填写正确的邮箱地址')
+    return
+  }
+  if (!/^\d{4,8}$/.test(code.value.trim())) {
+    showMessage('请填写正确的验证码')
+    return
+  }
+  submitting.value = true
+  showMessage('')
+  try {
+    const res = await fetch('/api/user/email/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.value.trim(),
+        code: code.value.trim(),
+        username: username.value.trim() || null,
+      }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      window.location.href = '/chat'
+    } else {
+      showMessage(data.message || '登录失败，请重试')
     }
-    try {
-      const res = await fetch('/api/user/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.value, user_id: usernumber.value, userpwd: userpwd.value }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        window.location.href = '/chat'
-      } else if (data.code === 1001) {
-        errorText.value = '账号重复啦，换一个吧！'
-        usernumber.value = ''
-      } else {
-        errorText.value = '创建失败，请稍后再试'
-      }
-    } catch (error) {
-      errorText.value = '创建失败: ' + error.message
-    }
-  } else {
-    if (!usernumber.value.trim() || !userpwd.value.trim()) {
-      errorText.value = '账号和密码均为必填'
-      return
-    }
-    try {
-      const res = await fetch('/api/user/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: usernumber.value, userpwd: userpwd.value }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        window.location.href = '/chat'
-      } else if (data.code === 1002) {
-        errorText.value = '账号或密码错误'
-        userpwd.value = ''
-      } else {
-        errorText.value = '登录失败，请稍后再试'
-      }
-    } catch (error) {
-      errorText.value = '登录失败: ' + error.message
-    }
+  } catch (err) {
+    showMessage('网络错误：' + err.message)
+  } finally {
+    submitting.value = false
   }
 }
 </script>
@@ -146,7 +220,6 @@ const submitForm = async () => {
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
   border-bottom: 1px solid rgba(30, 180, 140, 0.06);
-  transition: all 0.5s;
 }
 
 .header-inner {
@@ -155,16 +228,8 @@ const submitForm = async () => {
   align-items: center;
 }
 
-.logo-link {
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-}
-
-.header-logo {
-  height: 2.5rem;
-  width: auto;
-}
+.logo-link { display: inline-flex; align-items: center; text-decoration: none; }
+.header-logo { height: 2.5rem; width: auto; }
 
 /* Main */
 .register-main {
@@ -177,11 +242,10 @@ const submitForm = async () => {
   z-index: 10;
 }
 
-/* Card */
 .register-card {
   width: 100%;
-  max-width: 420px;
-  background: rgba(255, 255, 255, 0.8);
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(15, 15, 15, 0.06);
   border-radius: 1.5rem;
@@ -206,12 +270,7 @@ const submitForm = async () => {
   line-height: 1.6;
 }
 
-/* Form */
-.register-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
+.register-form { display: flex; flex-direction: column; gap: 0.875rem; }
 
 .input-field {
   padding: 0.8rem 1rem;
@@ -223,15 +282,40 @@ const submitForm = async () => {
   background: #ffffff;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
   outline: none;
+  width: 100%;
 }
-
-.input-field::placeholder {
-  color: rgba(15, 15, 15, 0.3);
-}
-
+.input-field::placeholder { color: rgba(15, 15, 15, 0.3); }
 .input-field:focus {
   border-color: #1eb48c;
   box-shadow: 0 0 0 3px rgba(30, 180, 140, 0.1);
+}
+
+/* 验证码行 */
+.code-row { display: flex; gap: 0.625rem; }
+.code-input { flex: 1; }
+.code-btn {
+  flex-shrink: 0;
+  padding: 0 1rem;
+  background: #ffffff;
+  color: #1eb48c;
+  border: 1px solid rgba(30, 180, 140, 0.4);
+  border-radius: 0.625rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.25s ease;
+  min-width: 7.5rem;
+}
+.code-btn:hover:not(:disabled) {
+  background: rgba(30, 180, 140, 0.08);
+  border-color: #1eb48c;
+}
+.code-btn:disabled {
+  color: rgba(15, 15, 15, 0.3);
+  border-color: rgba(15, 15, 15, 0.12);
+  background: #f7f7f7;
+  cursor: not-allowed;
 }
 
 .error-text {
@@ -240,6 +324,7 @@ const submitForm = async () => {
   min-height: 1.2rem;
   display: block;
 }
+.error-text.ok { color: #1eb48c; }
 
 .submit-btn {
   display: inline-flex;
@@ -260,39 +345,23 @@ const submitForm = async () => {
   transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   box-shadow: 0 4px 20px rgba(30, 180, 140, 0.22);
 }
-
-.submit-btn:hover {
+.submit-btn:hover:not(:disabled) {
   background: #22c99d;
   box-shadow: 0 8px 28px rgba(30, 180, 140, 0.3);
   transform: translateY(-2px);
 }
-
-.submit-btn svg {
-  transition: transform 0.3s ease;
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
+.submit-btn svg { transition: transform 0.3s ease; }
+.submit-btn:hover:not(:disabled) svg { transform: translateX(3px); }
 
-.submit-btn:hover svg {
-  transform: translateX(3px);
-}
-
-/* Toggle */
-.toggle-text {
+.hint-text {
   margin-top: 1.5rem;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: rgba(15, 15, 15, 0.4);
-}
-
-.toggle-link {
-  color: #1eb48c;
-  text-decoration: none;
-  cursor: pointer;
-  font-weight: 500;
-  transition: color 0.3s ease;
-}
-
-.toggle-link:hover {
-  color: #22c99d;
 }
 
 /* Decorative background */
@@ -305,32 +374,14 @@ const submitForm = async () => {
   align-items: center;
   justify-content: center;
 }
-
-.bg-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(30, 180, 140, 0.05);
-}
-
-.bg-ring-1 {
-  width: 800px;
-  height: 800px;
-}
-
-.bg-ring-2 {
-  width: 500px;
-  height: 500px;
-  border-color: rgba(30, 180, 140, 0.07);
-}
+.bg-ring { position: absolute; border-radius: 50%; border: 1px solid rgba(30, 180, 140, 0.05); }
+.bg-ring-1 { width: 800px; height: 800px; }
+.bg-ring-2 { width: 500px; height: 500px; border-color: rgba(30, 180, 140, 0.07); }
 
 @media (max-width: 480px) {
-  .register-card {
-    padding: 2rem 1.5rem;
-    border-radius: 1rem;
-  }
-
-  .register-title {
-    font-size: 1.5rem;
-  }
+  .register-card { padding: 2rem 1.5rem; border-radius: 1rem; }
+  .register-title { font-size: 1.5rem; }
+  .code-row { flex-direction: column; }
+  .code-btn { width: 100%; padding: 0.7rem; }
 }
 </style>

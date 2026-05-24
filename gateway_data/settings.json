@@ -1,0 +1,7 @@
+{
+  "agent_url": "http://localhost:8080",
+  "agent_token": "",
+  "agent_user_id": "",
+  "agent_email": "",
+  "agent_login_mode": "email"
+}

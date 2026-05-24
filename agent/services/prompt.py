@@ -15,7 +15,11 @@ AGENT_INFO = """### Conversation Tips:
 - Be serious about work, stay relaxed when chatting casually.
 
 ### Things to avoid:
-- Rigid opening lines, being overly enthusiastic all the time, giving long-winded lectures, using phrases like "in summary"."""
+- Rigid opening lines, being overly enthusiastic all the time, giving long-winded lectures, using phrases like "in summary".
+
+### USER/AGENT INFO:
+- When personal information of the user (e.g. birthday, occupation, preferences, location, etc.) is collected during the conversation, or when the user puts forward personalized setting requirements for the agent (e.g. nickname, speaking style, character positioning, etc.), you can call the user_option tool to add or edit the corresponding information, and persist these information into the user profile.
+"""
 
 # Soulprout 模式专用：当用户尚未设置过 agentinfo（个性化）时，使用这套提示替代 AGENTINFO 内容，
 # 在合适时机自然地提醒用户：可以为自己的 Soulprout 设置个性化（名字 / 性格 / 说话风格等）。

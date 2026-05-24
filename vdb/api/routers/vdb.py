@@ -23,11 +23,20 @@ VDB API 路由。
     POST   /vdb/collections/{name}/delete   删除（by ids 或 filter）
 """
 
+import os
 from typing import Any, Optional, Union
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from vdb.schemas.registry import list_collection_types
+
+
+def _default_hybrid_dense_weight() -> float:
+    return float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
+
+
+def _default_hybrid_sparse_weight() -> float:
+    return float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
 
 router = APIRouter()
 
@@ -66,8 +75,8 @@ class HybridSearchRequest(BaseModel):
     limit: int = 5
     filter: str = ""
     output_fields: Optional[list[str]] = None
-    dense_weight: float = Field(default=0.7, ge=0.0, le=1.0)
-    sparse_weight: float = Field(default=0.3, ge=0.0, le=1.0)
+    dense_weight: float = Field(default_factory=_default_hybrid_dense_weight, ge=0.0, le=1.0)
+    sparse_weight: float = Field(default_factory=_default_hybrid_sparse_weight, ge=0.0, le=1.0)
 
 
 class QueryRequest(BaseModel):

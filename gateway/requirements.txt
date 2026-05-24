@@ -1,0 +1,34 @@
+# ── Gateway 运行时依赖 ──────────────────────────────────────────
+# 安装命令：pip install -r gateway/requirements_gateway.txt
+
+# HTTP 客户端（微信 iLink API 长轮询）
+aiohttp>=3.9.0
+
+# AES 加密（iLink 媒体加密，可选但推荐）
+cryptography>=42.0.0
+
+# 管理 Web 服务
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# 二维码终端渲染（可选，不影响 Web UI）
+qrcode>=7.4.2
+
+# CA 证书（iLink 服务器 TLS 验证）
+certifi>=2024.2.2
+
+# 环境变量加载
+python-dotenv>=1.0.0
+
+# ── Agent 核心依赖（chat_caller.py 调用 agent.* 需要）──────────
+# 以下依赖已在 agent/requirements.txt 中声明，打包时一并包含
+motor>=3.3.0
+beanie>=1.25.0
+openai>=1.30.0
+anthropic>=0.25.0
+aiofiles>=23.2.1
+aioshutil>=0.3
+pydantic>=2.0.0
+
+# PyInstaller（仅构建时需要，不打入最终包）
+# pyinstaller>=6.6.0

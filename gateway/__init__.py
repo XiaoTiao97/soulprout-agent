@@ -2,19 +2,15 @@
 Gateway 模块 — 平台消息网关。
 
 提供统一的平台接入抽象，目前支持：
-- 微信客服 (WeComKFAdapter)  企业微信对外客服，通过 sync_msg 拉取消息
+- 个人微信 (WeixinAdapter)  基于腾讯 iLink Bot API，扫码登录，长轮询收消息
 
 快速使用示例：
-    from gateway.base import MessageEvent, SendResult, SessionSource
-    from gateway.platforms.wecom_kf import WeComKFAdapter, WeComKFConfig
+    from gateway.base import MessageEvent, SendResult
+    from gateway.platforms.weixin import WeixinAdapter
 
-    config = WeComKFConfig.from_env()
-    adapter = WeComKFAdapter(config)
+    adapter = WeixinAdapter()
     adapter.set_message_handler(my_handler)
-
-    # 在 FastAPI lifespan 中：
     await adapter.connect()
-    app.include_router(adapter.get_router())
 """
 
 from gateway.base import (

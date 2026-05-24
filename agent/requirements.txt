@@ -7,8 +7,6 @@ mcp
 pymongo
 beanie
 python-jose
-passlib
-bcrypt==4.0.1
 aiohttp
 aioshutil
 weasyprint
@@ -23,6 +21,8 @@ pdfminer.six
 python-docx
 openpyxl
 alibabacloud_tea_openapi
+alibabacloud_tea_util
 alibabacloud_docmind_api20220711==1.4.7
+alibabacloud_dm20151123
 alibabacloud_credentials
 cryptography>=42.0.0

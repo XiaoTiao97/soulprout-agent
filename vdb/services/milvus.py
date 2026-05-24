@@ -85,7 +85,7 @@ class MilvusService:
                 index_params = client.prepare_index_params()
                 index_params.add_index(
                     field_name="vector",
-                    metric_type="IP",
+                    metric_type="COSINE",
                     index_type="AUTOINDEX",
                 )
                 index_params.add_index(
@@ -224,12 +224,16 @@ class MilvusService:
         limit: int = 5,
         filter: str = "",
         output_fields: Optional[list[str]] = None,
-        dense_weight: float = 0.7,
-        sparse_weight: float = 0.3,
+        dense_weight: Optional[float] = None,
+        sparse_weight: Optional[float] = None,
     ) -> list[dict]:
         """
-        Hybrid Search：dense embedding + BM25 稀疏检索，通过 WeightedRanker 融合。
+        Hybrid Search：dense embedding（COSINE）+ BM25 稀疏检索，通过 WeightedRanker 融合。
         """
+        if dense_weight is None:
+            dense_weight = self._config.hybrid_search_dense_weight
+        if sparse_weight is None:
+            sparse_weight = self._config.hybrid_search_sparse_weight
         client = self._require_client()
         output_fields = output_fields or self._collection_meta.get(
             collection_name, {}
@@ -240,7 +244,7 @@ class MilvusService:
         dense_req = AnnSearchRequest(
             data=[embedding],
             anns_field="vector",
-            param={"metric_type": "IP", "params": {"nprobe": 10}},
+            param={"metric_type": "COSINE", "params": {"nprobe": 10}},
             limit=limit,
             expr=filter or None,
         )
