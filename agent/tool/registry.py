@@ -425,13 +425,14 @@ TOOL_SCHEMAS = [
                 "等个人信息时调用，把信息存入 userinfo 字段，用于后续对话中保持记忆与个性化。\n"
                 "- info_type=agentinfo：当用户表达了对当前 Soulprout 智能体的期望（比如希望被叫什么名字、"
                 "性格、语气、说话风格、定位等）时调用，把信息存入 agentinfo 字段。\n"
+                "- module=view：查看当前 info_type 对应字段的已有内容，再决定使用 add 还是 edit。\n"
                 "- module=add：在原内容末尾追加 content（首次写入时直接写入）。\n"
                 "- module=edit：在原内容中将 old_text 精确替换为 content，此时 old_text 必填。\n"
                 "注意：userinfo 与 agentinfo 单字段上限 1024 字符"
             ),
             "parameters": {
                 "type": "object",
-                "required": ["info_type", "module", "content"],
+                "required": ["info_type", "module"],
                 "properties": {
                     "info_type": {
                         "type": "string",
@@ -440,12 +441,12 @@ TOOL_SCHEMAS = [
                     },
                     "module": {
                         "type": "string",
-                        "enum": ["add", "edit"],
-                        "description": "操作：add 末尾追加 / edit 精确替换",
+                        "enum": ["view", "add", "edit"],
+                        "description": "操作：view 查看当前内容 / add 末尾追加 / edit 精确替换",
                     },
                     "content": {
                         "type": "string",
-                        "description": "add 时为要追加的内容；edit 时为替换后的新文本",
+                        "description": "[module=add 或 edit 必填] add 时为要追加的内容；edit 时为替换后的新文本",
                     },
                     "old_text": {
                         "type": "string",

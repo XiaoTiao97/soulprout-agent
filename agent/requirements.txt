@@ -12,6 +12,8 @@ aioshutil
 weasyprint
 zai-sdk
 aiofiles
+shortuuid
+python-multipart
 html2text
 pymilvus
 beanie==1.26.0

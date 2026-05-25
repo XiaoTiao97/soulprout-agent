@@ -25,20 +25,20 @@ class LLM:
     async def deepseek(self, messages, model_config):
         client = AsyncOpenAI(api_key=self.config.deepseek_key, base_url="https://api.deepseek.com")
         tools = model_config.tools
-        if model_config.model == "deepseek-reasoner":
-            for tool in tools:
-                tool.get("function")["strict"] = True
+        thinking = False
+        if model_config.model.endswith("-thinking"):
+            thinking = True
+            model_config.model = model_config.model.split("-thinking")[0]
 
         completion = await client.chat.completions.create(
             model=model_config.model,
             messages=messages,
             stream=True,
-            temperature=1.3,
             stream_options={"include_usage": True},
-            max_tokens=8192,
-            **({"tools": tools} if len(tools) > 0 else {})
+            **({"tools": tools} if len(tools) > 0 else {}),
+            **({"extra_body": {"thinking": {"type": "enabled"}}} if thinking == True else {
+                "extra_body": {"thinking": {"type": "disabled"}}})
         )
-
         async for chunk in completion:
             yield chunk
 

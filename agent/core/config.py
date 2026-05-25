@@ -70,16 +70,16 @@ class Config:
                 "model_source": "kimi",
                 "model_use": False if self.kimi_key in [default_key, None] else True,
                 "models": [
-                    {"name": "kimi-k2.5-thinking", "context_window": 256000},
-                    {"name": "kimi-k2.5", "context_window": 256000}
+                    {"name": "kimi-k2.6-thinking", "context_window": 256000},
+                    {"name": "kimi-k2.6", "context_window": 256000}
                 ]
             },
             {
                 "model_source": "deepseek",
                 "model_use": False if self.deepseek_key in [default_key, None] else True,
                 "models": [
-                    {"name": "deepseek-chat", "context_window": 128000},
-                    {"name": "deepseek-reasoner", "context_window": 128000},
+                    {"name": "deepseek-v4-pro", "context_window": 1000000},
+                    {"name": "deepseek-v4-flash", "context_window": 1000000},
                 ]
             },
             {
@@ -96,8 +96,8 @@ class Config:
                 "model_source": "glm",
                 "model_use": False if self.glm_key in [default_key, None] else True,
                 "models": [
-                    {"name": "glm-5", "context_window": 200000},
-                    {"name": "glm-5-thinking", "context_window": 200000},
+                    {"name": "glm-5.1", "context_window": 200000},
+                    {"name": "glm-5.1-thinking", "context_window": 200000},
                 ]
             },
             {
@@ -119,6 +119,8 @@ class Config:
             }
         ]
         self.local_file_path = "/home/soulprout_data/"
+        self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
+        self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"
         self.agent_default_tools = ["read", "write", "edit", "bash", "read_picture"]
 

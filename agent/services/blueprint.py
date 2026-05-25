@@ -5,20 +5,17 @@ Blueprint 模块：负责行动蓝图（action blueprint）规划，以及为规
     1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
     2. 个人 skill 库：按当前 user_id 直接列出全部
 - stream_action_blueprint: 调用规划专家模型，基于历史对话、可用工具与召回的 skill
-  流式输出主 Agent 可直接执行的结构化蓝图，并将蓝图持久化到会话历史与 Conversation 表。
+  流式输出主 Agent 可直接执行的结构化蓝图；蓝图作为 get_action_blueprint 工具结果
+  由 agent 运行时与其他工具一样持久化（tool_calls + role=tool）。
 """
 
 import os
-from datetime import datetime
 
 from agent.api.models.message import ChatResponse, ModelConfig
-from agent.database.crud.conversation import get_conversation_by_id
 from agent.database.crud.message import (
-    delete_runtime_messages,
     get_runtime_history,
-    save_message,
+    replace_tool_results_by_function_name,
 )
-from agent.database.models.message import AgentMessage
 from agent.services import prompt
 from agent.skill.skill_server import (
     get_user_skills_root,
@@ -28,6 +25,9 @@ from agent.utils.llm import LLM
 from agent.utils.vdb_client import VDBClient
 
 SKILL_COLLECTION = os.getenv("VDB_SKILL_COLLECTION", "skill_collection")
+BLUEPRINT_DISCARDED_TEXT = (
+    "A new blueprint has been generated. This blueprint is discarded by default."
+)
 
 
 class Blueprint:
@@ -151,6 +151,11 @@ class Blueprint:
 
     async def stream_action_blueprint(self):
         try:
+            await replace_tool_results_by_function_name(
+                conversation_id=self.conversation_id,
+                function_name="get_action_blueprint",
+                new_content=BLUEPRINT_DISCARDED_TEXT,
+            )
             model_config = ModelConfig(
                 model_source=self.config.plan_model_source,
                 model=self.config.plan_model,
@@ -174,7 +179,7 @@ class Blueprint:
             history_list = [
                 {"role": item.role, "content": item.content}
                 for item in history
-                if item.role not in ["agent", "plan"]
+                if item.role not in ["agent"]
             ]
             summary_info = await self._summary_history(self.input_text, history_list)
 
@@ -206,27 +211,7 @@ class Blueprint:
                     ).model_dump_json()
 
             self.last_blueprint_text = plan
-            plan_prompt_final = f"BLUEPRINT：{plan}"
-            old_plan_id = [item.id for item in history if item.type == "plan"]
-            await delete_runtime_messages(self.is_sub_agent, old_plan_id)
-            await save_message(
-                AgentMessage(
-                    user_id=self.user_id,
-                    conversation_id=self.conversation_id,
-                    type="plan",
-                    role="user",
-                    content=plan_prompt_final,
-                    created_at=datetime.utcnow(),
-                ),
-                self.is_sub_agent,
-                self.session_id,
-            )
-            conv = await get_conversation_by_id(self.conversation_id)
-            if conv:
-                conv.action_blueprint = plan
-                conv.updated_at = datetime.utcnow()
-                await conv.save()
-            print("action_blueprint:", plan)
+            print("action_blueprint generated:", plan)
 
         except Exception as e:
             self.last_blueprint_text = ""

@@ -69,7 +69,7 @@ class Chat:
         self.time_now = f"""{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} {datetime.now().strftime("%A")}"""
         self.capabilities_prompt = prompt.CAPABILITIES_PROMPT
         self.agent_info = os.getenv("AGENT_INFO", prompt.AGENT_INFO)
-        self.system_prompt = f"""{self.agent_info}\n{self.capabilities_prompt}\nCurrent time:{self.time_now}\n"""
+        self.system_prompt = f"""{self.agent_info}\n{self.capabilities_prompt}\n"""
 
         self.model_config = None
         self.agent_name = None
@@ -93,7 +93,8 @@ class Chat:
             "user_option",
             "base_memory",
             "create_memory",
-            "edit_memory"
+            "edit_memory",
+            "get_action_blueprint"
         ]
 
     async def mcp_list_tools(self):
@@ -473,7 +474,6 @@ class Chat:
             await self.agent_files_process()
 
         self.system_prompt = agent_card.system_prompt
-        self.system_prompt += f"\nCurrent Time: {self.time_now}"
         tools_use_list = list(agent_card.tools or [])
 
         if agent_card.agents:
@@ -544,17 +544,16 @@ class Chat:
         except Exception as e:
             print(f"加载 UserInfo 失败：{e}")
 
-        userinfo_section = f"USERINFO: {userinfo_text}" if userinfo_text else "USERINFO: (empty)"
+        userinfo_section = f"User-info: {userinfo_text}" if userinfo_text else "User-info: (empty)"
         if agentinfo_text:
-            agentinfo_section = f"AGENTINFO: {agentinfo_text}\n\n{prompt.AGENT_INFO}"
+            agentinfo_section = f"Agent-info: {agentinfo_text}"
         else:
-            agentinfo_section = f"AGENTINFO: {prompt.AGENT_INFO_PERSONA_REMINDER}\n\n{prompt.AGENT_INFO}"
-
+            agentinfo_section = f"Agent-info: {prompt.AGENT_INFO_PERSONA_REMINDER}"
+        agent_info_section = f"""# PERSONAL INFO\n{userinfo_section}\n{agentinfo_section}"""
         self.system_prompt = (
-            f"{userinfo_section}\n\n"
-            f"{agentinfo_section}\n"
+            f"{agent_info_section}\n"
+            f"{prompt.AGENT_INFO}\n"
             f"{self.capabilities_prompt}\n"
-            f"Current time:{self.time_now}\n"
         )
 
         tools = await self.mcp_list_tools()
@@ -852,7 +851,6 @@ class Chat:
 
         self.agent_name = agent_card.name_zh if agent_card.name_zh else agent_card.name
         self.system_prompt = agent_card.system_prompt
-        self.system_prompt += f"\n当前时间：{self.time_now}"
         skills_use_dict = agent_card.skills
         skills_list = await self.expert_load_skills(skills_use_dict) if skills_use_dict else []
         self.system_prompt += f"\n已加载以下skills至工作区: {skills_list}" if skills_use_dict else ""

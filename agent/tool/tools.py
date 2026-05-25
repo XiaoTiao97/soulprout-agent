@@ -564,20 +564,20 @@ class SoulproutToolFunction:
     # ─────────────────────────────────────────────────────────────────────────
     # 用户个性化配置工具：user_option
     #   - info_type=userinfo / agentinfo
-    #   - module=add（末尾追加）/ edit（按 old_text 精确替换）
+    #   - module=view（查看当前内容）/ add（末尾追加）/ edit（按 old_text 精确替换）
     # ─────────────────────────────────────────────────────────────────────────
 
     USER_OPTION_MAX_LEN = 1024
 
-    async def user_option(self, info_type, module, content, conversation_id, old_text=None):
+    async def user_option(self, info_type, module, conversation_id, content=None, old_text=None):
         if info_type not in ("userinfo", "agentinfo"):
             return "错误：info_type 仅支持 userinfo 或 agentinfo"
-        if module not in ("add", "edit"):
-            return "错误：module 仅支持 add 或 edit"
+        if module not in ("view", "add", "edit"):
+            return "错误：module 仅支持 view、add 或 edit"
         if module == "edit" and not old_text:
             return "错误：module=edit 时必须填写 old_text"
-        if content is None:
-            return "错误：content 不能为空"
+        if module != "view" and content is None:
+            return "错误：module=add 或 edit 时 content 不能为空"
 
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         if not user_id:
@@ -588,6 +588,8 @@ class SoulproutToolFunction:
                 return f"错误：未找到用户 {user_id}"
 
             current = getattr(user, info_type, "") or ""
+            if module == "view":
+                return current
             if module == "add":
                 new_value = f"{current}\n{content}" if current else content
             else:

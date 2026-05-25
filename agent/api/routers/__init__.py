@@ -7,6 +7,7 @@ from .tools import router as tools_router
 from .skill import router as skill_router
 from .agent_card import router as agent_card_router
 from .agent_subscription import router as agent_subscription_router
+from agent.kb.router import router as kb_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -16,3 +17,4 @@ router.include_router(tools_router)
 router.include_router(skill_router)
 router.include_router(agent_card_router)
 router.include_router(agent_subscription_router)
+router.include_router(kb_router)

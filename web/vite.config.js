@@ -19,7 +19,7 @@ export default defineConfig({
         rewrite: path => path.replace(/^\/api/, ''),
       },
       '/kb': {
-        target: 'http://localhost:7777', // 后端地址
+        target: 'http://localhost:8080', // agent 知识库接口（已合并至 8080）
         changeOrigin: true,
         rewrite: path => path.replace(/^\/kb/, ''),
       },

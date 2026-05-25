@@ -10,7 +10,6 @@ class Conversation(Document):
     user_id: str = Field(..., description="用户ID")
     conversation_id: str = Field(..., description="会话ID", unique=True)
     abstract: str = Field(..., description="摘要")
-    action_blueprint: str = Field(default="", description="最近一次行动蓝图全文，供前端刷新/切换会话时与消息流对齐展示")
     model_source: str = Field(default="deepseek", description="使用的模型来源")
     model: str = Field(default="deepseek-chat", description="使用的模型型号")
     tools_use: bool = Field(..., description="是否使用工具")

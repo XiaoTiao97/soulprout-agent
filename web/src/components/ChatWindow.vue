@@ -121,14 +121,22 @@
                         <div class="p-content-markdown" v-html="renderMarkdown(message.content)"></div>
                       </div>
                     </div>
-                    <div class="answer-robot-tool">
+                    <div class="answer-robot-tool answer-robot-tool--with-ws">
+                      <WebSearchBlock
+                        v-if="getWebSearchCalls(message.tool_calls, message.tool_call_id).length"
+                        :calls="getWebSearchCalls(message.tool_calls, message.tool_call_id)"
+                        :tool-messages="toolMessages"
+                        :agent-message-list="agent_message_list"
+                      />
                       <template v-for="(toolCall, toolIndex) in message.tool_calls" :key="toolIndex">
-                        <div v-if="message.type === 'get_tools'" class="answer-robot-tool-name" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, message.tool_call_id, message.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, message.tool_call_id)">
-                          🛠️ {{ toolCall.function.name }} 
-                        </div>
-                        <div v-else class="answer-robot-tool-name" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, message.tool_call_id, message.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, message.tool_call_id)">
-                          ⚙️ {{ toolCall.function.name }} 
-                        </div>
+                        <template v-if="toolCall.function.name !== 'web_search'">
+                          <div v-if="message.type === 'get_tools'" class="answer-robot-tool-name" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, message.tool_call_id, message.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, message.tool_call_id)">
+                            🛠️ {{ toolCall.function.name }} 
+                          </div>
+                          <div v-else class="answer-robot-tool-name" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, message.tool_call_id, message.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, message.tool_call_id)">
+                            ⚙️ {{ toolCall.function.name }} 
+                          </div>
+                        </template>
                       </template>
                     </div>
                   </div>
@@ -230,14 +238,23 @@
                 <div v-else-if="block.type === 'reasoner_content'" class="answer-robot-reasoner">
                   <div class="p-content-markdown" v-html="renderMarkdown(block.content ?? '')"></div>
                 </div>
-                <div v-else-if="(block.type === 'get_tools' || block.type === 'get_agents') && block.tool_calls" class="answer-robot-tool">
+                <div v-else-if="(block.type === 'get_tools' || block.type === 'get_agents') && block.tool_calls" class="answer-robot-tool answer-robot-tool--with-ws">
+                    <WebSearchBlock
+                      v-if="getWebSearchCalls(block.tool_calls, block.tool_call_id).length"
+                      :calls="getWebSearchCalls(block.tool_calls, block.tool_call_id)"
+                      :tool-messages="toolMessages"
+                      :agent-message-list="agent_message_list"
+                      :pending="isStreamingToolBlockPending(block, index)"
+                    />
                     <template v-for="(toolCall, toolIndex) in block.tool_calls" :key="toolIndex">
-                      <div v-if="block.type === 'get_tools'" class="answer-robot-tool-name" :class="{ 'answer-robot-tool-name--pending': isStreamingToolBlockPending(block, index) }" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, block.tool_call_id, block.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, block.tool_call_id)">
-                        🛠️ {{ toolCall.function.name }} 
-                      </div>
-                      <div v-else class="answer-robot-tool-name" :class="{ 'answer-robot-tool-name--pending': isStreamingToolBlockPending(block, index) }" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, block.tool_call_id, block.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, block.tool_call_id)">
-                        ⚙️ {{ toolCall.function.name }} 
-                      </div>
+                      <template v-if="toolCall.function.name !== 'web_search'">
+                        <div v-if="block.type === 'get_tools'" class="answer-robot-tool-name" :class="{ 'answer-robot-tool-name--pending': isStreamingToolBlockPending(block, index) }" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, block.tool_call_id, block.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, block.tool_call_id)">
+                          🛠️ {{ toolCall.function.name }} 
+                        </div>
+                        <div v-else class="answer-robot-tool-name" :class="{ 'answer-robot-tool-name--pending': isStreamingToolBlockPending(block, index) }" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, block.tool_call_id, block.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, block.tool_call_id)">
+                          ⚙️ {{ toolCall.function.name }} 
+                        </div>
+                      </template>
                     </template>
                 </div>
                 <div v-else-if="block.type === 'text'" class="text-message-wrapper">
@@ -328,6 +345,8 @@
 <script lang="ts" setup>
 import { ref, nextTick, computed, watch, onMounted, onUnmounted, onUpdated } from 'vue'
 import MessageInput from '../components/MessageInput.vue'
+import WebSearchBlock from './WebSearchBlock.vue'
+import type { WebSearchCallItem } from './WebSearchBlock.vue'
 import type { ConversationBase, ChatRequest, AgentMessage, ToolCalls } from '../types/interface.ts'
 import { AgentCard } from '../types/interface.ts'
 import axios from 'axios'
@@ -367,6 +386,8 @@ interface Props {
   reloadStreamingUiToken?: number;
   /** 当前聊天模式：'soulprout' | 'task'；Soulprout 模式下隐藏欢迎页与高级设置入口 */
   chatMode?: 'soulprout' | 'task';
+  /** 工具消息（含工具调用结果），用于 web_search 展示 */
+  toolMessages?: AgentMessage[];
 }
 
 interface StreamBlock {
@@ -389,7 +410,36 @@ const props = withDefaults(defineProps<Props>(), {
   planFoldAfterNonPlan: false,
   reloadStreamingUiToken: 0,
   chatMode: 'task',
+  toolMessages: () => [],
 })
+
+// ─── web_search：摘要与结果分区由 WebSearchBlock 负责 ─────────────────
+
+function parseToolArguments(argsString: string): Record<string, unknown> {
+  try {
+    return JSON.parse(argsString)
+  } catch {
+    return {}
+  }
+}
+
+function resolveToolCallId(toolCall: { id?: string }, fallbackId?: string): string {
+  return toolCall?.id || fallbackId || ''
+}
+
+function getWebSearchCalls(toolCalls: { function?: { name?: string; arguments?: string }; id?: string }[] | undefined, fallbackId?: string): WebSearchCallItem[] {
+  if (!toolCalls?.length) return []
+  return toolCalls
+    .filter((tc) => tc.function?.name === 'web_search')
+    .map((tc) => {
+      const args = parseToolArguments(tc.function?.arguments || '{}')
+      const q = args.query ?? args.q ?? args.search_query ?? ''
+      return {
+        toolCallId: resolveToolCallId(tc, fallbackId),
+        query: typeof q === 'string' ? q : String(q),
+      }
+    })
+}
 const emit = defineEmits<{
   sendMessage: [message: string, files: File[], options?: { input_message_id?: string }]
   changeToolsUse: []
@@ -1336,6 +1386,16 @@ const handleCreateAgentClick = () => {
 
 .answer-robot-tool {
   cursor: pointer;
+}
+
+/* web_search 区块：纵向排列，摘要与详情分区 */
+.answer-robot-tool--with-ws {
+  flex-direction: column;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* 工具调用未完成：与「查看这里」同款渐变；划过阶段占比加大、周期 2.5s，划过比 view-hint 更慢 */

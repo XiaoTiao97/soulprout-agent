@@ -23,83 +23,92 @@
     <!-- 工具信息内容 -->
     <div v-if="activeTab === 'tools'" class="tool-messages" ref="toolMessagesContainer" @scroll="handleScroll">
       <div v-for="(group, index) in groupedToolMessages" :key="group.tool_call_id" class="tool-message">
-        <div class="tool-frame" :class="{ highlighted: props.highlightedId === group.tool_call_id }" :ref="el => toolRefs[index] = el as HTMLElement">
-          <div class="content-container" :class="{ expanded: isExpanded(group.tool_call_id), 'needs-expand': needsExpand[index] }" :ref="el => contentRefs[index] = el">
-            <template v-for="(msg, msgIndex) in group.messages" :key="msgIndex">
-              <!-- Handle different types for each message -->
-              <div v-if="msg.type === 'event'" class="answer-robot-event">
-                {{ msg.content }}
+        <div class="tool-frame tool-card-new" :class="{ highlighted: props.highlightedId === group.tool_call_id }" :ref="el => toolRefs[index] = el as HTMLElement">
+
+          <!-- web_search 特殊可视化设计 -->
+          <template v-if="getGroupToolName(group) === 'web_search'">
+            <div class="tool-card-header web-search-header" @click="toggleExpand(group.tool_call_id, true)">
+              <span class="tool-badge-icon tool-badge-search">🔍</span>
+              <span class="tool-name-chip tool-name-chip-search">web_search</span>
+              <span class="tool-args-chip">{{ truncateText(getGroupArgsInline(group), 70) }}</span>
+              <span class="tool-expand-chevron">{{ isExpanded(group.tool_call_id) ? '▲' : '▼' }}</span>
+            </div>
+            <div v-if="!isExpanded(group.tool_call_id)" class="tool-result-row">
+              <template v-if="getWebSearchResultCount(group) > 0">
+                <span class="search-count-tag">{{ getWebSearchResultCount(group) }} 条结果</span>
+              </template>
+              <span v-else-if="getGroupToolResult(group)" class="tool-result-text">{{ truncateText(getGroupToolResult(group), 80) }}</span>
+              <span v-else class="tool-result-empty">搜索中…</span>
+            </div>
+            <div v-if="isExpanded(group.tool_call_id)" class="web-search-results-panel">
+              <template v-if="parseWebSearchResults(group).length > 0">
+                <a
+                  v-for="(result, i) in parseWebSearchResults(group)"
+                  :key="i"
+                  :href="result.link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="search-result-item"
+                >
+                  <div class="sri-meta">
+                    <span class="sri-domain">{{ extractDomain(result.link) }}</span>
+                    <span v-if="result.publish_date" class="sri-date">{{ result.publish_date }}</span>
+                  </div>
+                  <div class="sri-title">{{ result.title }}</div>
+                  <div v-if="result.content" class="sri-snippet">{{ result.content }}</div>
+                  <div class="sri-link">{{ result.link }}</div>
+                </a>
+              </template>
+              <div v-else-if="getGroupToolResult(group)" class="tool-full-result-section">
+                <div class="p-content-markdown tool-result-content" v-html="renderMarkdown(getGroupToolResult(group))"></div>
               </div>
-              
-              <div v-else-if="(msg.type === 'get_tools' || (msg.type === 'tool' && msg.role !== 'agent')) && msg.tool_calls" class="answer-robot-tool-wrapper">
-                <!-- 先显示 content（如果存在） -->
-                <div v-if="msg.content && msg.content.trim()" class="text-message-wrapper">
+              <div v-else class="search-no-results">暂无搜索结果</div>
+            </div>
+          </template>
+
+          <!-- 普通工具卡片 -->
+          <template v-else>
+            <div class="tool-card-header">
+              <span class="tool-badge-icon">{{ getGroupIcon(group) }}</span>
+              <span class="tool-name-chip">{{ getGroupToolName(group) || '工具调用' }}</span>
+              <span class="tool-args-chip">{{ truncateText(getGroupArgsInline(group), 80) }}</span>
+              <button
+                v-if="hasToolContent(group)"
+                class="tool-expand-btn"
+                @click="toggleExpand(group.tool_call_id, true)"
+              >{{ isExpanded(group.tool_call_id) ? '▲' : '▼' }}</button>
+            </div>
+            <div v-if="!isExpanded(group.tool_call_id) && getGroupToolResult(group)" class="tool-result-row">
+              <span class="tool-result-text">{{ truncateText(getGroupToolResult(group), 120) }}</span>
+            </div>
+            <div v-if="isExpanded(group.tool_call_id)" class="tool-expanded-body">
+              <div v-if="Object.keys(getGroupToolArgs(group)).length > 0" class="tool-full-args">
+                <div v-for="(value, key) in getGroupToolArgs(group)" :key="key" class="tool-arg-full-row">
+                  <span class="tool-arg-key">{{ key }}</span>
+                  <pre class="tool-arg-value">{{ typeof value === 'string' ? value : JSON.stringify(value, null, 2) }}</pre>
+                </div>
+              </div>
+              <div v-if="getGroupToolResult(group)" class="tool-full-result-section">
+                <div class="tool-result-label">返回结果</div>
+                <div class="p-content-markdown tool-result-content" v-html="renderMarkdown(getGroupToolResult(group))"></div>
+              </div>
+              <template v-for="(msg, msgIndex) in group.messages" :key="msgIndex">
+                <div v-if="msg.type === 'event'" class="answer-robot-event">{{ msg.content }}</div>
+                <div v-else-if="msg.role === 'agent' && msg.type !== 'tool'" class="text-message-wrapper">
                   <div class="answer-robot-content">
-                    <div class="p-content-markdown" v-html="renderMarkdown(msg.content)"></div>
+                    <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
                   </div>
                 </div>
-                <div class="answer-robot-tool">
-                  <template v-for="(toolCall, toolIndex) in msg.tool_calls" :key="toolIndex">
-                    <div class="answer-robot-tool-name-extra">
-                      🛠️ {{ toolCall.function.name }} 
-                    </div>
-                    <div class="answer-robot-tool-args">
-                      <div v-for="(value, key) in parseArguments(toolCall.function.arguments)" :key="key" class="arg-item">
-                        <span class="arg-key">{{ key }}:</span>
-                        <span class="arg-value">{{ value }}</span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </div>
-              
-              <div v-else-if="msg.type === 'get_agents' && msg.tool_calls && msg.role !== 'agent'" class="answer-robot-tool-wrapper">
-                <!-- 先显示 content（如果存在） -->
-                <div v-if="msg.content && msg.content.trim()" class="text-message-wrapper">
-                  <div class="answer-robot-content">
-                    <div class="p-content-markdown" v-html="renderMarkdown(msg.content)"></div>
-                  </div>
-                </div>
-                <div class="answer-robot-tool">
-                  <template v-for="(toolCall, toolIndex) in msg.tool_calls" :key="toolIndex">
-                    <div class="answer-robot-tool-name-extra">
-                      ⚙️ {{ toolCall.function.name }} 
-                    </div>
-                    <div class="answer-robot-tool-args">
-                      <div v-for="(value, key) in parseArguments(toolCall.function.arguments)" :key="key" class="arg-item">
-                        <span class="arg-key">{{ key }}:</span>
-                        <span class="arg-value">{{ value }}</span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </div>
-              
-              <div v-else-if="msg.type === 'agent_for_frontend'" class="answer-robot-tool">
-                <div class="answer-robot-tool-name-extra">
-                  ⚙️ {{ msg.content }} 
-                </div>
-              </div>
-              
-              <div v-else-if="msg.role === 'agent' && msg.type !== 'tool'" class="text-message-wrapper">
-                <div class="answer-robot-content">
+                <div v-else-if="msg.type === 'reasoner_content'" class="answer-robot-reasoner">
                   <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
                 </div>
-              </div>
-              <div v-else-if="msg.type === 'text' || msg.role === 'tool'" class="text-message-wrapper">
-              <div class="answer-robot-content">
-                  <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
+                <div v-else-if="msg.type === 'agent_for_frontend'" class="answer-robot-tool">
+                  <div class="answer-robot-tool-name-extra">⚙️ {{ msg.content }}</div>
                 </div>
-              </div>
-              <div v-else-if="msg.type === 'reasoner_content'" class="answer-robot-reasoner">
-                <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
-              </div>
-            </template>
-          </div>
-          <button v-if="needsExpand[index] || isExpanded(group.tool_call_id)" @click="toggleExpand(group.tool_call_id, true)" class="expand-button">
-            <span class="arrow-icon" v-if="isExpanded(group.tool_call_id)">▲</span>
-            <span class="arrow-icon" v-else>▼</span>
-          </button>
+              </template>
+            </div>
+          </template>
+
         </div>
       </div>
     </div>
@@ -468,12 +477,22 @@ const groupedToolMessages = computed(() => {
     groups.push(g)
   })
   // plan 已在 ChatWindow 主对话展示，侧栏不再展示，并去掉仅含 plan 的空框
+  // web_search 已在 ChatWindow 主对话内联展示，侧栏不再展示
   return groups
     .map((g) => ({
       ...g,
       messages: g.messages.filter((m) => m.type !== 'plan')
     }))
     .filter((g) => g.messages.length > 0)
+    .filter((g) => {
+      // 过滤掉 web_search 工具组
+      for (const msg of g.messages) {
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+          if (msg.tool_calls[0].function?.name === 'web_search') return false
+        }
+      }
+      return true
+    })
 })
 
 // 移除占位符renderMarkdown和相关注释
@@ -1066,94 +1085,131 @@ const parseArguments = (argsString: string): Record<string, any> => {
   }
 }
 
+// ─── 工具卡片辅助函数 ──────────────────────────────────────────────────
+
+/** 从 group 中提取工具名称 */
+function getGroupToolName(group: any): string {
+  for (const msg of group.messages) {
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      return msg.tool_calls[0].function?.name || ''
+    }
+  }
+  for (const msg of group.messages) {
+    if (msg.type === 'agent_for_frontend') return msg.content || ''
+  }
+  return ''
+}
+
+/** 从 group 中提取第一个 tool_call 的 parsed arguments */
+function getGroupToolArgs(group: any): Record<string, any> {
+  for (const msg of group.messages) {
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      return parseArguments(msg.tool_calls[0].function?.arguments || '{}')
+    }
+  }
+  return {}
+}
+
+/** 将 args 拼成内联字符串（key=value 形式，用 · 分隔） */
+function getGroupArgsInline(group: any): string {
+  const args = getGroupToolArgs(group)
+  const entries = Object.entries(args)
+  if (entries.length === 0) return ''
+  return entries.map(([k, v]) => {
+    const val = typeof v === 'string' ? v : JSON.stringify(v)
+    return `${k}=${val}`
+  }).join('  ·  ')
+}
+
+/** 从 group 中提取工具调用结果（role=tool 消息） */
+function getGroupToolResult(group: any): string {
+  for (const msg of group.messages) {
+    if (msg.role === 'tool' && msg.content != null) {
+      return msg.content
+    }
+  }
+  return ''
+}
+
+/** 根据消息类型选择图标 */
+function getGroupIcon(group: any): string {
+  for (const msg of group.messages) {
+    if (msg.type === 'get_agents') return '⚙️'
+  }
+  return '🛠️'
+}
+
+/** 判断是否有可展开内容 */
+function hasToolContent(group: any): boolean {
+  return Object.keys(getGroupToolArgs(group)).length > 0 || !!getGroupToolResult(group)
+}
+
+/** 截断文本 */
+function truncateText(str: string, max: number): string {
+  if (!str) return ''
+  return str.length > max ? str.slice(0, max) + '…' : str
+}
+
+/** 提取域名 */
+function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+/** 解析 web_search 工具结果为数组 */
+function parseWebSearchResults(group: any): { title: string; link: string; content: string; media: string; publish_date: string }[] {
+  const raw = getGroupToolResult(group)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed
+    return []
+  } catch {
+    return []
+  }
+}
+
+/** 获取 web_search 结果数量 */
+function getWebSearchResultCount(group: any): number {
+  return parseWebSearchResults(group).length
+}
+
 // isExpanded
 const isExpanded = (id: string): boolean => expanded.value.get(id) || false
 
-  // toggleExpand with animation
+  // toggleExpand（纯状态切换，无高度动画）
   const toggleExpand = (id: string, isManual: boolean = false) => {
-    const index = groupedToolMessages.value.findIndex(g => g.tool_call_id === id)
-    if (index === -1) return
-    const contentEl = contentRefs.value[index] as HTMLElement | null
-    if (!contentEl) return
     const toExpand = !isExpanded(id)
-    if (toExpand) {
-      expanded.value.set(id, true)
-      isManuallyCollapsed.value.set(id, false)
-      // Expand
-      contentEl.style.maxHeight = `${contentEl.clientHeight}px`
-      nextTick(() => {
-        contentEl.style.maxHeight = `${contentEl.scrollHeight}px`
-        setTimeout(() => {
-          contentEl.style.maxHeight = ''
-          checkOverflow()
-          scrollToBottom()
-        }, 1000)
-      })
-    } else {
-      expanded.value.set(id, false)
-      isManuallyCollapsed.value.set(id, isManual)
-      // Collapse
-      contentEl.style.maxHeight = `${contentEl.scrollHeight}px`
-      const _ = contentEl.offsetHeight // Force reflow to ensure transition
-      nextTick(() => {
-        contentEl.style.maxHeight = '250px'
-      setTimeout(() => {
-        expanded.value.set(id, false)
-        contentEl.style.maxHeight = ''
-        checkOverflow()
-        scrollToBottom()
-      }, 1000)
-      })
-    }
+    expanded.value.set(id, toExpand)
+    isManuallyCollapsed.value.set(id, !toExpand && isManual)
+    nextTick(() => {
+      scrollToBottom()
+    })
 }
 
-// checkOverflow
+// checkOverflow（contentRefs 已不再使用，仅保留 copy 监听器绑定）
 const checkOverflow = () => {
   nextTick(() => {
-    needsExpand.value = contentRefs.value.map(ref => {
-      if (!ref) return false
-      const htmlRef = ref as HTMLElement
-      return htmlRef.scrollHeight > htmlRef.clientHeight
-    })
     attachCopyListeners()
   })
 }
 
-// 防抖版 checkOverflow：流式时频繁触发，避免每 chunk 都做 DOM 查询和事件绑定
+// 防抖版 checkOverflow（已移除自动展开逻辑）
 let checkOverflowTimer: ReturnType<typeof setTimeout> | null = null
-let pendingGroupsRef: { groups: typeof groupedToolMessages.value } | null = null
-const debouncedCheckOverflow = (groups?: typeof groupedToolMessages.value) => {
-  if (groups) pendingGroupsRef = { groups }
+const debouncedCheckOverflow = () => {
   if (checkOverflowTimer) clearTimeout(checkOverflowTimer)
   checkOverflowTimer = setTimeout(() => {
     checkOverflowTimer = null
-    checkOverflow()
-    const pending = pendingGroupsRef
-    pendingGroupsRef = null
-    if (pending && pending.groups.length > 0) {
-      const lastIndex = pending.groups.length - 1
-      const lastId = pending.groups[lastIndex].tool_call_id
-      nextTick(() => {
-        if (needsExpand.value[lastIndex] && !expanded.value.get(lastId) && !isManuallyCollapsed.value.get(lastId)) {
-          toggleExpand(lastId, false)
-        }
-      })
-    }
+    attachCopyListeners()
   }, 80)
 }
 
 // watch
-watch(groupedToolMessages, (newGroups, oldGroups) => {
-  if (newGroups.length > oldGroups.length) {
-    const newId = newGroups[newGroups.length - 1].tool_call_id
-    toggleExpand(newId)  // This will expand since initially false
-    if (newGroups.length >= 2) {
-      const prevId = newGroups[newGroups.length - 2].tool_call_id
-      if (isExpanded(prevId)) {
-        toggleExpand(prevId, false)  // Force collapse the previous one
-      }
-    }
-  }
+watch(groupedToolMessages, (newGroups) => {
+  // 仅初始化新 group 的展开状态，不自动展开
   newGroups.forEach(group => {
     const id = group.tool_call_id
     if (!expanded.value.has(id)) {
@@ -1162,7 +1218,7 @@ watch(groupedToolMessages, (newGroups, oldGroups) => {
     }
   })
   nextTick(() => {
-    debouncedCheckOverflow(newGroups)
+    scrollToBottom()
   })
 }, { deep: true })
 
@@ -2346,12 +2402,12 @@ const handleKeyDown = (event: KeyboardEvent) => {
 .tool-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  padding-bottom: 24px;
+  padding: 16px 18px;
+  padding-bottom: 20px;
   background: linear-gradient(180deg, #f8f9fb 0%, #f4f5f7 100%);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 /* WebKit-based browsers (Chrome, Safari) */
@@ -3365,6 +3421,27 @@ const handleKeyDown = (event: KeyboardEvent) => {
   box-shadow: 0 4px 10px rgba(79, 168, 111, 0.28);
 }
 
+/* 高亮时新卡片内部背景继承高亮色 */
+.highlighted .tool-card-header,
+.highlighted .web-search-header {
+  background: rgba(217, 244, 227, 0.7) !important;
+}
+
+.highlighted .tool-result-row {
+  background: rgba(217, 244, 227, 0.5);
+  border-top-color: rgba(110, 196, 141, 0.2);
+}
+
+.highlighted .tool-expanded-body {
+  background: rgba(217, 244, 227, 0.3);
+  border-top-color: rgba(110, 196, 141, 0.2);
+}
+
+.highlighted .web-search-results-panel {
+  background: rgba(217, 244, 227, 0.3);
+  border-top-color: rgba(110, 196, 141, 0.1);
+}
+
 :deep(.structured-list) {
   list-style-type: disc;
   padding-left: 20px;
@@ -3711,6 +3788,349 @@ const handleKeyDown = (event: KeyboardEvent) => {
   border-radius: 6px;
   margin-bottom: 8px;
   border-left: 3px solid rgba(47, 79, 79, 0.565);
+}
+
+/* ═══════════════════════════════════════════════════════
+   新紧凑工具卡片样式
+   ═══════════════════════════════════════════════════════ */
+
+.tool-card-new {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  background: #ffffff;
+  box-shadow:
+    0 2px 8px rgba(17, 24, 39, 0.05),
+    0 1px 3px rgba(17, 24, 39, 0.03);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.tool-card-new:hover {
+  box-shadow:
+    0 6px 16px rgba(17, 24, 39, 0.08),
+    0 2px 6px rgba(17, 24, 39, 0.04);
+  transform: translateY(-1px);
+}
+
+/* ── 卡片头部（第一行：图标 + 名称 + 参数 + 展开按钮） ── */
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px 9px 12px;
+  cursor: default;
+  min-height: 36px;
+  background: #ffffff;
+}
+
+.web-search-header {
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, #ffffff 60%);
+  transition: background 0.2s ease;
+}
+
+.web-search-header:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, rgba(249, 250, 251, 0.5) 100%);
+}
+
+.tool-badge-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  line-height: 1;
+}
+
+.tool-badge-search {
+  filter: none;
+}
+
+.tool-name-chip {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  background: rgba(107, 114, 128, 0.09);
+  padding: 2px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-name-chip-search {
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
+}
+
+.tool-args-chip {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+}
+
+.tool-expand-chevron {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: #d1d5db;
+  margin-left: 2px;
+  transition: color 0.2s ease;
+}
+
+.web-search-header:hover .tool-expand-chevron {
+  color: #9ca3af;
+}
+
+.tool-expand-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 9px;
+  color: #d1d5db;
+  padding: 3px 7px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.tool-expand-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #9ca3af;
+}
+
+/* ── 第二行：结果预览（折叠时） ── */
+.tool-result-row {
+  padding: 5px 13px 8px 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  background: rgba(249, 250, 251, 0.6);
+}
+
+.tool-result-text {
+  font-size: 11.5px;
+  color: #6b7280;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.tool-result-empty {
+  font-size: 11px;
+  color: #d1d5db;
+  font-style: italic;
+}
+
+.search-count-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  color: #2563eb;
+  font-weight: 500;
+  background: rgba(37, 99, 235, 0.07);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ── 展开后内容区（普通工具） ── */
+.tool-expanded-body {
+  padding: 10px 13px 13px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(249, 250, 251, 0.5);
+}
+
+.tool-full-args {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tool-arg-full-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-arg-key {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.tool-arg-value {
+  font-size: 12px;
+  color: #374151;
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.tool-full-result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-result-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.tool-result-content {
+  font-size: 12px !important;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════════════════
+   web_search 可视化结果样式
+   ═══════════════════════════════════════════════════════ */
+
+.web-search-results-panel {
+  border-top: 1px solid rgba(59, 130, 246, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: rgba(249, 250, 252, 0.6);
+  padding: 8px 10px 10px;
+  max-height: 460px;
+  overflow-y: auto;
+}
+
+.web-search-results-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.web-search-results-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.web-search-results-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.search-result-item {
+  display: block;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+  cursor: pointer;
+  background: #ffffff;
+  margin-bottom: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.search-result-item:last-child {
+  margin-bottom: 0;
+}
+
+.search-result-item:hover {
+  border-color: rgba(59, 130, 246, 0.2);
+  background: rgba(239, 246, 255, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.1);
+}
+
+.sri-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.sri-domain {
+  font-size: 10.5px;
+  color: #059669;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.sri-date {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.sri-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.search-result-item:hover .sri-title {
+  color: #1d4ed8;
+}
+
+.sri-snippet {
+  font-size: 11.5px;
+  color: #6b7280;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.sri-link {
+  font-size: 10.5px;
+  color: #60a5fa;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+
+.search-result-item:hover .sri-link {
+  opacity: 1;
+  color: #2563eb;
+}
+
+.search-no-results {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: #9ca3af;
+  letter-spacing: 0.02em;
 }
 
 :deep(.pptx-preview-wrapper) {

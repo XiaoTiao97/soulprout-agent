@@ -37,6 +37,7 @@
             :username="currentUsername"
             :reloadStreamingUiToken="reloadStreamingUiToken"
             :chatMode="chatMode"
+            :toolMessages="toolMessages"
             @sendMessage="handleSendMessage"
             @stopGeneration="stopGeneration"
             :class="{ 'compressed': showExtraInfo }"

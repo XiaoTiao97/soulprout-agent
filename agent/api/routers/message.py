@@ -27,7 +27,7 @@ async def get_models_list():
 @router.get("/message/{conversation_id}")
 async def get_messages(conversation_id: str):
      messages = await get_message_by_conv_id(conversation_id)
-     messages = [message for message in messages if not isinstance(message.content, list) and message.type != "plan"]
+     messages = [message for message in messages if not isinstance(message.content, list)]
      return messages
 
 @router.post("/message/chat", response_class=StreamingResponse)
