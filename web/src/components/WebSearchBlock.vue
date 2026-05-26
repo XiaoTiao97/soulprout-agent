@@ -46,7 +46,7 @@
                 class="ws-source-item"
                 target="_blank"
                 rel="noopener noreferrer"
-                @click="!row.link && $event.preventDefault()"
+                @click="onSourceClick($event, row.link)"
               >
                 <span class="ws-source-meta">
                   <span v-if="row.media" class="ws-source-media">{{ row.media }}</span>
@@ -80,6 +80,22 @@ const props = defineProps<{
   /** 流式进行中且尚无结果时显示扫光 */
   pending?: boolean
 }>()
+
+const emit = defineEmits<{
+  openWebPreview: [url: string]
+}>()
+
+function onSourceClick(event: MouseEvent, link?: string) {
+  if (!link) {
+    event.preventDefault()
+    return
+  }
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+    return
+  }
+  event.preventDefault()
+  emit('openWebPreview', link)
+}
 
 const expanded = ref(new Set<string>())
 
@@ -122,14 +138,15 @@ function getCount(toolCallId: string) {
   gap: 0;
   width: 100%;
   max-width: 100%;
-  margin: 4px 0 8px;
+  margin: 0;
 }
 
 .ws-summaries-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 4px;
 }
 
 .ws-summary-pill {

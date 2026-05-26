@@ -1,316 +1,465 @@
 <template>
   <div class="extra-info">
-    <!-- Tab 切换栏 -->
-    <div class="tab-container">
-      <div 
-        class="tab-item" 
-        :class="{ active: activeTab === 'tools' }"
-        @click="activeTab = 'tools'"
-      >
-        <span class="tab-icon">🛠️</span>
-        <span class="tab-text">工具信息</span>
-      </div>
-      <div 
-        class="tab-item" 
-        :class="{ active: activeTab === 'files' }"
-        @click="activeTab = 'files'"
-      >
-        <span class="tab-icon">📁</span>
-        <span class="tab-text">文件库</span>
-      </div>
-    </div>
+    <div class="preview-viewport-body">
+      <!-- 左侧预览主区域 -->
+      <div class="preview-main">
+        <div class="preview-tab-bar">
+          <div
+            class="preview-tab-switch"
+            role="tablist"
+            aria-label="预览视窗切换"
+            :data-active="activeTab"
+          >
+            <span class="preview-tab-thumb" aria-hidden="true"></span>
+            <button
+              type="button"
+              role="tab"
+              class="preview-tab-option"
+              :class="{ 'preview-tab-option--active': activeTab === 'files' }"
+              :aria-selected="activeTab === 'files'"
+              @click="activeTab = 'files'"
+            >文件</button>
+            <button
+              type="button"
+              role="tab"
+              class="preview-tab-option"
+              :class="{ 'preview-tab-option--active': activeTab === 'agents' }"
+              :aria-selected="activeTab === 'agents'"
+              @click="activeTab = 'agents'"
+            >子智能体</button>
+            <button
+              type="button"
+              role="tab"
+              class="preview-tab-option"
+              :class="{ 'preview-tab-option--active': activeTab === 'web' }"
+              :aria-selected="activeTab === 'web'"
+              @click="activeTab = 'web'"
+            >网页</button>
+          </div>
+        </div>
 
-    <!-- 工具信息内容 -->
-    <div v-if="activeTab === 'tools'" class="tool-messages" ref="toolMessagesContainer" @scroll="handleScroll">
-      <div v-for="(group, index) in groupedToolMessages" :key="group.tool_call_id" class="tool-message">
-        <div class="tool-frame tool-card-new" :class="{ highlighted: props.highlightedId === group.tool_call_id }" :ref="el => toolRefs[index] = el as HTMLElement">
-
-          <!-- web_search 特殊可视化设计 -->
-          <template v-if="getGroupToolName(group) === 'web_search'">
-            <div class="tool-card-header web-search-header" @click="toggleExpand(group.tool_call_id, true)">
-              <span class="tool-badge-icon tool-badge-search">🔍</span>
-              <span class="tool-name-chip tool-name-chip-search">web_search</span>
-              <span class="tool-args-chip">{{ truncateText(getGroupArgsInline(group), 70) }}</span>
-              <span class="tool-expand-chevron">{{ isExpanded(group.tool_call_id) ? '▲' : '▼' }}</span>
-            </div>
-            <div v-if="!isExpanded(group.tool_call_id)" class="tool-result-row">
-              <template v-if="getWebSearchResultCount(group) > 0">
-                <span class="search-count-tag">{{ getWebSearchResultCount(group) }} 条结果</span>
-              </template>
-              <span v-else-if="getGroupToolResult(group)" class="tool-result-text">{{ truncateText(getGroupToolResult(group), 80) }}</span>
-              <span v-else class="tool-result-empty">搜索中…</span>
-            </div>
-            <div v-if="isExpanded(group.tool_call_id)" class="web-search-results-panel">
-              <template v-if="parseWebSearchResults(group).length > 0">
-                <a
-                  v-for="(result, i) in parseWebSearchResults(group)"
-                  :key="i"
-                  :href="result.link"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="search-result-item"
-                >
-                  <div class="sri-meta">
-                    <span class="sri-domain">{{ extractDomain(result.link) }}</span>
-                    <span v-if="result.publish_date" class="sri-date">{{ result.publish_date }}</span>
-                  </div>
-                  <div class="sri-title">{{ result.title }}</div>
-                  <div v-if="result.content" class="sri-snippet">{{ result.content }}</div>
-                  <div class="sri-link">{{ result.link }}</div>
-                </a>
-              </template>
-              <div v-else-if="getGroupToolResult(group)" class="tool-full-result-section">
-                <div class="p-content-markdown tool-result-content" v-html="renderMarkdown(getGroupToolResult(group))"></div>
-              </div>
-              <div v-else class="search-no-results">暂无搜索结果</div>
-            </div>
-          </template>
-
-          <!-- 普通工具卡片 -->
-          <template v-else>
-            <div class="tool-card-header">
-              <span class="tool-badge-icon">{{ getGroupIcon(group) }}</span>
-              <span class="tool-name-chip">{{ getGroupToolName(group) || '工具调用' }}</span>
-              <span class="tool-args-chip">{{ truncateText(getGroupArgsInline(group), 80) }}</span>
-              <button
-                v-if="hasToolContent(group)"
-                class="tool-expand-btn"
-                @click="toggleExpand(group.tool_call_id, true)"
-              >{{ isExpanded(group.tool_call_id) ? '▲' : '▼' }}</button>
-            </div>
-            <div v-if="!isExpanded(group.tool_call_id) && getGroupToolResult(group)" class="tool-result-row">
-              <span class="tool-result-text">{{ truncateText(getGroupToolResult(group), 120) }}</span>
-            </div>
-            <div v-if="isExpanded(group.tool_call_id)" class="tool-expanded-body">
-              <div v-if="Object.keys(getGroupToolArgs(group)).length > 0" class="tool-full-args">
-                <div v-for="(value, key) in getGroupToolArgs(group)" :key="key" class="tool-arg-full-row">
-                  <span class="tool-arg-key">{{ key }}</span>
-                  <pre class="tool-arg-value">{{ typeof value === 'string' ? value : JSON.stringify(value, null, 2) }}</pre>
-                </div>
-              </div>
-              <div v-if="getGroupToolResult(group)" class="tool-full-result-section">
-                <div class="tool-result-label">返回结果</div>
-                <div class="p-content-markdown tool-result-content" v-html="renderMarkdown(getGroupToolResult(group))"></div>
-              </div>
-              <template v-for="(msg, msgIndex) in group.messages" :key="msgIndex">
-                <div v-if="msg.type === 'event'" class="answer-robot-event">{{ msg.content }}</div>
-                <div v-else-if="msg.role === 'agent' && msg.type !== 'tool'" class="text-message-wrapper">
-                  <div class="answer-robot-content">
-                    <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
+        <div class="preview-content-area">
+        <!-- 文件 Tab -->
+        <template v-if="activeTab === 'files'">
+          <div v-if="selectedFile" class="preview-pane">
+            <div class="preview-header">
+              <h4 class="preview-header-title">{{ selectedFile }}</h4>
+              <div class="header-actions">
+                <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">编辑</button>
+                <div v-if="isHtml && !isEditing" class="export-container">
+                  <button class="export-button" @click="toggleExportOptions">导出</button>
+                  <div v-if="showExportOptions" class="export-dropdown">
+                    <button class="dropdown-item" @click="exportWithFormat('pdf')">PDF</button>
+                    <button class="dropdown-item" @click="exportWithFormat('pptx')">PPTX</button>
                   </div>
                 </div>
-                <div v-else-if="msg.type === 'reasoner_content'" class="answer-robot-reasoner">
-                  <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
-                </div>
-                <div v-else-if="msg.type === 'agent_for_frontend'" class="answer-robot-tool">
-                  <div class="answer-robot-tool-name-extra">⚙️ {{ msg.content }}</div>
-                </div>
-              </template>
-            </div>
-          </template>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- 文件库内容（内嵌显示） -->
-    <div v-if="activeTab === 'files'" class="file-library-content">
-      <div class="file-library-body">
-        <div class="left-preview" v-if="selectedFile">
-          <div class="preview-header">
-            <h4>{{ selectedFile }}</h4>
-            <div class="header-actions">
-              <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">
-                编辑
-              </button>
-              <div v-if="isHtml && !isEditing" class="export-container">
-                <button class="export-button" @click="toggleExportOptions">
-                  导出
-                </button>
-                <div v-if="showExportOptions" class="export-dropdown">
-                  <button class="dropdown-item" @click="exportWithFormat('pdf')">PDF</button>
-                  <button class="dropdown-item" @click="exportWithFormat('pptx')">PPTX</button>
-                </div>
+                <img v-if="!isEditing" :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
               </div>
-              <img v-if="!isEditing" :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
+              <div v-if="exporting" class="export-feedback">导出中...</div>
+              <div v-if="exportSuccess" class="export-feedback success">导出成功！</div>
+              <div v-if="exportError" class="export-feedback error">{{ exportError }}</div>
             </div>
-            <div v-if="exporting" class="export-feedback">导出中...</div>
-            <div v-if="exportSuccess" class="export-feedback success">导出成功！</div>
-            <div v-if="exportError" class="export-feedback error">{{ exportError }}</div>
-          </div>
-          <div class="preview-content">
-            <div v-if="previewError" class="error">{{ previewError }}</div>
-            <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
-            <iframe v-else-if="isHtml" :src="fileUrl" class="html-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
-            <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" />
-            <VueOfficePdf v-else-if="isPdf" :src="fileUrl" />
-            <VueOfficePptx v-else-if="isPpt" :src="fileUrl" />
-            <div v-else-if="isDocx" v-html="fileContent"></div>
-            <div v-else v-html="renderMarkdown(processedFileContent)"></div>
-          </div>
-        </div>
-        <div class="left-preview" v-else>
-          <p class="no-selection">请选择一个文件进行预览</p>
-        </div>
-        <div class="right-sidebar" :class="{ 'collapsed': !isFileListExpanded }">
-          <div class="file-list-header">
-            <button class="file-list-toggle-button" @click="toggleFileList" :title="isFileListExpanded ? '收起' : '展开'">
-              <img :src="InfoIcon" alt="" class="file-toggle-icon" :class="{ 'rotated-left': isFileListExpanded, 'rotated-right': !isFileListExpanded }" />
-            </button>
-            <span class="file-list-title" v-if="isFileListExpanded">文件列表</span>
-            <div class="header-actions-group">
-              <img v-if="isFileListExpanded" :src="RefreshIcon" alt="刷新" title="刷新" class="icon-button" @click="fetchFiles" />
+            <div class="preview-content">
+              <div v-if="previewError" class="error">{{ previewError }}</div>
+              <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
+              <iframe v-else-if="isHtml" :src="fileUrl" class="html-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+              <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" />
+              <VueOfficePdf v-else-if="isPdf" :src="fileUrl" />
+              <VueOfficePptx v-else-if="isPpt" :src="fileUrl" />
+              <div v-else-if="isDocx" v-html="fileContent"></div>
+              <div v-else v-html="renderMarkdown(processedFileContent)"></div>
             </div>
           </div>
-          <div v-if="isFileListExpanded" class="file-list-content">
-            <div v-if="visibleFileNodes.length > 0" class="file-tree">
+          <div v-else class="preview-empty">
+            <p class="preview-empty-text">预览窗口</p>
+          </div>
+        </template>
+
+        <!-- 子智能体 Tab -->
+        <template v-else-if="activeTab === 'agents'">
+          <div
+            v-if="groupedSubAgentMessages.length"
+            class="agent-messages"
+            ref="agentMessagesContainer"
+            @scroll="handleScroll"
+          >
+            <div v-for="(group, index) in groupedSubAgentMessages" :key="group.tool_call_id" class="tool-message">
               <div
-                v-for="node in visibleFileNodes"
-                :key="node.key"
-                class="file-tree-node"
-                :class="{
-                  folder: node.type === 'folder',
-                  file: node.type === 'file',
-                  selected: node.type === 'file' && node.path === selectedFileNormalized
-                }"
-                :style="{ paddingLeft: `${12 + node.level * 16}px` }"
-                @click="handleTreeNodeClick(node)"
+                class="tool-frame tool-card-new"
+                :class="{ highlighted: props.highlightedId === group.tool_call_id }"
+                :ref="el => toolRefs[index] = el as HTMLElement"
               >
-                <span class="tree-arrow" :class="{ placeholder: node.type === 'file' }">
-                  {{ node.type === 'folder' ? (isFolderExpanded(node.path) ? '▾' : '▸') : '·' }}
-                </span>
-                <span class="tree-icon">
-                  {{ node.type === 'folder' ? (isFolderExpanded(node.path) ? '📂' : '📁') : '📄' }}
-                </span>
-                <span class="file-name">{{ node.name }}</span>
+                <div class="tool-card-header">
+                  <span class="tool-badge-icon">{{ getGroupIcon(group) }}</span>
+                  <span class="tool-name-chip">{{ getSubAgentDisplayName(group) }}</span>
+                  <span class="tool-args-chip">{{ truncateText(getGroupArgsInline(group), 80) }}</span>
+                  <button
+                    v-if="hasToolContent(group)"
+                    class="tool-expand-btn"
+                    @click="toggleExpand(group.tool_call_id, true)"
+                  >{{ isExpanded(group.tool_call_id) ? '▲' : '▼' }}</button>
+                </div>
+                <div v-if="!isExpanded(group.tool_call_id) && getGroupToolResult(group)" class="tool-result-row">
+                  <span class="tool-result-text">{{ truncateText(getGroupToolResult(group), 120) }}</span>
+                </div>
+                <div v-if="isExpanded(group.tool_call_id)" class="tool-expanded-body">
+                  <div v-if="Object.keys(getGroupToolArgs(group)).length > 0" class="tool-full-args">
+                    <div v-for="(value, key) in getGroupToolArgs(group)" :key="key" class="tool-arg-full-row">
+                      <span class="tool-arg-key">{{ key }}</span>
+                      <pre class="tool-arg-value">{{ typeof value === 'string' ? value : JSON.stringify(value, null, 2) }}</pre>
+                    </div>
+                  </div>
+                  <div v-if="getGroupToolResult(group)" class="tool-full-result-section">
+                    <div class="tool-result-label">返回结果</div>
+                    <div class="p-content-markdown tool-result-content" v-html="renderMarkdown(getGroupToolResult(group))"></div>
+                  </div>
+                  <template v-for="(msg, msgIndex) in group.messages" :key="msgIndex">
+                    <div v-if="msg.type === 'event'" class="answer-robot-event">{{ msg.content }}</div>
+                    <div v-else-if="msg.role === 'agent' && msg.type !== 'tool'" class="text-message-wrapper">
+                      <div class="answer-robot-content">
+                        <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
+                      </div>
+                    </div>
+                    <div v-else-if="msg.type === 'reasoner_content'" class="answer-robot-reasoner">
+                      <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
+                    </div>
+                    <div v-else-if="msg.type === 'agent_for_frontend'" class="answer-robot-tool">
+                      <div class="answer-robot-tool-name-extra">⚙️ {{ msg.content }}</div>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
-            <div v-else class="empty-file-list">
-              <p>暂无文件</p>
-              <p class="empty-hint">文件将在这里显示</p>
+          </div>
+          <div v-else class="preview-empty">
+            <p class="preview-empty-text">预览窗口</p>
+          </div>
+        </template>
+
+        <!-- 网页 Tab -->
+        <template v-else-if="activeTab === 'web'">
+          <div v-if="selectedWebUrl" class="preview-pane web-preview-pane">
+            <div class="preview-header web-preview-header">
+              <h4 class="preview-header-title web-preview-title" :title="selectedWebUrl">{{ extractDomain(selectedWebUrl) }}</h4>
+              <div class="header-actions">
+                <button type="button" class="edit-button" @click="openWebInNewTab">在新标签页打开</button>
+              </div>
+            </div>
+            <div class="preview-content web-preview-content">
+              <div v-if="webIframeBlocked" class="web-blocked-notice">
+                <p>该网页无法嵌入预览，已为你在新标签页打开。</p>
+                <button type="button" class="edit-button" @click="openWebInNewTab">重新打开</button>
+              </div>
+              <template v-else>
+                <div v-if="webIframeLoading" class="web-preview-loading" role="status" aria-live="polite">
+                  <div class="web-preview-spinner" aria-hidden="true"></div>
+                  <p class="web-preview-loading-text">网页加载中…</p>
+                </div>
+                <iframe
+                  :key="selectedWebUrl"
+                  :src="selectedWebUrl"
+                  class="web-iframe"
+                  frameborder="0"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  referrerpolicy="no-referrer-when-downgrade"
+                  @load="onWebIframeLoad"
+                  @error="onWebIframeError"
+                ></iframe>
+              </template>
             </div>
           </div>
+          <div v-else class="preview-empty">
+            <p class="preview-empty-text">预览窗口</p>
+          </div>
+        </template>
         </div>
+
+        <!-- 浮动文件列表（overlay 于预览区右侧） -->
+        <aside
+          class="file-list-float"
+          :class="{ 'file-list-float--collapsed': !isFileListExpanded }"
+          aria-label="文件列表"
+        >
+          <button
+            v-if="!isFileListExpanded"
+            type="button"
+            class="file-list-rail"
+            aria-label="展开文件列表"
+            @click="isFileListExpanded = true"
+          >
+            <span class="file-list-rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.2 1.5H12.5A1.5 1.5 0 0 1 14 6v6.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5V4.5z" />
+              </svg>
+            </span>
+          </button>
+
+          <template v-else>
+            <header class="file-list-float-head">
+              <button
+                type="button"
+                class="file-list-float-collapse"
+                aria-label="收起文件列表"
+                @click="isFileListExpanded = false"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
+              </button>
+              <div class="file-list-float-heading">
+                <span class="file-list-float-title">文件</span>
+                <span class="file-list-float-count">{{ floatFileCount }}</span>
+              </div>
+              <button
+                type="button"
+                class="file-list-float-refresh"
+                aria-label="刷新文件列表"
+                @click="fetchFiles"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2.5 8a5.5 5.5 0 0 1 9.3-3.9" />
+                  <path d="M13.5 8A5.5 5.5 0 0 1 4.2 11.9" />
+                  <path d="M11.8 2.5V5h-2.3" />
+                  <path d="M4.2 13.5V11h2.3" />
+                </svg>
+              </button>
+            </header>
+
+            <div class="file-list-float-body">
+              <ul v-if="visibleFileNodes.length > 0" class="fl-tree" role="tree">
+                <li
+                  v-for="node in visibleFileNodes"
+                  :key="node.key"
+                  role="treeitem"
+                  class="fl-tree-row"
+                >
+                  <button
+                    type="button"
+                    class="fl-tree-item"
+                    :class="{
+                      'fl-tree-item--folder': node.type === 'folder',
+                      'fl-tree-item--selected': node.type === 'file' && node.path === selectedFileNormalized,
+                    }"
+                    :style="{ paddingLeft: `${10 + node.level * 14}px` }"
+                    @click="handleTreeNodeClick(node)"
+                  >
+                    <span
+                      class="fl-tree-leading"
+                      :class="{ 'fl-tree-leading--folder': node.type === 'folder' }"
+                      aria-hidden="true"
+                    >
+                      <svg v-if="node.type === 'folder'" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.2 1.5H12.5A1.5 1.5 0 0 1 14 6v6.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5V4.5z" />
+                      </svg>
+                      <svg v-else viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 2.5h5l2.5 2.5V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" />
+                        <path d="M9 2.5V6H12.5" />
+                      </svg>
+                    </span>
+                    <span class="fl-tree-name" :title="node.name">{{ node.name }}</span>
+                    <span
+                      v-if="node.type === 'folder'"
+                      class="fl-tree-folder-chevron"
+                      aria-hidden="true"
+                    >{{ isFolderExpanded(node.path) ? '▾' : '▸' }}</span>
+                  </button>
+                </li>
+              </ul>
+              <div v-else class="fl-tree-empty">
+                <p class="fl-tree-empty-title">暂无文件</p>
+              </div>
+            </div>
+          </template>
+        </aside>
       </div>
     </div>
 
     <!-- 全屏文件库弹窗 -->
     <div v-if="showFileLibrary" class="file-library-full-panel">
-      <div class="full-panel-header">
-        <h3>
-          <span class="header-title">
-            文件库
-            <img :src="RefreshIcon" alt="刷新" class="icon-button" @click="fetchFiles" />
-          </span>
-          <span @click="closeEditPanel" class="close-button">×</span>
-        </h3>
-      </div>
-      <div class="full-panel-content">
-        <div class="left-sidebar" :class="{ 'collapsed': !isFileListExpanded }">
-          <div class="file-list-header">
-            <button class="file-list-toggle-button" @click="toggleFileList" :title="isFileListExpanded ? '收起' : '展开'">
-              <img :src="InfoIcon" alt="" class="file-toggle-icon" :class="{ 'rotated-left': isFileListExpanded, 'rotated-right': !isFileListExpanded }" />
-            </button>
-            <span class="file-list-title" v-if="isFileListExpanded">文件列表</span>
-            <div class="header-actions-group">
-              <img v-if="isFileListExpanded" :src="RefreshIcon" alt="刷新" title="刷新" class="icon-button" @click="fetchFiles" />
-            </div>
-          </div>
-          <div v-if="isFileListExpanded" class="file-list-content">
-            <div v-if="visibleFileNodes.length > 0" class="file-tree">
-              <div
-                v-for="node in visibleFileNodes"
-                :key="node.key"
-                class="file-tree-node"
-                :class="{
-                  folder: node.type === 'folder',
-                  file: node.type === 'file',
-                  selected: node.type === 'file' && node.path === selectedFileNormalized
-                }"
-                :style="{ paddingLeft: `${12 + node.level * 16}px` }"
-                @click="handleTreeNodeClick(node)"
+      <header class="full-panel-header">
+        <span class="full-panel-title">文件编辑</span>
+        <button type="button" class="full-panel-close" aria-label="关闭" @click="closeEditPanel">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </button>
+      </header>
+      <div class="full-panel-body">
+        <aside
+          class="full-panel-sidebar"
+          :class="{ 'full-panel-sidebar--collapsed': !isFullPanelFileListExpanded }"
+          aria-label="文件列表"
+        >
+          <button
+            v-if="!isFullPanelFileListExpanded"
+            type="button"
+            class="file-list-rail full-panel-rail"
+            aria-label="展开文件列表"
+            @click="isFullPanelFileListExpanded = true"
+          >
+            <span class="file-list-rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.2 1.5H12.5A1.5 1.5 0 0 1 14 6v6.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5V4.5z" />
+              </svg>
+            </span>
+          </button>
+
+          <template v-else>
+            <header class="file-list-float-head">
+              <button
+                type="button"
+                class="file-list-float-collapse"
+                aria-label="收起文件列表"
+                @click="isFullPanelFileListExpanded = false"
               >
-                <span class="tree-arrow" :class="{ placeholder: node.type === 'file' }">
-                  {{ node.type === 'folder' ? (isFolderExpanded(node.path) ? '▾' : '▸') : '·' }}
-                </span>
-                <span class="tree-icon">
-                  {{ node.type === 'folder' ? (isFolderExpanded(node.path) ? '📂' : '📁') : '📄' }}
-                </span>
-                <span class="file-name">{{ node.name }}</span>
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
+              </button>
+              <div class="file-list-float-heading">
+                <span class="file-list-float-title">文件</span>
+                <span class="file-list-float-count">{{ floatFileCount }}</span>
+              </div>
+              <button
+                type="button"
+                class="file-list-float-refresh"
+                aria-label="刷新文件列表"
+                @click="fetchFiles"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2.5 8a5.5 5.5 0 0 1 9.3-3.9" />
+                  <path d="M13.5 8A5.5 5.5 0 0 1 4.2 11.9" />
+                  <path d="M11.8 2.5V5h-2.3" />
+                  <path d="M4.2 13.5V11h2.3" />
+                </svg>
+              </button>
+            </header>
+
+            <div class="file-list-float-body">
+              <ul v-if="visibleFileNodes.length > 0" class="fl-tree" role="tree">
+                <li
+                  v-for="node in visibleFileNodes"
+                  :key="node.key"
+                  role="treeitem"
+                  class="fl-tree-row"
+                >
+                  <button
+                    type="button"
+                    class="fl-tree-item"
+                    :class="{
+                      'fl-tree-item--folder': node.type === 'folder',
+                      'fl-tree-item--selected': node.type === 'file' && node.path === selectedFileNormalized,
+                    }"
+                    :style="{ paddingLeft: `${10 + node.level * 14}px` }"
+                    @click="handleTreeNodeClick(node)"
+                  >
+                    <span
+                      class="fl-tree-leading"
+                      :class="{ 'fl-tree-leading--folder': node.type === 'folder' }"
+                      aria-hidden="true"
+                    >
+                      <svg v-if="node.type === 'folder'" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.2 1.5H12.5A1.5 1.5 0 0 1 14 6v6.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5V4.5z" />
+                      </svg>
+                      <svg v-else viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 2.5h5l2.5 2.5V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" />
+                        <path d="M9 2.5V6H12.5" />
+                      </svg>
+                    </span>
+                    <span class="fl-tree-name" :title="node.name">{{ node.name }}</span>
+                    <span
+                      v-if="node.type === 'folder'"
+                      class="fl-tree-folder-chevron"
+                      aria-hidden="true"
+                    >{{ isFolderExpanded(node.path) ? '▾' : '▸' }}</span>
+                  </button>
+                </li>
+              </ul>
+              <div v-else class="fl-tree-empty">
+                <p class="fl-tree-empty-title">暂无文件</p>
               </div>
             </div>
-            <div v-else class="empty-file-list">
-              <p>暂无文件</p>
-              <p class="empty-hint">文件将在这里显示</p>
-            </div>
-          </div>
-        </div>
-        <div class="right-preview" v-if="selectedFile">
-          <div class="preview-header">
-            <h4>{{ selectedFile }}</h4>
-            <div class="header-actions">
-              <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">
-                编辑
-              </button>
-              <button v-if="isEditing && isMarkdownFile" :class="{ 'mode-button': true, 'active': editMode === 'markdown' }" @click="switchEditMode('markdown')">
-                📝 Markdown
-              </button>
-              <button v-if="isEditing && isMarkdownFile" :class="{ 'mode-button': true, 'active': editMode === 'source' }" @click="switchEditMode('source')">
-                💻 源码
-              </button>
-              <div class="button-separator"></div>
-              <button v-if="isEditing" class="save-button" @click="saveFile" :disabled="saving">
-                {{ saving ? '保存中...' : '保存' }}
-              </button>
-              <button v-if="isEditing" class="cancel-button last-button" @click="() => cancelEditing()">
-                退出编辑
-              </button>
-              <div v-if="isHtml && !isEditing" class="export-container">
-                <button class="export-button" @click="toggleExportOptions">
-                  导出
-                </button>
-                <div v-if="showExportOptions" class="export-dropdown">
-                  <button class="dropdown-item" @click="exportWithFormat('pdf')">PDF</button>
-                  <button class="dropdown-item" @click="exportWithFormat('pptx')">PPTX</button>
+          </template>
+        </aside>
+
+        <main class="full-panel-main">
+          <div v-if="selectedFile" class="preview-pane">
+            <div class="preview-header">
+              <h4 class="preview-header-title" :title="selectedFile">{{ selectedFile }}</h4>
+              <div class="header-actions">
+                <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">编辑</button>
+                <div
+                  v-if="isEditing && isMarkdownFile"
+                  class="edit-mode-switch"
+                  role="tablist"
+                  aria-label="编辑模式切换"
+                  :data-active="editMode"
+                >
+                  <span class="edit-mode-thumb" aria-hidden="true"></span>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="edit-mode-option"
+                    :class="{ 'edit-mode-option--active': editMode === 'markdown' }"
+                    :aria-selected="editMode === 'markdown'"
+                    @click="switchEditMode('markdown')"
+                  >Markdown</button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="edit-mode-option"
+                    :class="{ 'edit-mode-option--active': editMode === 'source' }"
+                    :aria-selected="editMode === 'source'"
+                    @click="switchEditMode('source')"
+                  >源码</button>
                 </div>
+                <button v-if="isEditing" class="save-button" @click="saveFile" :disabled="saving">
+                  {{ saving ? '保存中...' : '保存' }}
+                </button>
+                <button v-if="isEditing" class="cancel-button" @click="() => cancelEditing()">退出编辑</button>
+                <div v-if="isHtml && !isEditing" class="export-container">
+                  <button class="export-button" @click="toggleExportOptions">导出</button>
+                  <div v-if="showExportOptions" class="export-dropdown">
+                    <button class="dropdown-item" @click="exportWithFormat('pdf')">PDF</button>
+                    <button class="dropdown-item" @click="exportWithFormat('pptx')">PPTX</button>
+                  </div>
+                </div>
+                <img v-if="!isEditing" :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
               </div>
-              <img v-if="!isEditing" :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
+              <div v-if="exporting" class="export-feedback">导出中...</div>
+              <div v-if="exportSuccess" class="export-feedback success">导出成功！</div>
+              <div v-if="exportError" class="export-feedback error">{{ exportError }}</div>
             </div>
-            <div v-if="exporting" class="export-feedback">导出中...</div>
-            <div v-if="exportSuccess" class="export-feedback success">导出成功！</div>
-            <div v-if="exportError" class="export-feedback error">{{ exportError }}</div>
-          </div>
-          <div class="preview-content">
-            <div v-if="previewError" class="error">{{ previewError }}</div>
-            <div v-else-if="isEditing" class="edit-content">
-              <!-- Markdown模式 -->
-              <div v-if="editMode === 'markdown' && isMarkdownFile" class="markdown-editor-container">
-                <div id="markdown-editor" class="markdown-editor"></div>
+            <div class="preview-content">
+              <div v-if="previewError" class="error">{{ previewError }}</div>
+              <div v-else-if="isEditing" class="edit-content">
+                <div v-if="editMode === 'markdown' && isMarkdownFile" class="markdown-editor-container">
+                  <div id="markdown-editor" class="markdown-editor"></div>
+                </div>
+                <textarea
+                  v-else
+                  v-model="editedContent"
+                  class="edit-textarea"
+                  placeholder="在此编辑文件内容..."
+                  @keydown="handleKeyDown"
+                  ref="editTextarea"
+                ></textarea>
+                <div v-if="saveSuccess" class="save-feedback success">保存成功</div>
+                <div v-if="saveError" class="save-feedback error">{{ saveError }}</div>
               </div>
-              <!-- 源码模式 -->
-              <textarea
-                v-else
-                v-model="editedContent"
-                class="edit-textarea"
-                placeholder="在此编辑文件内容..."
-                @keydown="handleKeyDown"
-                ref="editTextarea"
-              ></textarea>
-              <div v-if="saveSuccess" class="save-feedback success">保存成功</div>
-              <div v-if="saveError" class="save-feedback error">{{ saveError }}</div>
+              <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
+              <iframe v-else-if="isHtml" :src="fileUrl" class="html-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+              <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" />
+              <VueOfficePdf v-else-if="isPdf" :src="fileUrl" />
+              <VueOfficePptx v-else-if="isPpt" :src="fileUrl" />
+              <div v-else-if="isDocx" v-html="fileContent"></div>
+              <div v-else v-html="renderMarkdown(processedFileContent)"></div>
             </div>
-            <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
-            <iframe v-else-if="isHtml" :src="fileUrl" class="html-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
-            <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" />
-            <VueOfficePdf v-else-if="isPdf" :src="fileUrl" />
-            <VueOfficePptx v-else-if="isPpt" :src="fileUrl" />
-            <div v-else-if="isDocx" v-html="fileContent"></div>
-            <div v-else v-html="renderMarkdown(processedFileContent)"></div>
           </div>
-        </div>
-        <div class="right-preview" v-else>
-          <p class="no-selection">请选择一个文件进行预览</p>
-        </div>
+          <div v-else class="preview-empty">
+            <p class="preview-empty-text">预览窗口</p>
+          </div>
+        </main>
       </div>
     </div>
   </div>
@@ -328,13 +477,7 @@ import CopyIcon from '@/assets/images/copy_icon.svg?url'
 import SuccessIcon from '@/assets/images/success_icon.svg?url'
 import axios from 'axios'; // 假设使用axios，如果有自定义api，请调整
 // @ts-ignore
-import RefreshIcon from '@/assets/images/refresh_icon.svg?url'
-// @ts-ignore
 import DownloadIcon from '@/assets/images/download_icon.svg?url'
-// @ts-ignore
-import FileLibraryIcon from '@/assets/images/file_library_icon.svg?url'
-// @ts-ignore
-import InfoIcon from '@/assets/images/info_icon.svg?url'
 // Import vue-office components (user needs to install @vue-office/docx, @vue-office/excel, @vue-office/pdf, etc.)
 import VueOfficeDocx from '@vue-office/docx'
 import '@vue-office/docx/lib/index.css'
@@ -354,12 +497,35 @@ import 'highlight.js/styles/github.css'
 
 const props = defineProps<{ 
   toolMessages: AgentMessage[]
-  fileMessages: AgentMessage[] // 新增：文件消息列表
+  fileMessages: AgentMessage[]
   highlightedId: string | null
   scrollToId: string | null
   toggleTrigger: number
-  conversationId: string // 新增
+  conversationId: string
+  webOpenTrigger?: { url: string; nonce: number } | null
+  fileOpenTrigger?: { filePath: string; nonce: number } | null
 }>()
+
+type PreviewTab = 'files' | 'agents' | 'web'
+
+const SUB_AGENT_TOOL_NAMES = new Set(['call_sub_agent', 'soulprout_kb_agent'])
+
+function isSubAgentToolName(name: string): boolean {
+  return SUB_AGENT_TOOL_NAMES.has(name)
+}
+
+function isSubAgentGroup(group: { messages: AgentMessage[] }): boolean {
+  const name = getGroupToolName(group)
+  if (isSubAgentToolName(name)) return true
+  for (const msg of group.messages) {
+    if (msg.tool_calls?.length) {
+      for (const tc of msg.tool_calls) {
+        if (isSubAgentToolName(tc.function?.name || '')) return true
+      }
+    }
+  }
+  return false
+}
 
 const groupedToolMessages = computed(() => {
   const groups: any[] = []  // 或定义接口
@@ -495,6 +661,10 @@ const groupedToolMessages = computed(() => {
     })
 })
 
+const groupedSubAgentMessages = computed(() =>
+  groupedToolMessages.value.filter((g) => isSubAgentGroup(g))
+)
+
 // 移除占位符renderMarkdown和相关注释
 // 添加必要的导入和markdown配置
 
@@ -602,7 +772,7 @@ const expanded = ref<Map<string, boolean>>(new Map())
 const needsExpand = ref<boolean[]>([])
   const isManuallyCollapsed = ref<Map<string, boolean>>(new Map())
 const toolRefs = ref<HTMLElement[]>([])
-const toolMessagesContainer = ref<HTMLElement | null>(null)
+const agentMessagesContainer = ref<HTMLElement | null>(null)
 const isAutoScroll = ref(true)
 
 const files = ref<string[]>([]);
@@ -717,6 +887,10 @@ const visibleFileNodes = computed<VisibleFileTreeNode[]>(() => {
   return result
 })
 
+const floatFileCount = computed(() =>
+  visibleFileNodes.value.filter((n) => n.type === 'file').length,
+)
+
 const isFolderExpanded = (folderPath: string) => {
   return expandedFolders.value.has(folderPath)
 }
@@ -737,8 +911,74 @@ const handleTreeNodeClick = async (node: VisibleFileTreeNode) => {
     return
   }
 
+  activeTab.value = 'files'
   const rawPath = normalizedFilePathMap.value.get(node.path) || node.path
   await fetchFileContent(rawPath)
+}
+
+function resolveFilePathForPreview(filePath: string): string {
+  const normalized = normalizeFilePath(filePath)
+  if (!normalized) return filePath
+
+  const fromMap = normalizedFilePathMap.value.get(normalized)
+  if (fromMap) return fromMap
+
+  const baseName = normalized.split('/').pop()
+  for (const rawPath of files.value) {
+    const candidate = normalizeFilePath(rawPath)
+    if (candidate === normalized) return rawPath
+    if (baseName && candidate.split('/').pop() === baseName) return rawPath
+  }
+
+  return normalized
+}
+
+function expandFoldersForPath(filePath: string) {
+  const normalized = normalizeFilePath(filePath)
+  const segments = normalized.split('/').filter(Boolean)
+  if (segments.length <= 1) return
+
+  const next = new Set(expandedFolders.value)
+  let current = ''
+  for (let i = 0; i < segments.length - 1; i++) {
+    current = current ? `${current}/${segments[i]}` : segments[i]
+    next.add(current)
+  }
+  expandedFolders.value = next
+}
+
+async function ensureFilesLoaded() {
+  if (files.value.length || !props.conversationId) return
+
+  try {
+    const response = await axios.get(`/api/files?conversation_id=${props.conversationId}`)
+    if (Array.isArray(response.data)) {
+      files.value = response.data
+    } else if (response.data && Array.isArray(response.data.files)) {
+      files.value = response.data.files
+    } else if (response.data && Array.isArray(response.data.data)) {
+      files.value = response.data.data
+    }
+  } catch {
+    // 预览仍可通过 file_content 接口尝试加载
+  }
+}
+
+async function openFilePreview(filePath: string) {
+  if (!filePath || !props.conversationId) return
+
+  activeTab.value = 'files'
+  isFileListExpanded.value = true
+  await ensureFilesLoaded()
+
+  const resolved = resolveFilePathForPreview(filePath)
+  const resolvedNormalized = normalizeFilePath(resolved)
+  if (resolvedNormalized && !files.value.some((f) => normalizeFilePath(f) === resolvedNormalized)) {
+    files.value.push(resolved)
+  }
+  expandFoldersForPath(resolved)
+  await nextTick()
+  await fetchFileContent(resolved)
 }
 
 // 文件流式更新相关状态
@@ -752,6 +992,11 @@ const isAddingText = ref(false) // 是否正在添加文本
 const streamingFileInitialized = ref(false) // 流式文件内容是否已初始化（从后端获取过原始内容）
 
 const fetchFiles = async () => {
+  if (!props.conversationId) {
+    files.value = []
+    return
+  }
+
   // 先清空文件列表，让用户看到刷新效果
   files.value = [];
   
@@ -1133,10 +1378,18 @@ function getGroupToolResult(group: any): string {
 
 /** 根据消息类型选择图标 */
 function getGroupIcon(group: any): string {
-  for (const msg of group.messages) {
-    if (msg.type === 'get_agents') return '⚙️'
-  }
-  return '🛠️'
+  return '⚙️'
+}
+
+/** 子智能体卡片显示名称 */
+function getSubAgentDisplayName(group: any): string {
+  const args = getGroupToolArgs(group)
+  const agentName = args.name ? String(args.name) : ''
+  const toolName = getGroupToolName(group)
+  if (agentName) return `${agentName}(子智能体)`
+  if (toolName === 'soulprout_kb_agent') return '知识库子智能体'
+  if (toolName === 'call_sub_agent') return '子智能体'
+  return '子智能体'
 }
 
 /** 判断是否有可展开内容 */
@@ -1186,7 +1439,7 @@ const isExpanded = (id: string): boolean => expanded.value.get(id) || false
     expanded.value.set(id, toExpand)
     isManuallyCollapsed.value.set(id, !toExpand && isManual)
     nextTick(() => {
-      scrollToBottom()
+      scrollAgentMessagesToBottom()
     })
 }
 
@@ -1208,37 +1461,43 @@ const debouncedCheckOverflow = () => {
 }
 
 // watch
-watch(groupedToolMessages, (newGroups) => {
-  // 仅初始化新 group 的展开状态，不自动展开
+const autoSwitchedSubAgents = ref(new Set<string>())
+
+watch(groupedSubAgentMessages, (newGroups) => {
   newGroups.forEach(group => {
     const id = group.tool_call_id
     if (!expanded.value.has(id)) {
       expanded.value.set(id, false)
       isManuallyCollapsed.value.set(id, false)
     }
+    if (!autoSwitchedSubAgents.value.has(id)) {
+      autoSwitchedSubAgents.value.add(id)
+      activeTab.value = 'agents'
+      expanded.value.set(id, true)
+    }
   })
   nextTick(() => {
-    scrollToBottom()
+    scrollAgentMessagesToBottom()
   })
 }, { deep: true })
 
 watch(() => [props.scrollToId, props.toggleTrigger], () => {
   if (props.scrollToId) {
-    const index = groupedToolMessages.value.findIndex(g => g.tool_call_id === props.scrollToId)
-    if (index !== -1) {
-      const ref = toolRefs.value[index]
-      if (ref) {
-        ref.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      }
-      toggleExpand(props.scrollToId, false)
+    const index = groupedSubAgentMessages.value.findIndex(g => g.tool_call_id === props.scrollToId)
+    if (index === -1) return
+    activeTab.value = 'agents'
+    const ref = toolRefs.value[index]
+    if (ref) {
+      ref.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
+    toggleExpand(props.scrollToId, false)
   }
 })
 
-// 监听工具消息变化，自动滚动到底部
+// 监听子智能体消息变化，自动滚动到底部
 watch(() => props.toolMessages, () => {
   nextTick(() => {
-    scrollToBottom()
+    scrollAgentMessagesToBottom()
   })
 }, { deep: true, immediate: true })
 
@@ -1254,22 +1513,22 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(() => {
   checkOverflow()
   attachCopyListeners()
-
-  // 添加页面关闭/刷新的监听
+  fetchFiles()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 // 清理事件监听器
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  clearWebIframeTimer()
 })
 
 // 添加滚动到底部的方法
-const scrollToBottom = () => {
-  if (isAutoScroll.value && toolMessagesContainer.value) {
+const scrollAgentMessagesToBottom = () => {
+  if (isAutoScroll.value && agentMessagesContainer.value) {
     nextTick(() => {
-      if (toolMessagesContainer.value) {
-        toolMessagesContainer.value.scrollTop = toolMessagesContainer.value.scrollHeight
+      if (agentMessagesContainer.value) {
+        agentMessagesContainer.value.scrollTop = agentMessagesContainer.value.scrollHeight
       }
     })
   }
@@ -1277,13 +1536,11 @@ const scrollToBottom = () => {
 
 // 添加处理用户手动滚动的方法
 const handleScroll = () => {
-  if (toolMessagesContainer.value) {
-    const { scrollTop, scrollHeight, clientHeight } = toolMessagesContainer.value
-    // 如果用户滚动到接近底部，恢复自动滚动
+  if (agentMessagesContainer.value) {
+    const { scrollTop, scrollHeight, clientHeight } = agentMessagesContainer.value
     if (scrollHeight - scrollTop - clientHeight < 50) {
       isAutoScroll.value = true
     } else {
-      // 用户手动滚动到其他位置，停止自动滚动
       isAutoScroll.value = false
     }
   }
@@ -1341,15 +1598,88 @@ const handleCodeCopy = (e) => {
 }
 
 // Tab 切换状态
-const activeTab = ref<'tools' | 'files'>('tools')
+const activeTab = ref<PreviewTab>('files')
+
+// 网页预览
+const selectedWebUrl = ref<string | null>(null)
+const webIframeBlocked = ref(false)
+const webIframeLoading = ref(false)
+let webIframeLoadTimer: ReturnType<typeof setTimeout> | null = null
+
+function openWebPreview(url: string) {
+  if (!url) return
+  webIframeLoading.value = true
+  selectedWebUrl.value = url
+  webIframeBlocked.value = false
+  activeTab.value = 'web'
+}
+
+function openWebInNewTab() {
+  if (selectedWebUrl.value) {
+    window.open(selectedWebUrl.value, '_blank', 'noopener,noreferrer')
+  }
+}
+
+function clearWebIframeTimer() {
+  if (webIframeLoadTimer) {
+    clearTimeout(webIframeLoadTimer)
+    webIframeLoadTimer = null
+  }
+}
+
+function handleWebIframeBlocked() {
+  webIframeLoading.value = false
+  webIframeBlocked.value = true
+  openWebInNewTab()
+}
+
+function onWebIframeLoad(event: Event) {
+  clearWebIframeTimer()
+  webIframeLoading.value = false
+  const iframe = event.target as HTMLIFrameElement | null
+  if (!iframe) return
+
+  webIframeLoadTimer = setTimeout(() => {
+    try {
+      const doc = iframe.contentDocument
+      if (doc && doc.body && doc.body.innerHTML.trim() === '') {
+        handleWebIframeBlocked()
+      }
+    } catch {
+      // 跨域页面无法读取 document，视为正常加载
+    }
+  }, 2500)
+}
+
+function onWebIframeError() {
+  clearWebIframeTimer()
+  webIframeLoading.value = false
+  handleWebIframeBlocked()
+}
+
+watch(
+  () => props.webOpenTrigger,
+  (trigger) => {
+    if (trigger?.url) {
+      openWebPreview(trigger.url)
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
+  () => props.fileOpenTrigger,
+  (trigger) => {
+    if (trigger?.filePath) {
+      void openFilePreview(trigger.filePath)
+    }
+  },
+  { deep: true, immediate: true },
+)
 
 // 文件列表展开/收缩状态（默认展开）
 const isFileListExpanded = ref(true)
-
-// 切换文件列表展开/收缩
-const toggleFileList = () => {
-  isFileListExpanded.value = !isFileListExpanded.value
-}
+const isFullPanelFileListExpanded = ref(true)
 
 // showFileLibrary 用于控制全屏文件库弹窗的显示（编辑模式和预览模式都会使用）
 const showFileLibrary = ref(false)
@@ -1389,20 +1719,21 @@ watch(() => props.conversationId, (newId, oldId) => {
     isDeletingText.value = false
     isAddingText.value = false
     streamingFileInitialized.value = false
+    selectedWebUrl.value = null
+    webIframeBlocked.value = false
+    webIframeLoading.value = false
+    autoSwitchedSubAgents.value = new Set()
+    clearWebIframeTimer()
   }
   
-  // 如果当前在文件库 tab，刷新文件列表
-  if (activeTab.value === 'files') {
-    fetchFiles();
-  }
+  fetchFiles()
 })
 
-// 监听 activeTab 变化，切换到文件库时自动获取文件列表
+// 监听 activeTab 变化
 watch(activeTab, (newTab) => {
   if (newTab === 'files') {
     fetchFiles()
-  } else if (newTab === 'tools') {
-    // 切换回工具库时，重新检查溢出状态以显示展开按钮
+  } else if (newTab === 'agents') {
     nextTick(() => {
       checkOverflow()
     })
@@ -2065,6 +2396,7 @@ const startEditing = () => {
 
   // 显示全屏编辑弹窗
   showFileLibrary.value = true
+  isFullPanelFileListExpanded.value = true
   isEditing.value = true
   editedContent.value = fileContent.value
   originalContent.value = fileContent.value // 保存原始内容
@@ -2333,100 +2665,473 @@ const handleKeyDown = (event: KeyboardEvent) => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #f8f9fa; /* 调整为更柔和的背景 */
+  background-color: rgb(242, 242, 242);
   padding: 0;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
 }
 
-/* Tab 切换栏样式（类似书签下拉栏） */
-.tab-container {
+/* 紧凑型 Tab 切换（居中） */
+.preview-tab-bar {
+  flex-shrink: 0;
   display: flex;
-  background-color: #ffffff;
-  border-bottom: 2px solid #e9ecef;
-  padding: 0;
-  margin: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  z-index: 10;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background-color: rgb(242, 242, 242);
 }
 
-.tab-item {
+.preview-tab-switch {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  padding: 3px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.preview-tab-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 3);
+  height: calc(100% - 6px);
+  background-color: rgb(33, 33, 33);
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.preview-tab-switch[data-active="agents"] .preview-tab-thumb {
+  transform: translateX(100%);
+}
+
+.preview-tab-switch[data-active="web"] .preview-tab-thumb {
+  transform: translateX(200%);
+}
+
+.preview-tab-option {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 68px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background-color: transparent;
+  color: rgb(110, 110, 110);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.15px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.22s ease, transform 0.16s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.preview-tab-option:hover:not(.preview-tab-option--active) {
+  color: rgb(33, 33, 33);
+}
+
+.preview-tab-option--active,
+.preview-tab-option--active:hover {
+  color: #fff;
+}
+
+.preview-tab-option:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.25);
+  outline-offset: 2px;
+}
+
+/* 预览主布局 */
+.preview-viewport-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.preview-main {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: rgb(242, 242, 242);
+}
+
+.preview-content-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 浮动文件列表 */
+.file-list-float {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 20;
+  height: 50%;
+  width: 228px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-right: none;
+  border-radius: 14px 0 0 14px;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.file-list-float--collapsed {
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  max-height: none;
+}
+
+/* 收起态：仅文件库图标 */
+.file-list-rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: rgba(255, 255, 255, 0.98);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s ease;
+}
+
+.file-list-rail:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+.file-list-rail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(110, 110, 110);
+  transition: color 0.2s ease;
+}
+
+.file-list-rail:hover .file-list-rail-icon {
+  color: rgb(33, 33, 33);
+}
+
+/* 展开态：顶栏 */
+.file-list-float-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 9px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgb(242, 242, 242);
+}
+
+.file-list-float-collapse,
+.file-list-float-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(110, 110, 110);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.file-list-float-collapse:hover,
+.file-list-float-refresh:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgb(33, 33, 33);
+}
+
+.file-list-float-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.file-list-float-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(61, 61, 61);
+  letter-spacing: 0.02em;
+}
+
+.file-list-float-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgb(130, 130, 130);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 6px;
+  border-radius: 999px;
+  line-height: 1.5;
+}
+
+.file-list-float-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 6px 8px;
+}
+
+.file-list-float-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.file-list-float-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+
+.fl-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fl-tree-row {
+  margin: 0;
+  padding: 0;
+}
+
+.fl-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(61, 61, 61);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.fl-tree-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.fl-tree-item--selected {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgb(33, 33, 33);
+  font-weight: 600;
+}
+
+.fl-tree-item--folder {
+  color: rgb(80, 80, 80);
+  font-weight: 600;
+}
+
+.fl-tree-leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  color: rgb(140, 140, 140);
+}
+
+.fl-tree-item--selected .fl-tree-leading {
+  color: rgb(61, 61, 61);
+}
+
+.fl-tree-item--folder .fl-tree-leading {
+  color: rgb(110, 110, 110);
+}
+
+.fl-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fl-tree-folder-chevron {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: rgb(160, 160, 160);
+  line-height: 1;
+}
+
+.fl-tree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  min-height: 120px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.fl-tree-empty-title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgb(110, 110, 110);
+}
+
+.preview-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-empty {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  cursor: pointer;
-  background-color: #ffffff;
-  border: none;
-  border-bottom: 3px solid transparent;
-  transition: all 0.3s ease;
-  position: relative;
+  min-height: 0;
+}
+
+.preview-empty-text {
+  margin: 0;
+  color: rgb(150, 150, 150);
   font-size: 14px;
   font-weight: 500;
-  color: #6c757d;
+  letter-spacing: 0.02em;
 }
 
-.tab-item:hover {
-  background-color: #f8f9fa;
-  color: #495057;
-}
-
-.tab-item.active {
-  background-color: #f8f9fa;
-  color: #6b7280;
-  border-bottom-color: #9ca3af;
-  font-weight: 600;
-}
-
-.tab-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background-color: #9ca3af;
-}
-
-.tab-icon {
-  font-size: 16px;
-}
-
-.tab-text {
+.preview-header-title {
+  margin: 0;
   font-size: 14px;
+  font-weight: 600;
+  color: rgb(61, 61, 61);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
-.tool-messages {
+.web-preview-title {
+  font-size: 13px;
+}
+
+.web-preview-content {
+  padding: 0 !important;
+  position: relative;
   flex: 1;
-  overflow-y: auto;
-  padding: 16px 18px;
-  padding-bottom: 20px;
-  background: linear-gradient(180deg, #f8f9fb 0%, #f4f5f7 100%);
+  min-height: 0;
+}
+
+.web-preview-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgb(242, 242, 242);
 }
 
-/* WebKit-based browsers (Chrome, Safari) */
-.tool-messages::-webkit-scrollbar {
-    width: 10px;
+.web-preview-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid rgba(0, 0, 0, 0.08);
+  border-top-color: rgb(110, 110, 110);
+  border-radius: 50%;
+  animation: web-preview-spin 0.75s linear infinite;
 }
 
-.tool-messages::-webkit-scrollbar-thumb {
-    background-color: rgba(88, 88, 88, 0.209);
-    border-radius: 5px
+@keyframes web-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.tool-messages::-webkit-scrollbar-track {
-    background-color: rgba(255, 255, 255, 0.4);
-    border-radius: 5px;
+.web-preview-loading-text {
+  margin: 0;
+  font-size: 13px;
+  color: rgb(110, 110, 110);
 }
 
-.tool-messages::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(83, 83, 83, 0.339);
+.web-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+.web-blocked-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: rgb(110, 110, 110);
+  font-size: 13px;
+}
+
+.agent-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.agent-messages::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+}
+
+.agent-messages::-webkit-scrollbar-track {
+  background-color: transparent;
 }
 
 /* 文件库内容样式（内嵌显示，非全屏） */
@@ -2458,29 +3163,28 @@ const handleKeyDown = (event: KeyboardEvent) => {
   position: relative;
 }
 
-/* 整体面板固定宽高，并使用flex防止挤压 */
+/* 全屏文件编辑弹窗 */
 .file-library-full-panel {
   position: fixed;
   top: 8%;
   left: 8%;
   width: 84vw;
   height: 84vh;
-  background: #f3f4f6;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.15), 
-              0 8px 24px rgba(0,0,0,0.1);
+  background: rgb(242, 242, 242);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.14), 0 8px 24px rgba(0, 0, 0, 0.08);
   z-index: 100;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.08);
-  animation: panelFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  animation: panelFadeIn 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes panelFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(-10px);
+    transform: scale(0.98) translateY(-8px);
   }
   to {
     opacity: 1;
@@ -2489,594 +3193,120 @@ const handleKeyDown = (event: KeyboardEvent) => {
 }
 
 .full-panel-header {
-  position: sticky;
-  top: 0;
-  background: #ffffff;
-  padding: 18px 24px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-  z-index: 10;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-}
-
-.full-panel-header::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.05), transparent);
-}
-
-.full-panel-header h3 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  color: #6b7280;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  letter-spacing: -0.01em;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgb(242, 242, 242);
 }
 
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #6b7280;
-}
-
-.full-panel-content {
-  display: flex;
-  flex-grow: 1;
-  overflow: hidden;
-}
-
-.right-sidebar {
-  width: 280px;
-  flex: 0 0 280px;
-  background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
-  border-left: 1px solid rgba(229, 231, 235, 0.8);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0;
-  position: relative;
-  box-shadow: 
-    inset 2px 0 8px rgba(0, 0, 0, 0.02),
-    inset -1px 0 0 rgba(255, 255, 255, 0.5);
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease, flex-basis 0.3s ease;
-}
-
-.right-sidebar.collapsed {
-  width: 50px;
-  flex: 0 0 50px;
-  overflow: visible;
-}
-
-.right-sidebar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.right-sidebar::-webkit-scrollbar-track {
-  background: rgba(243, 244, 246, 0.5);
-  border-radius: 4px;
-  margin: 8px 0;
-}
-
-.right-sidebar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, 
-    rgba(156, 163, 175, 0.4) 0%, 
-    rgba(156, 163, 175, 0.3) 50%, 
-    rgba(156, 163, 175, 0.4) 100%);
-  border-radius: 4px;
-  transition: background 0.3s ease;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.right-sidebar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, 
-    rgba(107, 114, 128, 0.5) 0%, 
-    rgba(107, 114, 128, 0.4) 50%, 
-    rgba(107, 114, 128, 0.5) 100%);
-  background-clip: padding-box;
-}
-
-.file-list-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 15px 20px;
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-  transition: padding 0.3s ease;
-  min-height: 38px;
-}
-
-.right-sidebar.collapsed .file-list-header,
-.left-sidebar.collapsed .file-list-header {
-  padding: 16px 8px;
-  justify-content: center;
-  gap: 0;
-}
-
-.file-list-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #6b7280;
-  letter-spacing: -0.01em;
-  transition: opacity 0.3s ease;
-}
-
-.file-list-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.file-tree {
-  padding: 10px 8px;
-}
-
-.file-tree-node {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  margin-bottom: 4px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-}
-
-.file-tree-node:hover {
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.file-tree-node.selected {
-  background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-}
-
-.file-tree-node.folder {
-  font-weight: 600;
-}
-
-.file-tree-node.file .file-name {
-  color: #374151;
-}
-
-.file-tree-node.folder .file-name {
-  color: #1f2937;
-}
-
-.file-tree-node.selected .file-name {
-  color: #065f46;
-}
-
-.tree-arrow {
-  width: 12px;
-  color: #6b7280;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.tree-arrow.placeholder {
-  opacity: 0.5;
-}
-
-.tree-icon {
-  width: 18px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.header-actions-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-/* 文件库展开/收缩按钮 - 独立样式（与刷新按钮相同的背景、边框和悬停效果） */
-.file-list-toggle-button {
-  position: static;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 4px;
-  margin: 0;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  opacity: 0.7;
-  box-sizing: border-box;
-}
-
-.file-list-toggle-button:hover {
-  background-color: rgba(0, 0, 0, 0.06);
-  opacity: 1;
-  transform: scale(1.1);
-}
-
-.file-list-toggle-button:active {
-  transform: scale(0.95);
-}
-
-.file-list-toggle-button .file-toggle-icon {
-  width: 12px;
-  height: 12px;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: block;
-}
-
-.file-list-toggle-button .file-toggle-icon.rotated-left {
-  transform: rotate(-90deg);
-}
-
-.file-list-toggle-button .file-toggle-icon.rotated-right {
-  transform: rotate(90deg);
-}
-
-.file-list-toggle-button:hover .file-toggle-icon.rotated-left {
-  transform: rotate(-90deg);
-}
-
-.file-list-toggle-button:hover .file-toggle-icon.rotated-right {
-  transform: rotate(90deg);
-}
-
-.right-sidebar.collapsed .file-list-header .file-list-toggle-button,
-.left-sidebar.collapsed .file-list-header .file-list-toggle-button {
-  margin: 0 auto;
-}
-
-.right-sidebar.collapsed .file-list-title,
-.left-sidebar.collapsed .file-list-title {
-  display: none;
-}
-
-.right-sidebar.collapsed .icon-button,
-.left-sidebar.collapsed .icon-button {
-  display: none;
-}
-
-.right-sidebar.collapsed .header-actions-group,
-.left-sidebar.collapsed .header-actions-group {
-  display: none;
-}
-
-.right-sidebar ul {
-  list-style: none;
-  padding: 12px 10px;
-  margin: 0;
-  flex: 1;
-  overflow-y: auto;
-  background: linear-gradient(180deg, rgba(249, 250, 251, 0.5) 0%, rgba(243, 244, 246, 0.3) 100%);
-}
-
-.right-sidebar li {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  padding: 14px 16px;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border-radius: 12px;
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  box-shadow: 
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
-}
-
-.right-sidebar li::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, 
-    rgba(156, 163, 175, 0.3) 0%, 
-    rgba(156, 163, 175, 0.15) 50%, 
-    rgba(156, 163, 175, 0.3) 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease, width 0.3s ease;
-  border-radius: 12px 0 0 12px;
-}
-
-.right-sidebar li::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.6) 0%, 
-    rgba(249, 250, 251, 0.4) 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  border-radius: 12px;
-}
-
-.right-sidebar li:hover {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #f1f3f5 100%);
-  border-color: rgba(209, 213, 219, 0.9);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.08),
-    0 2px 4px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.02);
-  transform: translateY(-2px) scale(1.01);
-}
-
-.right-sidebar li:hover::before {
-  opacity: 1;
-  width: 4px;
-}
-
-.right-sidebar li:hover::after {
-  opacity: 1;
-}
-
-.right-sidebar li.selected {
-  background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
-  border-color: rgba(16, 185, 129, 0.25);
-  font-weight: 600;
-  color: #065f46;
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.15), 
-              0 1px 0 rgba(255,255,255,0.9) inset,
-              0 0 0 1px rgba(16, 185, 129, 0.1) inset;
-  transform: translateY(-1px);
-}
-
-.right-sidebar li.selected::before {
-  opacity: 1;
-  background: linear-gradient(180deg, #10b981, rgba(16, 185, 129, 0.4));
-}
-
-.right-sidebar li:active {
-  transform: translateY(0) scale(0.98);
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.06),
-    inset 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.right-sidebar li:last-child {
-  margin-bottom: 0;
-}
-
-/* 全屏弹窗中的左侧边栏样式 */
-.left-sidebar {
-  width: 280px;
-  flex: 0 0 280px;
-  background: #e5e7eb;
-  border-right: 1px solid rgba(0,0,0,0.1);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0;
-  position: relative;
-  box-shadow: inset -2px 0 4px rgba(0,0,0,0.03);
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease, flex-basis 0.3s ease;
-}
-
-.left-sidebar.collapsed {
-  width: 50px;
-  flex: 0 0 50px;
-  overflow: visible;
-}
-
-.left-sidebar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.left-sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.left-sidebar::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.12);
-  border-radius: 3px;
-  transition: background 0.2s ease;
-}
-
-.left-sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.18);
-}
-
-.left-sidebar .file-list-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 24px;
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-  transition: padding 0.3s ease;
-  min-height: 56px;
-}
-
-.left-sidebar ul {
-  list-style: none;
-  padding: 20px 16px;
-  margin: 0;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.left-sidebar li {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  padding: 12px 14px;
-  margin-bottom: 6px;
-  background: #ffffff;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-}
-
-.left-sidebar li::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 3px;
-  height: 100%;
-  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.08), transparent);
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
-
-.left-sidebar li:hover {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border-color: rgba(0,0,0,0.08);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 
-              0 1px 0 rgba(255,255,255,0.9) inset,
-              0 -1px 0 rgba(0,0,0,0.02) inset;
-  transform: translateY(-1px);
-}
-
-.left-sidebar li:hover::before {
-  opacity: 1;
-}
-
-.left-sidebar li.selected {
-  background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
-  border-color: rgba(16, 185, 129, 0.25);
-  font-weight: 600;
-  color: #065f46;
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.15), 
-              0 1px 0 rgba(255,255,255,0.9) inset,
-              0 0 0 1px rgba(16, 185, 129, 0.1) inset;
-  transform: translateY(-1px);
-}
-
-.left-sidebar li.selected::before {
-  opacity: 1;
-  background: linear-gradient(180deg, #10b981, rgba(16, 185, 129, 0.4));
-}
-
-.left-sidebar li:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.left-sidebar li:last-child {
-  margin-bottom: 0;
-}
-
-.file-name {
-  flex: 1;
-  word-break: break-all;
-  overflow-wrap: break-word;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: #4b5563;
-  transition: color 0.3s ease, font-weight 0.3s ease;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  position: relative;
-  z-index: 1;
-}
-
-.right-sidebar li:hover .file-name {
-  color: #1f2937;
-}
-
-.right-sidebar li.selected .file-name,
-.left-sidebar li.selected .file-name {
-  color: #065f46;
-}
-
-.right-sidebar .empty-file-list,
-.left-sidebar .empty-file-list {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-  color: #6b7280;
-  flex: 1;
-  background: linear-gradient(180deg, 
-    rgba(249, 250, 251, 0.3) 0%, 
-    rgba(243, 244, 246, 0.2) 100%);
-  border-radius: 12px;
-  margin: 12px 10px;
-}
-
-.empty-file-list p {
-  margin: 8px 0;
+.full-panel-title {
   font-size: 14px;
-  font-weight: 500;
-  color: #9ca3af;
-  letter-spacing: -0.01em;
-}
-
-.empty-file-list .empty-hint {
-  font-size: 12px;
-  color: #d1d5db;
-  font-weight: 400;
+  font-weight: 600;
+  color: rgb(61, 61, 61);
   letter-spacing: 0.01em;
 }
 
-.left-preview {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: #f9fafb;
-  overflow: hidden;
-  position: relative;
+.full-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(110, 110, 110);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 
-.right-preview {
+.full-panel-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgb(33, 33, 33);
+}
+
+.full-panel-body {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.full-panel-sidebar {
+  flex-shrink: 0;
+  width: 228px;
   display: flex;
   flex-direction: column;
-  background: #f9fafb;
+  background: rgba(255, 255, 255, 0.98);
+  border-right: 1px solid rgba(0, 0, 0, 0.07);
   overflow: hidden;
-  position: relative;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.full-panel-sidebar--collapsed {
+  width: 40px;
+}
+
+.full-panel-rail {
+  height: 100%;
+}
+
+.full-panel-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(242, 242, 242);
+}
+
+.file-library-full-panel .preview-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgb(242, 242, 242);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: none;
+  min-height: auto;
+  margin-bottom: 0;
+  z-index: 5;
+}
+
+.file-library-full-panel .preview-header::after {
+  display: none;
+}
+
+.file-library-full-panel .preview-content {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px 20px;
+  background: rgb(242, 242, 242);
+  box-shadow: none;
+  overflow-y: auto;
+}
+
+.file-library-full-panel .edit-content,
+.file-library-full-panel .markdown-editor-container,
+.file-library-full-panel .edit-textarea {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 .preview-header {
   position: sticky;
   top: 0;
   background: #ffffff;
-  padding: 16px 24px;
+  padding: 12px 20px;
   border-bottom: 1px solid rgba(0,0,0,0.08);
   z-index: 5;
   box-shadow: 0 2px 4px rgba(0,0,0,0.04);
@@ -3254,23 +3484,23 @@ const handleKeyDown = (event: KeyboardEvent) => {
 }
 
 .tool-frame {
-  border: 1px solid #e6e8ec;
-  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 10px;
   margin-bottom: 0;
-  background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
-  box-shadow:
-    0 6px 18px rgba(17, 24, 39, 0.06),
-    0 1px 6px rgba(17, 24, 39, 0.04);
+  background: #fcfcfc;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   position: relative;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-  --end-color: #f9fafb;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .tool-frame:hover {
-  box-shadow:
-    0 12px 28px rgba(17, 24, 39, 0.08),
-    0 4px 12px rgba(17, 24, 39, 0.05);
-  transform: translateY(-2px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.tool-frame.highlighted {
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
 }
 
 .content-container {
@@ -3636,7 +3866,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
   position: sticky;
   top: 0;
   background-color: #ffffff;
-  padding: 15px 20px;
+  padding: 12px 18px;
   border-bottom: 1px solid #eee;
   z-index: 1;
   border-top-left-radius: 12px;
@@ -4312,78 +4542,89 @@ const handleKeyDown = (event: KeyboardEvent) => {
 }
 
 /* 编辑相关样式 */
-.edit-button, .save-button, .cancel-button {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  color: #64748b;
-  border: 1px solid rgba(0,0,0,0.08);
-  padding: 8px 16px;
+.edit-button {
+  color: rgb(90, 90, 90);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 8px 14px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   margin-right: 6px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
+  letter-spacing: 0.02em;
+  font-family: inherit;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  background: rgba(0, 0, 0, 0.04);
+  box-shadow: none;
 }
 
 .edit-button:hover {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
-  border-color: rgba(0,0,0,0.12);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
-  transform: translateY(-1px);
+  background: rgba(0, 0, 0, 0.07);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgb(33, 33, 33);
+  transform: none;
+  box-shadow: none;
 }
 
 .edit-button:active {
-  transform: translateY(0);
+  background: rgba(0, 0, 0, 0.09);
+}
+
+.save-button,
+.cancel-button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 6px;
+  letter-spacing: 0.02em;
+  font-family: inherit;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  box-shadow: none;
 }
 
 .save-button {
-  color: #059669;
-  border-color: rgba(16, 185, 129, 0.3);
-  min-width: 80px;
-  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  min-width: 72px;
+  background: rgb(232, 241, 236);
+  color: rgb(62, 98, 78);
+  border: 1px solid rgba(62, 98, 78, 0.22);
 }
 
 .save-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #d1fae5 0%, #f0fdf4 100%);
-  border-color: #10b981;
-  color: #047857;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
-  transform: translateY(-1px);
+  background: rgb(220, 233, 226);
+  border-color: rgba(62, 98, 78, 0.32);
+  color: rgb(52, 82, 66);
 }
 
 .save-button:active:not(:disabled) {
-  transform: translateY(0);
+  background: rgb(210, 225, 216);
+  border-color: rgba(62, 98, 78, 0.38);
 }
 
 .save-button:disabled {
-  color: #94a3b8;
-  border-color: rgba(0,0,0,0.06);
+  color: rgb(160, 175, 168);
+  border-color: rgba(0, 0, 0, 0.06);
   cursor: not-allowed;
-  background: #f9fafb;
-  opacity: 0.6;
+  background: rgb(238, 242, 240);
+  opacity: 1;
 }
 
 .cancel-button {
-  color: #dc2626;
-  border-color: rgba(248, 113, 113, 0.3);
-  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+  background: rgb(247, 237, 237);
+  color: rgb(130, 82, 82);
+  border: 1px solid rgba(130, 82, 82, 0.22);
 }
 
 .cancel-button:hover {
-  background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
-  border-color: #f87171;
-  color: #b91c1c;
-  box-shadow: 0 2px 8px rgba(248, 113, 113, 0.2), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
-  transform: translateY(-1px);
+  background: rgb(241, 226, 226);
+  border-color: rgba(130, 82, 82, 0.32);
+  color: rgb(110, 68, 68);
 }
 
 .cancel-button:active {
-  transform: translateY(0);
+  background: rgb(234, 216, 216);
+  border-color: rgba(130, 82, 82, 0.38);
 }
 
 .last-button {
@@ -4484,46 +4725,73 @@ const handleKeyDown = (event: KeyboardEvent) => {
   display: inline-block;
 }
 
-/* 模式切换按钮样式 */
-.mode-button {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  color: #64748b;
-  border: 1px solid rgba(0,0,0,0.08);
-  padding: 8px 16px;
-  border-radius: 8px;
+/* 编辑模式切换（segmented control） */
+.edit-mode-switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  margin-right: 8px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.edit-mode-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 2);
+  height: calc(100% - 6px);
+  background-color: rgb(33, 33, 33);
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.edit-mode-switch[data-active="source"] .edit-mode-thumb {
+  transform: translateX(100%);
+}
+
+.edit-mode-option {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 72px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: rgb(110, 110, 110);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.15px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  margin-right: 6px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
+  outline: none;
+  transition: color 0.22s ease;
+  font-family: inherit;
+  white-space: nowrap;
 }
 
-.mode-button:hover {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
-  border-color: rgba(0,0,0,0.12);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
-  transform: translateY(-1px);
+.edit-mode-option:hover:not(.edit-mode-option--active) {
+  color: rgb(33, 33, 33);
 }
 
-.mode-button:active {
-  transform: translateY(0);
+.edit-mode-option--active,
+.edit-mode-option--active:hover {
+  color: #fff;
 }
 
-.mode-button.active {
-  background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
-  color: #059669;
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
-}
-
-.mode-button.active:hover {
-  background: linear-gradient(135deg, #a7f3d0 0%, #d1fae5 100%);
-  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.2), 
-              0 1px 0 rgba(255,255,255,0.9) inset;
+.edit-mode-option:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.25);
+  outline-offset: 2px;
 }
 
 /* Toast UI Editor 自定义样式 */

@@ -44,13 +44,15 @@
             @highlight="highlightedId = $event"
             @unhighlight="highlightedId = null"
             @scrollTo="handleScrollTo($event)"
+            @openWebPreview="handleOpenWebPreview($event)"
+            @openFilePreview="handleOpenFilePreview($event)"
           />
         </div>
 
         <div 
           v-if="showExtraInfo" 
           class="resizer" 
-          @mousedown="startResize"
+          @pointerdown="startResize"
           :class="{ 'resizing': isResizing }"
         ></div>
 
@@ -63,13 +65,14 @@
               :highlightedId="highlightedId" 
               :scrollToId="scrollToId" 
               :toggleTrigger="toggleTrigger" 
-              :conversationId="chat_request.conversation_id || ''" 
+              :conversationId="chat_request.conversation_id || ''"
+              :webOpenTrigger="webOpenTrigger"
+              :fileOpenTrigger="fileOpenTrigger"
             />
           </div>
         </transition>
 
         <button 
-          v-if="toolMessages.length > 0" 
           @click="toggleExtraInfo" 
           class="info-button" 
           :class="{ 'shifted': showExtraInfo }"
@@ -103,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import axios from 'axios'
 import ConversationWindow from '../components/ConversationWindow.vue'
 import ChatWindow from '../components/ChatWindow.vue'
@@ -948,6 +951,20 @@ const extraInfoWidth = ref('40%')
 const minChatWidth = 300 // 最小宽度（像素）
 const minExtraWidth = 250 // 最小宽度（像素）
 
+let resizeCleanup: (() => void) | null = null
+
+function stopResize() {
+  if (!isResizing.value && !resizeCleanup) return
+  isResizing.value = false
+  document.body.style.userSelect = ''
+  document.body.style.cursor = ''
+  if (resizeCleanup) {
+    resizeCleanup()
+    resizeCleanup = null
+  }
+  saveWidths()
+}
+
 // 从 localStorage 加载保存的宽度
 function loadSavedWidths() {
   const savedChatWidth = localStorage.getItem('chatWindowWidth')
@@ -965,31 +982,40 @@ function saveWidths() {
 }
 
 // 开始拖拽调整大小
-function startResize(e: MouseEvent) {
+function startResize(e: PointerEvent) {
+  if (e.button !== 0) return
   e.preventDefault()
   e.stopPropagation()
+
+  // 清理可能残留的上一轮拖拽状态
+  stopResize()
+
+  const resizerEl = e.currentTarget as HTMLElement | null
+  const chatMain = document.querySelector('.chat-main') as HTMLElement | null
+  if (!resizerEl || !chatMain) return
+
   isResizing.value = true
-  
-  // 禁用文本选择
   document.body.style.userSelect = 'none'
   document.body.style.cursor = 'col-resize'
-  
-  const chatMain = document.querySelector('.chat-main') as HTMLElement
-  if (!chatMain) return
-  
+
+  try {
+    resizerEl.setPointerCapture(e.pointerId)
+  } catch {
+    // 部分环境可能不支持 pointer capture，继续走 document 级监听
+  }
+
   const chatMainWidth = chatMain.clientWidth
   const startX = e.clientX
-  const startChatWidth = parseFloat(chatWindowWidth.value) / 100 * chatMainWidth
-  
-  function handleMouseMove(e: MouseEvent) {
+  const startChatWidth = (parseFloat(chatWindowWidth.value) / 100) * chatMainWidth
+
+  const handlePointerMove = (ev: PointerEvent) => {
     if (!isResizing.value) return
-    e.preventDefault()
-    
-    const deltaX = e.clientX - startX
+    ev.preventDefault()
+
+    const deltaX = ev.clientX - startX
     const newChatWidth = startChatWidth + deltaX
     const newExtraWidth = chatMainWidth - newChatWidth
-    
-    // 限制最小宽度
+
     if (newChatWidth >= minChatWidth && newExtraWidth >= minExtraWidth) {
       const chatPercent = (newChatWidth / chatMainWidth) * 100
       const extraPercent = (newExtraWidth / chatMainWidth) * 100
@@ -997,26 +1023,58 @@ function startResize(e: MouseEvent) {
       extraInfoWidth.value = `${extraPercent}%`
     }
   }
-  
-  function handleMouseUp() {
-    isResizing.value = false
-    // 恢复文本选择
-    document.body.style.userSelect = ''
-    document.body.style.cursor = ''
-    saveWidths()
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
+
+  const endResize = () => {
+    try {
+      if (resizerEl.hasPointerCapture(e.pointerId)) {
+        resizerEl.releasePointerCapture(e.pointerId)
+      }
+    } catch {
+      // ignore
+    }
+    stopResize()
   }
-  
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
+
+  const captureOpts = { capture: true } as const
+  resizerEl.addEventListener('pointermove', handlePointerMove)
+  resizerEl.addEventListener('pointerup', endResize)
+  resizerEl.addEventListener('pointercancel', endResize)
+  window.addEventListener('pointerup', endResize, captureOpts)
+  window.addEventListener('blur', endResize)
+  document.addEventListener('visibilitychange', endResize)
+
+  resizeCleanup = () => {
+    resizerEl.removeEventListener('pointermove', handlePointerMove)
+    resizerEl.removeEventListener('pointerup', endResize)
+    resizerEl.removeEventListener('pointercancel', endResize)
+    window.removeEventListener('pointerup', endResize, captureOpts)
+    window.removeEventListener('blur', endResize)
+    document.removeEventListener('visibilitychange', endResize)
+  }
 }
 
-watch(toolMessages, () => {
-  if (toolMessages.value.length === 0) {
-    showExtraInfo.value = false
+const webOpenTrigger = ref<{ url: string; nonce: number } | null>(null)
+const fileOpenTrigger = ref<{ filePath: string; nonce: number } | null>(null)
+
+async function handleOpenWebPreview(url: string) {
+  if (!url) return
+  const needMount = !showExtraInfo.value
+  if (needMount) {
+    showExtraInfo.value = true
+    await nextTick()
   }
-}, { deep: true })
+  webOpenTrigger.value = { url, nonce: Date.now() }
+}
+
+async function handleOpenFilePreview(filePath: string) {
+  if (!filePath) return
+  const needMount = !showExtraInfo.value
+  if (needMount) {
+    showExtraInfo.value = true
+    await nextTick()
+  }
+  fileOpenTrigger.value = { filePath, nonce: Date.now() }
+}
 
 function toggleExtraInfo() {
   showExtraInfo.value = !showExtraInfo.value
@@ -1027,6 +1085,9 @@ function toggleExtraInfo() {
 }
 
 const handleScrollTo = (id: string) => {
+  if (!showExtraInfo.value) {
+    showExtraInfo.value = true
+  }
   if (scrollToId.value === id) {
     toggleTrigger.value++
   } else {
@@ -1071,6 +1132,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  stopResize()
 })
 </script>
 

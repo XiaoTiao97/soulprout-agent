@@ -127,17 +127,18 @@
                         :calls="getWebSearchCalls(message.tool_calls, message.tool_call_id)"
                         :tool-messages="toolMessages"
                         :agent-message-list="agent_message_list"
+                        @open-web-preview="handleOpenWebPreview"
                       />
-                      <template v-for="(toolCall, toolIndex) in message.tool_calls" :key="toolIndex">
-                        <template v-if="toolCall.function.name !== 'web_search'">
-                          <div v-if="message.type === 'get_tools'" class="answer-robot-tool-name" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, message.tool_call_id, message.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, message.tool_call_id)">
-                            🛠️ {{ toolCall.function.name }} 
-                          </div>
-                          <div v-else class="answer-robot-tool-name" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, message.tool_call_id, message.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, message.tool_call_id)">
-                            ⚙️ {{ toolCall.function.name }} 
-                          </div>
-                        </template>
-                      </template>
+                      <ToolCallsBlock
+                        v-if="getGenericToolCallItems(message.tool_calls, message.tool_call_id, message.type).length"
+                        :calls="getGenericToolCallItems(message.tool_calls, message.tool_call_id, message.type)"
+                        :tool-messages="toolMessages"
+                        :agent-message-list="agent_message_list"
+                        @highlight="handleHighlight"
+                        @unhighlight="handleUnhighlight"
+                        @scroll-to="handleScrollTo"
+                        @open-file-preview="handleOpenFilePreview"
+                      />
                     </div>
                   </div>
 
@@ -245,17 +246,19 @@
                       :tool-messages="toolMessages"
                       :agent-message-list="agent_message_list"
                       :pending="isStreamingToolBlockPending(block, index)"
+                      @open-web-preview="handleOpenWebPreview"
                     />
-                    <template v-for="(toolCall, toolIndex) in block.tool_calls" :key="toolIndex">
-                      <template v-if="toolCall.function.name !== 'web_search'">
-                        <div v-if="block.type === 'get_tools'" class="answer-robot-tool-name" :class="{ 'answer-robot-tool-name--pending': isStreamingToolBlockPending(block, index) }" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, block.tool_call_id, block.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, block.tool_call_id)">
-                          🛠️ {{ toolCall.function.name }} 
-                        </div>
-                        <div v-else class="answer-robot-tool-name" :class="{ 'answer-robot-tool-name--pending': isStreamingToolBlockPending(block, index) }" @mouseenter="handleHighlight(getToolCallIdFromSingle(toolCall, block.tool_call_id, block.created_at))" @mouseleave="handleUnhighlight()" @click="handleScrollTo(toolCall.id, block.tool_call_id)">
-                          ⚙️ {{ toolCall.function.name }} 
-                        </div>
-                      </template>
-                    </template>
+                    <ToolCallsBlock
+                      v-if="getGenericToolCallItems(block.tool_calls, block.tool_call_id, block.type).length"
+                      :calls="getGenericToolCallItems(block.tool_calls, block.tool_call_id, block.type)"
+                      :tool-messages="toolMessages"
+                      :agent-message-list="agent_message_list"
+                      :pending="isStreamingToolBlockPending(block, index)"
+                      @highlight="handleHighlight"
+                      @unhighlight="handleUnhighlight"
+                      @scroll-to="handleScrollTo"
+                      @open-file-preview="handleOpenFilePreview"
+                    />
                 </div>
                 <div v-else-if="block.type === 'text'" class="text-message-wrapper">
                   <div class="answer-robot-content">
@@ -345,8 +348,10 @@
 <script lang="ts" setup>
 import { ref, nextTick, computed, watch, onMounted, onUnmounted, onUpdated } from 'vue'
 import MessageInput from '../components/MessageInput.vue'
+import ToolCallsBlock from './ToolCallsBlock.vue'
 import WebSearchBlock from './WebSearchBlock.vue'
 import type { WebSearchCallItem } from './WebSearchBlock.vue'
+import { buildGenericToolCallItems, buildWebSearchCallItems } from '../utils/toolCallDisplay'
 import type { ConversationBase, ChatRequest, AgentMessage, ToolCalls } from '../types/interface.ts'
 import { AgentCard } from '../types/interface.ts'
 import axios from 'axios'
@@ -413,32 +418,21 @@ const props = withDefaults(defineProps<Props>(), {
   toolMessages: () => [],
 })
 
-// ─── web_search：摘要与结果分区由 WebSearchBlock 负责 ─────────────────
+// ─── web_search 独立展示；其余工具由 ToolCallsBlock 负责 ─────────────────
 
-function parseToolArguments(argsString: string): Record<string, unknown> {
-  try {
-    return JSON.parse(argsString)
-  } catch {
-    return {}
-  }
+function getWebSearchCalls(
+  toolCalls: { function?: { name?: string; arguments?: string }; id?: string }[] | undefined,
+  fallbackId?: string,
+): WebSearchCallItem[] {
+  return buildWebSearchCallItems(toolCalls, fallbackId)
 }
 
-function resolveToolCallId(toolCall: { id?: string }, fallbackId?: string): string {
-  return toolCall?.id || fallbackId || ''
-}
-
-function getWebSearchCalls(toolCalls: { function?: { name?: string; arguments?: string }; id?: string }[] | undefined, fallbackId?: string): WebSearchCallItem[] {
-  if (!toolCalls?.length) return []
-  return toolCalls
-    .filter((tc) => tc.function?.name === 'web_search')
-    .map((tc) => {
-      const args = parseToolArguments(tc.function?.arguments || '{}')
-      const q = args.query ?? args.q ?? args.search_query ?? ''
-      return {
-        toolCallId: resolveToolCallId(tc, fallbackId),
-        query: typeof q === 'string' ? q : String(q),
-      }
-    })
+function getGenericToolCallItems(
+  toolCalls: { function?: { name?: string; arguments?: string }; id?: string }[] | undefined,
+  fallbackId?: string,
+  messageType?: string,
+) {
+  return buildGenericToolCallItems(toolCalls, fallbackId, messageType)
 }
 const emit = defineEmits<{
   sendMessage: [message: string, files: File[], options?: { input_message_id?: string }]
@@ -450,6 +444,8 @@ const emit = defineEmits<{
   highlight: [id: string]
   unhighlight: []
   scrollTo: [id: string]
+  openWebPreview: [url: string]
+  openFilePreview: [filePath: string]
 }>()
 
 // 从消息中获取 tool_call_id（优先使用 tool_calls[0].id，否则使用 tool_call_id，最后使用 created_at）
@@ -468,20 +464,22 @@ const getToolCallIdFromBlock = (block: StreamBlock): string => {
   return block.tool_call_id || String(block.created_at)
 }
 
-// 从单个 toolCall 获取 id
-const getToolCallIdFromSingle = (toolCall: any, fallbackId?: string, fallbackCreatedAt?: number): string => {
-  return toolCall.id || fallbackId || String(fallbackCreatedAt || Date.now())
-}
-
 const handleHighlight = (id?: string) => {
   if (id) emit('highlight', id)
 }
 
 const handleUnhighlight = () => emit('unhighlight')
 
-const handleScrollTo = (toolCallId?: string, fallbackId?: string) => {
-  const id = toolCallId || fallbackId
-  if (id) emit('scrollTo', id)
+const handleScrollTo = (toolCallId?: string) => {
+  if (toolCallId) emit('scrollTo', toolCallId)
+}
+
+const handleOpenWebPreview = (url: string) => {
+  if (url) emit('openWebPreview', url)
+}
+
+const handleOpenFilePreview = (filePath: string) => {
+  if (filePath) emit('openFilePreview', filePath)
 }
 
 /** 工具结果走侧栏 toolMessages；主对话流中「未完成」= 仍在生成且当前最后一块仍是工具调用 */
@@ -1396,6 +1394,15 @@ const handleCreateAgentClick = () => {
   gap: 0;
   width: 100%;
   max-width: 100%;
+  margin-top: 2px;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  cursor: default;
+}
+
+.answer-robot-tool-wrapper {
+  margin-top: 2px;
 }
 
 /* 工具调用未完成：与「查看这里」同款渐变；划过阶段占比加大、周期 2.5s，划过比 view-hint 更慢 */

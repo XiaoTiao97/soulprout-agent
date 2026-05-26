@@ -144,14 +144,19 @@ async def delete_user_skill(user_id: str, folder: str):
 # 固定基础文件夹路径（替换为您的实际路径）
 config = Config()
 FILES_BASE_DIR = config.local_file_path
-def get_conversation_dir(conversation_id: str) -> Path:
-    if not re.fullmatch(r"[0-9a-fA-F-]{36}", conversation_id):
+_CONVERSATION_ID_SAFE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
+
+def _validate_conversation_id(conversation_id: str) -> None:
+    if not conversation_id or not _CONVERSATION_ID_SAFE.match(conversation_id):
         raise HTTPException(status_code=400, detail="invalid conversation_id")
-    base_dir = Path(FILES_BASE_DIR).resolve()
-    conv_dir = (base_dir / conversation_id).resolve()
-    if base_dir not in conv_dir.parents and conv_dir != base_dir:
-        raise HTTPException(status_code=400, detail="invalid path")
-    return conv_dir
+
+
+def get_conversation_dir(conversation_id: str) -> Path:
+    _validate_conversation_id(conversation_id)
+    return _safe_join_under_base(FILES_BASE_DIR, conversation_id)
+
+
 def resolve_target_file(conversation_id: str, filename: str) -> Path:
     conv_dir = get_conversation_dir(conversation_id)
     target = (conv_dir / filename).resolve()
@@ -159,21 +164,16 @@ def resolve_target_file(conversation_id: str, filename: str) -> Path:
     if conv_dir not in target.parents and target != conv_dir:
         raise HTTPException(status_code=400, detail="invalid filename path")
     return target
+
+
 # 获取文件列表接口（添加conversation_id查询参数）
 @router.get("/files")
 async def get_files(conversation_id: str = Query(...)):
-    # 1) 基础参数校验（按你的会话ID规则可再调整）
-    if not re.fullmatch(r"[0-9a-fA-F-]{36}", conversation_id):
-        raise HTTPException(status_code=400, detail="invalid conversation_id")
-    base_dir = Path(FILES_BASE_DIR).resolve()
-    conv_dir = (base_dir / conversation_id).resolve()
-    # 2) 防路径穿越
-    if base_dir not in conv_dir.parents and conv_dir != base_dir:
-        raise HTTPException(status_code=400, detail="invalid path")
-    # 3) 目录不存在直接空列表
+    conv_dir = get_conversation_dir(conversation_id)
+    # 目录不存在直接空列表
     if not conv_dir.exists():
         return {"files": []}
-    # 4) 根目录不可读
+    # 根目录不可读
     if not os.access(conv_dir, os.R_OK | os.X_OK):
         raise HTTPException(status_code=403, detail="conversation directory not accessible")
     result = []

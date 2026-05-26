@@ -186,31 +186,53 @@
             <button class="confirm-ok" @click="confirmDelete">确定</button>
           </div>
         </div>
-        <div class="user-option">
-  <button type="button" class="user-button" @click.stop="toggleMenu" title="用户菜单">
-    <img class="user-icon" width="25" height="25" src="@/assets/images/user_icon.svg" alt="" />
-    <span
-      v-if="username"
-      class="user-display-name"
-      :class="{ 'hidden-text': isExpanded }"
-      :title="username"
-    >{{ username }}</span>
-  </button>
-  <div v-if="showMenu" class="user-menu" ref="menuRef">
-    <button class="menu-item" @click="goHome">
-      <img width="20" height="20" src="@/assets/images/home_icon.svg" alt="home" />
-      主页
-    </button>
-    <button class="menu-item" @click="goDocs">
-      <img width="20" height="20" src="@/assets/images/product_file.svg" alt="docs" />
-      产品文档
-    </button>
-    <button class="menu-item" @click="logout">
-      <img width="20" height="20" src="@/assets/images/logout_icon.svg" alt="logout" />
-      注销
-    </button>
-  </div>
-</div>
+        <div class="user-option" :class="{ 'user-option--collapsed': isExpanded }">
+          <div class="user-option-inner">
+            <button
+              type="button"
+              class="user-button"
+              :class="{ 'user-button--collapsed': isExpanded, 'user-button--open': showMenu }"
+              :aria-expanded="showMenu"
+              @click.stop="toggleMenu"
+              title="用户菜单"
+            >
+              <img class="user-icon" width="22" height="22" src="@/assets/images/user_icon.svg" alt="" />
+              <span
+                v-if="!isExpanded"
+                class="user-display-name"
+                :title="username"
+              >{{ username || '用户' }}</span>
+              <svg
+                v-if="!isExpanded"
+                class="user-chevron"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 6l4 4 4-4" />
+              </svg>
+            </button>
+            <div v-if="showMenu" class="user-menu" ref="menuRef">
+              <button type="button" class="user-menu-item" @click="goHome">
+                <img width="14" height="14" src="@/assets/images/home_icon.svg" alt="" />
+                <span>主页</span>
+              </button>
+              <button type="button" class="user-menu-item" @click="goDocs">
+                <img width="14" height="14" src="@/assets/images/product_file.svg" alt="" />
+                <span>产品文档</span>
+              </button>
+              <div class="user-menu-divider" aria-hidden="true"></div>
+              <button type="button" class="user-menu-item user-menu-item--danger" @click="logout">
+                <img width="14" height="14" src="@/assets/images/logout_icon.svg" alt="" />
+                <span>注销</span>
+              </button>
+            </div>
+          </div>
+        </div>
     </div>
 </template>
 
@@ -563,37 +585,65 @@ onUnmounted(() => {
   line-height: 1;
 }
 
+/* —— 用户区域：底部账户入口 + 紧凑上浮菜单 */
 .user-option {
-  height: 5%;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding: 0 10px;
-  border-top: 1px solid #eee;
-  position: relative;
+  justify-content: center;
   width: 100%;
+  padding: 10px 0 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
   box-sizing: border-box;
+}
+
+.user-option--collapsed {
+  padding-inline: 0;
+}
+
+.user-option-inner {
+  position: relative;
+  width: 90%;
+  box-sizing: border-box;
+}
+
+.user-option--collapsed .user-option-inner {
+  width: fit-content;
 }
 
 .user-button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
-  box-sizing: border-box;
-  background: none;
-  border: none;
-  cursor: pointer;
   padding: 6px 8px;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
   border-radius: 8px;
-  transition: background 0.2s;
+  cursor: pointer;
   text-align: left;
+  outline: none;
+  transition: background-color 0.2s ease;
 }
 
-.user-button:hover {
-  background: rgba(226, 226, 226, 0.800);
+.user-button:hover,
+.user-button--open {
+  background: rgba(226, 226, 226, 0.8);
+}
+
+.user-button--collapsed {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+}
+
+.user-button:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.25);
+  outline-offset: 2px;
 }
 
 .user-icon {
@@ -611,41 +661,82 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.user-display-name.hidden-text {
-  flex: 0 0 0;
-  width: 0;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+.user-chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: rgb(140, 140, 140);
+  transition: transform 0.22s ease;
+}
+
+.user-button--open .user-chevron {
+  transform: rotate(180deg);
 }
 
 .user-menu {
   position: absolute;
-  bottom: 100%;
-  left: 15px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  z-index: 1000;
-  font-size: 20px;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 128px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  z-index: 3000;
+  box-sizing: border-box;
 }
 
-.menu-item {
+.user-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  padding: 8px 12px;
-  background: none;
+  padding: 5px 8px;
+  background: transparent;
   border: none;
-  text-align: left;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.2s;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
 }
 
-.menu-item:hover {
-  background: #f0f0f0;
+.user-menu-item img {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.user-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.user-menu-item:hover img {
+  opacity: 1;
+}
+
+.user-menu-item:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.2);
+  outline-offset: 1px;
+}
+
+.user-menu-item--danger {
+  color: #b91c1c;
+}
+
+.user-menu-item--danger:hover {
+  background: rgba(185, 28, 28, 0.06);
+}
+
+.user-menu-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: rgba(0, 0, 0, 0.06);
 }
 </style>

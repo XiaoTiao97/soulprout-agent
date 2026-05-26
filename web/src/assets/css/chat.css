@@ -226,12 +226,14 @@ body::before {
 .agent-option-total{
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     position: relative; /* 使用相对定位 */
     width: 260px;
     flex-shrink: 0;
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
     transition: width 0.5s ease; /* 让宽度变化有动画 */
     min-width: 60px; /* 设置最小宽度 */
 }
@@ -243,7 +245,7 @@ body::before {
     align-items: center;
     position: relative; /* 使用相对定位 */
     width: 100%;
-    height: 25%;
+    flex-shrink: 0;
 }
 
 .agent-option-top {
@@ -384,7 +386,9 @@ body::before {
     align-items: center;
     position: relative;
     width: 100%;
-    height: 75%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .module-select {
@@ -481,7 +485,8 @@ body::before {
     align-items: center;
     position: relative;
     width: 100%;
-    height: 68%;
+    flex: 1;
+    min-height: 0;
     margin: 5px;
     gap: 5px;
     overflow-y: auto; /* 启用垂直滚动条 */
@@ -2526,6 +2531,8 @@ code {
   position: relative;
   z-index: 5;
   background: transparent;
+  touch-action: none;
+  user-select: none;
 }
 
 .resizer::after {
@@ -2537,18 +2544,18 @@ code {
   transform: translateX(-50%);
   width: 2px;
   border-radius: 999px;
-  background: #d1d5db;
+  background: transparent;
   transition: background-color 0.15s ease;
 }
 
 .resizer:hover::after {
   width: 2px;
-  background: #9ca3af;
+  background: #d1d5db;
 }
 
 .resizer.resizing::after {
   width: 2px;
-  background: #2563eb;
+  background: #9ca3af;
 }
 
 .info-button {
@@ -2654,7 +2661,7 @@ code {
 .extra-info-panel {
   width: 100%;
   height: 100%;
-  background-color: #f1f1f1;
+  background-color: rgb(242, 242, 242);
 }
 
 .slide-enter-active,
