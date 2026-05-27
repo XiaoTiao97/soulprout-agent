@@ -267,6 +267,41 @@ export function formatToolResultContent(content: string): string {
 
 const FILE_PREVIEW_TOOL_NAMES = new Set(['read', 'write', 'edit'])
 
+const EXTRA_PANEL_AUTO_EXPAND_TOOL_NAMES = new Set(['read', 'write', 'edit', 'call_sub_agent'])
+
+/** 流式消息是否应自动展开右侧 ExtraInfo 面板 */
+export function shouldAutoExpandExtraPanel(chunk: {
+  role?: string
+  type?: string
+  tool_calls?: { function?: { name?: string } }[]
+}): boolean {
+  const role = chunk.role || ''
+  const type = chunk.type || ''
+
+  if (role === 'file') {
+    return FILE_PREVIEW_TOOL_NAMES.has(type || 'read')
+  }
+
+  if (role === 'agent' && type !== 'plan') {
+    return true
+  }
+
+  if (role === 'tool' && type === 'agent') {
+    return true
+  }
+
+  if (chunk.tool_calls?.length) {
+    for (const tc of chunk.tool_calls) {
+      const name = tc.function?.name || ''
+      if (EXTRA_PANEL_AUTO_EXPAND_TOOL_NAMES.has(name)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 export function normalizeToolFilePath(filePath: unknown): string {
   return str(filePath).replace(/\\/g, '/').replace(/^\/+/, '').trim()
 }

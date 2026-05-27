@@ -1602,7 +1602,7 @@ const handleCreateAgentClick = () => {
 .user-feedback-wrapper {
   width: 100%;
   max-width: 100%;
-  margin: 4px 0 8px;
+  margin: 4px 0 4px 35px;
 }
 
 /* 工具调用未完成：与「查看这里」同款渐变；划过阶段占比加大、周期 2.5s，划过比 view-hint 更慢 */

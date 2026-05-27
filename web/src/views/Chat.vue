@@ -117,6 +117,7 @@ import AgentOption from '../components/AgentOption.vue'
 import ExtraInfo from '../components/ExtraInfo.vue'
 import type { ConversationBase, ChatRequest, AgentMessage } from '../types/interface.ts'
 import { AgentCard } from '../types/interface.ts'
+import { shouldAutoExpandExtraPanel } from '../utils/toolCallDisplay'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -545,9 +546,6 @@ async function processMessageQueue() {
         table: chunk_json.json_table || chunk_json.table // 支持 json_table 字段
       }
       fileMessages.value.push(fileMessage)
-      if (!showExtraInfo.value) {
-        showExtraInfo.value = true
-      }
     } else if (chunk_json.type === 'user_feedback') {
       const t = chunk_json.type
       if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
@@ -612,9 +610,6 @@ async function processMessageQueue() {
           chatPlanStreamForWindow.value = lastPlan.content || ''
         }
       }
-      if (!showExtraInfo.value && chunk_json.type !== 'plan') {
-        showExtraInfo.value = true
-      }
     } else {
       const t = chunk_json.type
       if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
@@ -646,6 +641,10 @@ async function processMessageQueue() {
         tool_calls: chunk_json.tool_calls || undefined,
         created_at: chunk_json.created_at
       })
+    }
+
+    if (!showExtraInfo.value && shouldAutoExpandExtraPanel(chunk_json)) {
+      showExtraInfo.value = true
     }
 
     applyPlanStreamSegmentEndedMarker(chunk_json)
