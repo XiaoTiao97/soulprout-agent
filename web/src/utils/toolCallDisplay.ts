@@ -211,6 +211,19 @@ export function getToolSummaryLabel(
       return hasResult ? `已编辑记忆 ${name || ''}`.trim() : `正在编辑记忆 ${name || '…'}`.trim()
     }
 
+    case 'ask_user_feedback': {
+      const batch = Array.isArray(args.questions) ? args.questions.length : 0
+      if (batch > 0) {
+        return hasResult
+          ? `已发起 ${batch} 项用户反馈，等待提交`
+          : `等待用户完成 ${batch} 项反馈…`
+      }
+      const prompt = truncate(str(args.prompt), 28)
+      return hasResult
+        ? `已发起用户反馈${prompt ? `：${prompt}` : ''}`
+        : `等待用户反馈${prompt ? `：${prompt}` : '…'}`
+    }
+
     case 'user_option': {
       const mod = str(args.module)
       const info = str(args.info_type) === 'agentinfo' ? '智能体配置' : '用户档案'

@@ -2,7 +2,7 @@
 Agent Chat HTTP 调用封装。
 
 所有消息统一通过 HTTP POST 请求发送给 Agent ``/message/chat`` 接口（SSE 流），
-收集所有 ``role=assistant``、``type=text`` 的内容后拼接为完整回复返回。
+收集 ``role=assistant type=text`` 与 ``type=user_feedback`` 的内容后拼接为完整回复返回。
 
 认证策略
 -------
@@ -79,7 +79,7 @@ async def _call_http(
     model: Optional[str],
 ) -> str:
     """
-    POST ``/message/chat``，逐行读取 SSE 流，拼接所有 ``role=assistant type=text`` 片段。
+    POST ``/message/chat``，逐行读取 SSE 流，拼接 assistant 正文与 user_feedback 提示文本。
     """
     try:
         import aiohttp
@@ -144,6 +144,7 @@ async def _call_http(
                     return f"（Agent 请求失败 HTTP {resp.status}）"
 
                 parts: list[str] = []
+                feedback_parts: list[str] = []
                 async for raw_line in resp.content:
                     line = raw_line.decode("utf-8", errors="replace").strip()
                     if not line.startswith("data:"):
@@ -153,14 +154,21 @@ async def _call_http(
                         continue
                     try:
                         chunk = json.loads(data_str)
-                        if chunk.get("role") == "assistant" and chunk.get("type") == "text":
-                            content = chunk.get("content", "")
-                            if content:
-                                parts.append(content)
+                        chunk_type = chunk.get("type")
+                        content = chunk.get("content") or ""
+                        if chunk_type == "user_feedback" and content:
+                            feedback_parts.append(content)
+                        elif chunk.get("role") == "assistant" and chunk_type == "text" and content:
+                            parts.append(content)
                     except (json.JSONDecodeError, TypeError):
                         pass
 
-                reply = "".join(parts).strip()
+                reply_segments: list[str] = []
+                if parts:
+                    reply_segments.append("".join(parts).strip())
+                if feedback_parts:
+                    reply_segments.append("\n\n".join(feedback_parts).strip())
+                reply = "\n\n".join(seg for seg in reply_segments if seg).strip()
                 return reply if reply else "（无回复）"
 
     except Exception as exc:

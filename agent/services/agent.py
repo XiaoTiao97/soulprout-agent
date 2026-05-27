@@ -1,3 +1,5 @@
+from dashscope.utils.oss_utils import upload_file
+
 from agent.utils.llm import LLM
 from agent.core.config import Config
 from agent.api.models.message import ChatResponse, Message, ModelConfig, ChatRequest, FileMessage
@@ -76,6 +78,7 @@ class Chat:
         self.agent_card = None
         self.sub_agents = []
         self.picture_base64_result = []
+        self.pause_for_user_feedback = False
         self.agents_dict = {}
         self.total_tokens = 0
         self.round_limit = 200
@@ -94,7 +97,8 @@ class Chat:
             "base_memory",
             "create_memory",
             "edit_memory",
-            "get_action_blueprint"
+            "get_action_blueprint",
+            "ask_user_feedback",
         ]
 
     async def mcp_list_tools(self):
@@ -698,11 +702,11 @@ class Chat:
     async def process_single_tool(self, name, arguments, message, tool_id):
         if name == "read_picture":
             result = await self.mcp_call_tool(name=name, arguments=arguments)
-            if result.get("ok") and result.get("base64"):
+            if not ("doubao" in self.model or "kimi" in self.model):
+                content = f"{self.model}不支持阅读图片"
+            elif result.get("ok") and result.get("base64"):
                 self.picture_base64_result.append(result.get("base64"))
                 content = result.get("message", "成功读取图片")
-            elif not ("doubao" in self.model or "kimi" in self.model):
-                content = f"{self.model}不支持阅读图片"
             else:
                 content = result.get("message", "路径不存在")
             self.messages.append({"role": "tool", "content": content, "tool_call_id": message.tool_calls[tool_id].id})
@@ -718,6 +722,46 @@ class Chat:
             self.messages.append({"role": "tool", "content": content, "tool_call_id": message.tool_calls[tool_id].id})
             yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[tool_id].id).model_dump_json()
             await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[tool_id].id, created_at=datetime.utcnow()))
+        elif name == "ask_user_feedback":
+            result = await self.mcp_call_tool(name=name, arguments=arguments)
+            tool_call_id = message.tool_calls[tool_id].id
+            if isinstance(result, dict) and result.get("ok"):
+                content = result.get("content") or ""
+                json_table = result.get("json_table") or {}
+            else:
+                content = result.get("message", str(result)) if isinstance(result, dict) else str(result)
+                json_table = {}
+
+            self.messages.append({"role": "tool", "content": content, "tool_call_id": tool_call_id})
+
+            is_interactive = bool(
+                json_table.get("questions") or json_table.get("interaction_type")
+            )
+            if is_interactive:
+                self.pause_for_user_feedback = True
+
+            message_type = "user_feedback" if is_interactive else "tool"
+            yield ChatResponse(
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                type=message_type,
+                role="tool",
+                content=content,
+                tool_call_id=tool_call_id,
+                json_table=json_table or None,
+            ).model_dump_json()
+            await self.save_message(
+                AgentMessage(
+                    user_id=self.user_id,
+                    conversation_id=self.conversation_id,
+                    type=message_type,
+                    role="tool",
+                    content=content,
+                    tool_call_id=tool_call_id,
+                    table=json_table or None,
+                    created_at=datetime.utcnow(),
+                )
+            )
         else:
             result = await self.mcp_call_tool(name=name, arguments=arguments)
 
@@ -787,6 +831,22 @@ class Chat:
         # 删除源目录
         await aioshutil.rmtree(source_dir)
         print("已移动临时文件，删除临时目录")
+
+    async def upload_files(self):
+        if not self.file_name_list:
+            return None
+        file_content = f"FILE: 上传文件 -> {self.file_name_list}"
+        return await self.save_message(
+            AgentMessage(
+                user_id=self.user_id,
+                conversation_id=self.conversation_id,
+                type="file",
+                role="user",
+                content=file_content,
+                table={"file_names": list(self.file_name_list)},
+                created_at=datetime.utcnow(),
+            )
+        )
 
     async def compress_process(self):
         compress = Compress(self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id, self.model)
@@ -984,7 +1044,10 @@ class Chat:
                         reasoning_content_total += reasoning_content
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="reasoner_content", content=reasoning_content).model_dump_json()
 
-            if len(message_total) > 0:
+            if self.pause_for_user_feedback:
+                self.pause_for_user_feedback = False
+                finish = True
+            elif len(message_total) > 0:
                 finish = True
                 await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant", content=message_total, reasoning_content=reasoning_content_total if len(reasoning_content_total) > 0 else None, created_at=datetime.utcnow()))
 
@@ -1041,8 +1104,7 @@ class Chat:
         print("system_prompt:", self.system_prompt)
         # 召回相关记忆（hybrid_search Top10 & score>=0.4 & 排除已加载），命中后写入 memory 类型消息
         await self.recall_memory_process()
-        # 对于上传文件的User Input处理
-        self.input_text += f"\n\nFILE: 上传文件 -> {self.file_name_list}" if len(self.file_name_list) > 0 else ""
+
         tool_name_list = [tool.get("function").get("name") for tool in tools]
         print(f"load tools:{tool_name_list}")
 
@@ -1050,6 +1112,9 @@ class Chat:
         print("model_source:", self.model_source, "model:", self.model)
         result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="user", content=self.input_text, created_at=datetime.utcnow()))
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="input_message_id", content=str(result.id)).model_dump_json()
+
+        # 处理上传文件
+        await self.upload_files()
 
         finish = False
         while finish is False:
@@ -1137,6 +1202,9 @@ class Chat:
                         reasoning_content_total += reasoning_content
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="reasoner_content", content=reasoning_content).model_dump_json()
 
-            if len(message_total) > 0:
+            if self.pause_for_user_feedback:
+                self.pause_for_user_feedback = False
+                finish = True
+            elif len(message_total) > 0:
                 finish = True
                 await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant", content=message_total, reasoning_content=reasoning_content_total if len(reasoning_content_total) > 0 else None, created_at=datetime.utcnow()))

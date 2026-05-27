@@ -86,10 +86,10 @@ class Config:
                 "model_source": "mimo",
                 "model_use": False if self.mimo_key in [default_key, None] else True,
                 "models": [
-                    {"name": "mimo-v2-pro-thinking", "context_window": 1000000},
-                    {"name": "mimo-v2-pro", "context_window": 1000000},
-                    {"name": "mimo-v2-omni-thinking", "context_window": 256000},
-                    {"name": "mimo-v2-omni", "context_window": 256000},
+                    {"name": "mimo-v2.5-pro-thinking", "context_window": 1000000},
+                    {"name": "mimo-v2.5-pro", "context_window": 1000000},
+                    {"name": "mimo-v2.5-thinking", "context_window": 1000000},
+                    {"name": "mimo-v2.5", "context_window": 1000000},
                 ]
             },
             {
@@ -119,6 +119,7 @@ class Config:
             }
         ]
         self.local_file_path = "/home/soulprout_data/"
+        self.deployment_mode = os.getenv("DEPLOYMENT_MODE")
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
         self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"

@@ -318,9 +318,7 @@ async function loadSoulproutConversation() {
   try {
     const response = await axios.get<AgentMessage[]>(`/api/message/${userId}`)
     agent_message_list.value = normalizeMessagesFromApi(response.data)
-    toolMessages.value = agent_message_list.value.filter(
-      (msg) => (msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools') && msg.role !== 'file',
-    )
+    toolMessages.value = agent_message_list.value.filter(isToolSidebarMessage)
     fileMessages.value = agent_message_list.value.filter((msg) => msg.role === 'file')
   } catch (error) {
     // 首次进入 Soulprout 模式时还没有任何会话/消息，忽略即可
@@ -400,6 +398,13 @@ function normalizeMessagesFromApi(raw: AgentMessage[]): AgentMessage[] {
   })
 }
 
+/** 侧栏 toolMessages：排除 user_feedback（主对话区单独渲染） */
+function isToolSidebarMessage(msg: AgentMessage): boolean {
+  if (msg.role === 'file') return false
+  if (msg.type === 'user_feedback') return false
+  return msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools'
+}
+
 /** 会话上缓存的蓝图注入 toolMessages（与原 cot_plan 行为一致；日后可单独改 blueprint 展示样式） */
 function injectPersistedBlueprintToToolMessages(
   conversationId: string,
@@ -422,9 +427,7 @@ async function refreshMessagesFromServer(conversationId: string) {
     const response = await axios.get<AgentMessage[]>(`/api/message/${conversationId}`)
     const response_conversation = await axios.get(`/api/conversation/${conversationId}`)
     agent_message_list.value = normalizeMessagesFromApi(response.data)
-    toolMessages.value = agent_message_list.value.filter(
-      (msg) => (msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools') && msg.role !== 'file',
-    )
+    toolMessages.value = agent_message_list.value.filter(isToolSidebarMessage)
     fileMessages.value = agent_message_list.value.filter((msg) => msg.role === 'file')
     injectPersistedBlueprintToToolMessages(
       conversationId,
@@ -462,7 +465,7 @@ async function pickConversation(conversationId) {
     const response_conversation = await axios.get(`/api/conversation/${conversationId}`)
     agent_message_list.value = normalizeMessagesFromApi(response.data)
     // 设置toolMessages和fileMessages
-    toolMessages.value = agent_message_list.value.filter(msg => (msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools') && msg.role !== 'file')
+    toolMessages.value = agent_message_list.value.filter(isToolSidebarMessage)
     fileMessages.value = agent_message_list.value.filter(msg => msg.role === 'file')
     injectPersistedBlueprintToToolMessages(
       conversationId,
@@ -506,6 +509,27 @@ async function processMessageQueue() {
     const chunk_json = messageQueue.value.shift()
     // console.log('处理队列消息:', chunk_json.role, chunk_json.type, '剩余队列长度:', messageQueue.value.length)
 
+    if (chunk_json.role === 'user' && chunk_json.type === 'file') {
+      const fileContent = chunk_json.content || ''
+      const last = agent_message_list.value[agent_message_list.value.length - 1]
+      const isDuplicate =
+        last?.role === 'user' &&
+        last?.type === 'file' &&
+        (last.content || '') === fileContent
+      if (!isDuplicate) {
+        agent_message_list.value.push({
+          user_id: chunk_json.user_id,
+          conversation_id: chunk_json.conversation_id,
+          type: 'file',
+          role: 'user',
+          content: fileContent,
+          table: chunk_json.json_table,
+          created_at: chunk_json.created_at,
+        })
+      }
+      continue
+    }
+
     // 重新处理消息分类逻辑
     if (chunk_json.role === 'file') {
       // 文件消息单独处理，不添加到 toolMessages
@@ -523,6 +547,22 @@ async function processMessageQueue() {
       fileMessages.value.push(fileMessage)
       if (!showExtraInfo.value) {
         showExtraInfo.value = true
+      }
+    } else if (chunk_json.type === 'user_feedback') {
+      const t = chunk_json.type
+      if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
+        chatPlanFoldAfterNonPlan.value = true
+      }
+      currentStreamingMessage.value = {
+        user_id: chunk_json.user_id,
+        conversation_id: chunk_json.conversation_id,
+        type: 'user_feedback',
+        role: chunk_json.role || 'tool',
+        content: chunk_json.content || '',
+        tool_call_id: chunk_json.tool_call_id || '',
+        tool_calls: chunk_json.tool_calls || undefined,
+        created_at: chunk_json.created_at,
+        table: chunk_json.json_table || chunk_json.table,
       }
     } else if (chunk_json.role === 'tool' || chunk_json.role === 'agent' || chunk_json.type === 'plan') {
       const canMerge = ['text', 'reasoner_content', 'plan'].includes(chunk_json.type)
@@ -562,7 +602,8 @@ async function processMessageQueue() {
           content: chunk_json.content || '',
           tool_call_id: chunk_json.tool_call_id,
           tool_calls: chunk_json.tool_calls,
-          created_at: chunk_json.created_at
+          created_at: chunk_json.created_at,
+          table: chunk_json.json_table || chunk_json.table,
         })
       }
       if (chunk_json.type === 'plan') {
@@ -588,7 +629,8 @@ async function processMessageQueue() {
         content: chunk_json.content || '',
         tool_call_id: chunk_json.tool_call_id || '',
         tool_calls: chunk_json.tool_calls || undefined,
-        created_at: chunk_json.created_at
+        created_at: chunk_json.created_at,
+        table: chunk_json.json_table || chunk_json.table,
       }
     }
 

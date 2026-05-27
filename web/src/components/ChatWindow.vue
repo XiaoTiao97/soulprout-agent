@@ -7,73 +7,94 @@
           <template v-for="(group, index) in groupedMessages" :key="index">
             <!-- 用户消息 -->
             <div v-if="group.role === 'user'" class="answer-single-me-agent">
-              <div
-                class="text-message-wrapper text-message-wrapper--user"
-                :class="{
-                  'text-message-wrapper--user-editing':
-                    editingUserMessageId === group.messages[0].id,
-                }"
-              >
-                <div
-                  class="answer-me-content"
-                  :class="{ 'answer-me-content--editing': editingUserMessageId === group.messages[0].id }"
-                >
-                  <template v-if="editingUserMessageId === group.messages[0].id">
-                    <div class="user-edit-box">
-                      <div class="input-total">
-                        <textarea
-                          :ref="setUserEditTextareaRef"
-                          v-model="editingUserDraft"
-                          class="input_field"
-                          rows="1"
-                          @input="adjustUserEditTextareaHeight"
-                          @keydown.enter.exact.prevent="confirmEditUser"
+              <div class="user-message-column">
+                <template v-for="(message, uMsgIndex) in group.messages" :key="uMsgIndex">
+                  <div
+                    v-if="isUserTextMessage(message)"
+                    class="text-message-wrapper text-message-wrapper--user"
+                    :class="{
+                      'text-message-wrapper--user-editing':
+                        editingUserMessageId === message.id,
+                    }"
+                  >
+                    <div
+                      class="answer-me-content"
+                      :class="{ 'answer-me-content--editing': editingUserMessageId === message.id }"
+                    >
+                      <template v-if="editingUserMessageId === message.id">
+                        <div class="user-edit-box">
+                          <div class="input-total">
+                            <textarea
+                              :ref="setUserEditTextareaRef"
+                              v-model="editingUserDraft"
+                              class="input_field"
+                              rows="1"
+                              @input="adjustUserEditTextareaHeight"
+                              @keydown.enter.exact.prevent="confirmEditUser"
+                            />
+                          </div>
+                          <div class="user-edit-actions">
+                            <button type="button" class="user-edit-btn-cancel" @click="cancelEditUser">取消</button>
+                            <button
+                              type="button"
+                              class="user-edit-btn-send"
+                              :disabled="isConfirmEditPending"
+                              @click="confirmEditUser"
+                            >
+                              发送
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div
+                          class="p-content-markdown"
+                          v-html="renderMarkdown(message.content)"
+                        ></div>
+                      </template>
+                    </div>
+                    <div class="message-actions message-actions--user">
+                      <button
+                        v-if="message.id && editingUserMessageId !== message.id"
+                        type="button"
+                        class="message-action-btn"
+                        title="编辑"
+                        @click="startEditUserMessage(message)"
+                      >
+                        <img :src="EditIcon" alt="" class="message-action-btn-icon" />
+                      </button>
+                      <button
+                        type="button"
+                        class="message-action-btn"
+                        :title="copiedStates.has(message.created_at) ? '已复制' : '复制'"
+                        @click="copyToClipboard(message.content, message.created_at)"
+                      >
+                        <img
+                          :src="copiedStates.has(message.created_at) ? DoneIcon : ContentCopyIcon"
+                          alt=""
+                          class="message-action-btn-icon"
                         />
-                      </div>
-                      <div class="user-edit-actions">
-                        <button type="button" class="user-edit-btn-cancel" @click="cancelEditUser">取消</button>
-                        <button
-                          type="button"
-                          class="user-edit-btn-send"
-                          :disabled="isConfirmEditPending"
-                          @click="confirmEditUser"
-                        >
-                          发送
-                        </button>
+                      </button>
+                    </div>
+                  </div>
+                  <div v-else-if="message.type === 'file'" class="user-uploaded-files">
+                    <div class="selected-files selected-files--history">
+                      <div
+                        v-for="(fileName, fIdx) in parseUserFileNames(message)"
+                        :key="`${message.created_at}-${fIdx}-${fileName}`"
+                        class="selected-file-item"
+                      >
+                        <img
+                          class="selected-file-icon"
+                          :src="getFileIconUrlForName(fileName)"
+                          :alt="fileName"
+                        />
+                        <div class="selected-file-name" :title="fileName">{{ fileName }}</div>
                       </div>
                     </div>
-                  </template>
-                  <template v-else>
-                    <div class="p-content-markdown" v-html="renderMarkdown(group.messages[0].content ?? '')"></div>
-                  </template>
-                </div>
-                <div class="message-actions message-actions--user">
-                  <button
-                    v-if="group.messages[0].id && editingUserMessageId !== group.messages[0].id"
-                    type="button"
-                    class="message-action-btn"
-                    title="编辑"
-                    @click="startEditUserMessage(group.messages[0])"
-                  >
-                    <img :src="EditIcon" alt="" class="message-action-btn-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    class="message-action-btn"
-                    :title="copiedStates.has(group.messages[0].created_at) ? '已复制' : '复制'"
-                    @click="copyToClipboard(group.messages[0].content, group.messages[0].created_at)"
-                  >
-                    <img
-                      :src="copiedStates.has(group.messages[0].created_at) ? DoneIcon : ContentCopyIcon"
-                      alt=""
-                      class="message-action-btn-icon"
-                    />
-                  </button>
-                </div>
+                  </div>
+                </template>
               </div>
-              <!-- <div class="answer-me-icon">
-                <img class="icon-me" src="@/assets/images/user_icon.svg" alt="user-logo" />
-              </div> -->
             </div>
             
             <!-- AI消息 -->
@@ -140,6 +161,15 @@
                         @open-file-preview="handleOpenFilePreview"
                       />
                     </div>
+                  </div>
+
+                  <div v-else-if="message.type === 'user_feedback' && message.table" class="user-feedback-wrapper">
+                    <UserFeedbackBlock
+                      :payload="(message.table as unknown as UserFeedbackPayload)"
+                      :disabled="isFeedbackDisabled(message)"
+                      :submitted-answer="getFeedbackSubmittedAnswer(message)"
+                      @submit="(answer) => handleFeedbackSubmit(message, answer)"
+                    />
                   </div>
 
                   <div v-else-if="message.type === 'text'" class="text-message-wrapper">
@@ -260,6 +290,14 @@
                       @open-file-preview="handleOpenFilePreview"
                     />
                 </div>
+                <div v-else-if="block.type === 'user_feedback' && block.table" class="user-feedback-wrapper">
+                  <UserFeedbackBlock
+                    :payload="(block.table as unknown as UserFeedbackPayload)"
+                    :disabled="isFeedbackDisabledFromBlock(block)"
+                    :submitted-answer="getFeedbackSubmittedAnswerFromBlock(block)"
+                    @submit="(answer) => handleFeedbackSubmitFromBlock(block, answer)"
+                  />
+                </div>
                 <div v-else-if="block.type === 'text'" class="text-message-wrapper">
                   <div class="answer-robot-content">
                     <div class="p-content-markdown" v-html="renderMarkdown(block.content ?? '')">
@@ -350,8 +388,15 @@ import { ref, nextTick, computed, watch, onMounted, onUnmounted, onUpdated } fro
 import MessageInput from '../components/MessageInput.vue'
 import ToolCallsBlock from './ToolCallsBlock.vue'
 import WebSearchBlock from './WebSearchBlock.vue'
+import UserFeedbackBlock from './UserFeedbackBlock.vue'
+import type { UserFeedbackPayload } from './UserFeedbackBlock.vue'
 import type { WebSearchCallItem } from './WebSearchBlock.vue'
 import { buildGenericToolCallItems, buildWebSearchCallItems } from '../utils/toolCallDisplay'
+import {
+  getFileIconUrlForName,
+  isUserTextMessageType,
+  parseUserFileNames,
+} from '../utils/userFileDisplay'
 import type { ConversationBase, ChatRequest, AgentMessage, ToolCalls } from '../types/interface.ts'
 import { AgentCard } from '../types/interface.ts'
 import axios from 'axios'
@@ -402,6 +447,7 @@ interface StreamBlock {
   tool_calls?: [ToolCalls];
   tool_call_id?: string;
   created_at: number;
+  table?: Record<string, unknown>;
 }
 
 interface MessageGroup {
@@ -480,6 +526,79 @@ const handleOpenWebPreview = (url: string) => {
 
 const handleOpenFilePreview = (filePath: string) => {
   if (filePath) emit('openFilePreview', filePath)
+}
+
+const submittedFeedbackAnswers = ref<Record<string, string>>({})
+
+function getFeedbackKey(message: Pick<AgentMessage, 'tool_call_id' | 'created_at'>): string {
+  return message.tool_call_id || String(message.created_at)
+}
+
+function hasUserAnswerAfterFeedback(message: AgentMessage): boolean {
+  const key = getFeedbackKey(message)
+  const idx = props.agent_message_list.findIndex(
+    (m) => m.type === 'user_feedback' && getFeedbackKey(m) === key,
+  )
+  if (idx < 0) return false
+  for (let i = idx + 1; i < props.agent_message_list.length; i++) {
+    const next = props.agent_message_list[i]
+    if (next.role === 'user' && next.type === 'text' && (next.content || '').trim()) {
+      return true
+    }
+    if (next.role === 'assistant' && next.type === 'get_tools') {
+      break
+    }
+  }
+  return false
+}
+
+function getFeedbackSubmittedAnswer(message: AgentMessage): string {
+  const key = getFeedbackKey(message)
+  if (submittedFeedbackAnswers.value[key]) return submittedFeedbackAnswers.value[key]
+  const idx = props.agent_message_list.findIndex(
+    (m) => m.type === 'user_feedback' && getFeedbackKey(m) === key,
+  )
+  if (idx < 0) return ''
+  for (let i = idx + 1; i < props.agent_message_list.length; i++) {
+    const next = props.agent_message_list[i]
+    if (next.role === 'user' && next.type === 'text' && (next.content || '').trim()) {
+      return (next.content || '').trim()
+    }
+    if (next.role === 'assistant' && next.type === 'get_tools') {
+      break
+    }
+  }
+  return ''
+}
+
+function isFeedbackDisabled(message: AgentMessage): boolean {
+  const key = getFeedbackKey(message)
+  if (submittedFeedbackAnswers.value[key]) return true
+  return hasUserAnswerAfterFeedback(message)
+}
+
+function isFeedbackDisabledFromBlock(block: StreamBlock): boolean {
+  const key = block.tool_call_id || String(block.created_at)
+  return !!submittedFeedbackAnswers.value[key]
+}
+
+function getFeedbackSubmittedAnswerFromBlock(block: StreamBlock): string {
+  const key = block.tool_call_id || String(block.created_at)
+  return submittedFeedbackAnswers.value[key] || ''
+}
+
+function handleFeedbackSubmit(message: AgentMessage, answer: string) {
+  const key = getFeedbackKey(message)
+  if (isFeedbackDisabled(message)) return
+  submittedFeedbackAnswers.value[key] = answer
+  handleSendMessage(answer, [])
+}
+
+function handleFeedbackSubmitFromBlock(block: StreamBlock, answer: string) {
+  const key = block.tool_call_id || String(block.created_at)
+  if (submittedFeedbackAnswers.value[key]) return
+  submittedFeedbackAnswers.value[key] = answer
+  handleSendMessage(answer, [])
 }
 
 /** 工具结果走侧栏 toolMessages；主对话流中「未完成」= 仍在生成且当前最后一块仍是工具调用 */
@@ -601,10 +720,14 @@ watch(
   { flush: 'post' },
 )
 
+function isUserTextMessage(msg: AgentMessage): boolean {
+  return msg.role === 'user' && isUserTextMessageType(msg.type)
+}
+
 function startEditUserMessage(msg: AgentMessage) {
-  if (!msg.id) return
+  if (!msg.id || !isUserTextMessage(msg)) return
   editingUserMessageId.value = msg.id
-  editingUserDraft.value = msg.content ?? ''
+  editingUserDraft.value = msg.content || ''
 }
 
 function cancelEditUser() {
@@ -646,7 +769,7 @@ async function confirmEditUser() {
     const userMsg: AgentMessage = {
       user_id: '',
       conversation_id: '',
-      type: 'content',
+      type: 'text',
       role: 'user',
       content: text,
       id,
@@ -837,7 +960,12 @@ const displayMessages = computed(() => {
   return props.agent_message_list.filter(msg => msg.type !== 'init')
 })
 
-// 将连续的相同角色消息分组
+// 将连续的相同角色消息分组（user_feedback 归入 assistant 区展示）
+const messageDisplayRole = (message: AgentMessage): string => {
+  if (message.type === 'user_feedback') return 'assistant'
+  return message.role
+}
+
 const groupedMessages = computed<MessageGroup[]>(() => {
   const messages = displayMessages.value
   if (messages.length === 0) return []
@@ -846,15 +974,14 @@ const groupedMessages = computed<MessageGroup[]>(() => {
   let currentGroup: MessageGroup | null = null
   
   for (const message of messages) {
-    if (!currentGroup || currentGroup.role !== message.role || message.role === 'user') {
-      // 创建新组
+    const displayRole = messageDisplayRole(message)
+    if (!currentGroup || currentGroup.role !== displayRole) {
       currentGroup = {
-        role: message.role,
+        role: displayRole,
         messages: [message]
       }
       groups.push(currentGroup)
     } else {
-      // 添加到当前组
       currentGroup.messages.push(message)
     }
   }
@@ -877,7 +1004,7 @@ const handleStreamingMessage = (streamingMessage: AgentMessage) => {
     : (streamingMessage.tool_call_id || String(created_at))
   
   // 如果类型改变，创建新的块
-  if (type !== currentBlockType.value || type === 'get_tools' || type === 'get_agents') {
+  if (type !== currentBlockType.value || type === 'get_tools' || type === 'get_agents' || type === 'user_feedback') {
     currentBlockType.value = type
     streamingBlocks.value.push({
       type: type,
@@ -885,7 +1012,8 @@ const handleStreamingMessage = (streamingMessage: AgentMessage) => {
       content: content || '',
       tool_call_id: toolCallId,
       tool_calls: tool_calls || undefined,
-      created_at: created_at
+      created_at: created_at,
+      table: streamingMessage.table,
     })
   } else {
     // 相同类型，累积追加内容到当前块
@@ -913,11 +1041,12 @@ const finishStreaming = () => {
         user_id: '',
         conversation_id: '',
         type: block.type,
-        role: 'assistant',
+        role: block.type === 'user_feedback' ? (block.role || 'tool') : (block.role || 'assistant'),
         content: block.content,
         created_at: block.created_at || Date.now(),
         tool_call_id: toolCallId,
         tool_calls: block.tool_calls || undefined,
+        table: block.table,
         from_streaming: true,  // 标记来自流式输出，tool_calls 不显示 content
       }
       props.agent_message_list.push(assistantMsg)
@@ -957,16 +1086,29 @@ function handleSkillsUseChange() {
 
 // 处理发送消息事件
 const handleSendMessage = (message: string, files: File[] = []) => {
-  // 1. 立即添加用户消息到历史记录
+  const now = Date.now()
   const userMsg: AgentMessage = {
     user_id: '',
     conversation_id: '',
-    type: 'content',
+    type: 'text',
     role: 'user',
     content: message,
-    created_at: Date.now()
+    created_at: now,
   }
   props.agent_message_list.push(userMsg)
+
+  if (files.length > 0) {
+    const fileNames = files.map((f) => f.name)
+    props.agent_message_list.push({
+      user_id: '',
+      conversation_id: '',
+      type: 'file',
+      role: 'user',
+      content: `\n\nFILE: 上传文件 -> ${JSON.stringify(fileNames)}`,
+      table: { file_names: fileNames },
+      created_at: now + 1,
+    })
+  }
 
   // 2. 添加初始化标记（用于显示AI正在回复）
   props.agent_message_list.push({
@@ -1251,6 +1393,58 @@ const handleCreateAgentClick = () => {
   gap: 6px;
 }
 
+.user-message-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.user-uploaded-files {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.user-uploaded-files .selected-files--history {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.user-uploaded-files .selected-file-item {
+  position: relative;
+  width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+}
+
+.user-uploaded-files .selected-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: contain;
+  padding: 4px;
+}
+
+.user-uploaded-files .selected-file-name {
+  max-width: 64px;
+  text-align: center;
+  font-size: 11px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .answer-single-robot .message-actions {
   bottom: 0px;
   left: 30px;
@@ -1403,6 +1597,12 @@ const handleCreateAgentClick = () => {
 
 .answer-robot-tool-wrapper {
   margin-top: 2px;
+}
+
+.user-feedback-wrapper {
+  width: 100%;
+  max-width: 100%;
+  margin: 4px 0 8px;
 }
 
 /* 工具调用未完成：与「查看这里」同款渐变；划过阶段占比加大、周期 2.5s，划过比 view-hint 更慢 */

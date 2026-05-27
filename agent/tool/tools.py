@@ -119,13 +119,60 @@ class SoulproutToolFunction:
     async def bash(self, command, conversation_id):
         root = self._workspace_dir(conversation_id)
         os.makedirs(root, exist_ok=True)
-        proc = await asyncio.create_subprocess_shell(command, cwd=root, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), 3600)
-            return f"Standard Output:\n{stdout.decode('utf-8', errors='replace')}\nStandard Error:\n{stderr.decode('utf-8', errors='replace')}"
+            if self.config.deployment_mode == "saas":
+                workspace = os.path.abspath(root)
+                proc = await asyncio.create_subprocess_exec(
+                    "bwrap",
+                    "--ro-bind", "/bin", "/bin",
+                    "--ro-bind", "/usr/bin", "/usr/bin",
+                    "--ro-bind", "/usr/local/python3.12", "/usr/local/python3.12",
+                    "--ro-bind", "/usr/lib", "/usr/lib",
+                    "--ro-bind", "/lib", "/lib",
+                    "--ro-bind", "/lib64", "/lib64",
+                    "--ro-bind", "/etc", "/etc",
+                    "--dev", "/dev",
+                    "--proc", "/proc",
+                    "--bind", workspace, "/workspace",
+                    "--tmpfs", "/tmp",
+                    "--unshare-user",
+                    "--unshare-pid",
+                    "--unshare-net",
+                    "--unshare-ipc",
+                    "--unshare-uts",
+                    "--uid", "65534",
+                    "--gid", "65534",
+                    "--chdir", "/workspace",
+                    "--setenv", "HOME", "/workspace",
+                    "--setenv", "PATH", "/usr/local/python3.12/bin:/usr/local/bin:/bin:/usr/bin",
+                    "/bin/sh", "-c", command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
+            else:
+                proc = await asyncio.create_subprocess_shell(
+                    command,
+                    cwd=root,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), 3600)
+            response_text = f"Command executed with return code: {proc.returncode}\n\n"
+            stdout_text = stdout.decode("utf-8", errors="replace")
+            stderr_text = stderr.decode("utf-8", errors="replace")
+            if stdout:
+                response_text += f"Standard Output:\n{stdout_text}"
+            if stderr:
+                response_text += f"Standard Error:\n{stderr_text}"
+            return response_text
         except asyncio.TimeoutError:
             proc.kill()
             return "错误: 命令执行超时"
+        except FileNotFoundError:
+            return "错误: 未找到 bwrap，SaaS 模式下 bash 需要 bubblewrap"
+        except Exception as e:
+            return f"错误: bash 执行失败，原因：{e}"
 
     async def create_agent(self, name, description, system_prompt, model, model_source, name_zh=None, tools=None, skills=None, kbs=None, agents=None, supervisor_history=True, file_names=None, conversation_id=None):
         try:
@@ -568,6 +615,137 @@ class SoulproutToolFunction:
     # ─────────────────────────────────────────────────────────────────────────
 
     USER_OPTION_MAX_LEN = 1024
+
+    def _normalize_feedback_options(self, raw_options):
+        normalized_options = []
+        option_keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        for index, opt in enumerate(raw_options or []):
+            if isinstance(opt, str):
+                key = option_keys[index] if index < len(option_keys) else str(index + 1)
+                normalized_options.append({"key": key, "label": opt, "value": opt})
+            elif isinstance(opt, dict):
+                key = opt.get("key") or (option_keys[index] if index < len(option_keys) else str(index + 1))
+                label = (opt.get("label") or opt.get("value") or "").strip()
+                value = (opt.get("value") or label).strip()
+                if not label and not value:
+                    continue
+                normalized_options.append(
+                    {"key": str(key), "label": label or value, "value": value or label}
+                )
+        return normalized_options
+
+    def _normalize_feedback_question(self, raw_question, index):
+        if not isinstance(raw_question, dict):
+            return None, f"Invalid format for question #{index + 1}"
+
+        interaction_type = (raw_question.get("interaction_type") or "").strip().lower()
+        if interaction_type not in ("choice", "input"):
+            return None, f"Question #{index + 1}: interaction_type must be choice or input"
+
+        prompt = (raw_question.get("prompt") or "").strip()
+        if not prompt:
+            return None, f"Question #{index + 1}: prompt is required"
+
+        question_id = (raw_question.get("id") or raw_question.get("key") or str(index + 1)).strip()
+        normalized = {
+            "id": question_id,
+            "interaction_type": interaction_type,
+            "prompt": prompt,
+        }
+
+        if interaction_type == "choice":
+            choice_mode = (raw_question.get("choice_mode") or "single").strip().lower()
+            if choice_mode not in ("single", "multiple"):
+                return None, f"Question #{index + 1}: choice_mode must be single or multiple"
+
+            normalized_options = self._normalize_feedback_options(raw_question.get("options"))
+            if not normalized_options:
+                return None, f"Question #{index + 1}: valid options are required"
+
+            normalized["choice_mode"] = choice_mode
+            normalized["options"] = normalized_options
+            normalized["allow_custom_input"] = bool(raw_question.get("allow_custom_input"))
+            normalized["custom_input_placeholder"] = (
+                raw_question.get("custom_input_placeholder") or "Other (please specify)"
+            )
+        else:
+            normalized["placeholder"] = raw_question.get("placeholder") or "Enter your answer…"
+
+        return normalized, None
+
+    def _build_feedback_question_content(self, question, index):
+        lines = [f"{index + 1}. {question['prompt']}"]
+        if question["interaction_type"] == "choice":
+            for opt in question["options"]:
+                lines.append(f"   {opt['key']}. {opt['label']} (submit value: {opt['value']})")
+            if question.get("allow_custom_input"):
+                lines.append(f"   Custom input allowed: {question.get('custom_input_placeholder')}")
+        else:
+            lines.append(f"   Expect free-text input (placeholder: {question.get('placeholder')})")
+        return lines
+
+    async def ask_user_feedback(
+        self,
+        conversation_id,
+        questions=None,
+        description=None,
+        interaction_type=None,
+        prompt=None,
+        options=None,
+        choice_mode="single",
+        allow_custom_input=False,
+        custom_input_placeholder="Other (please specify)",
+        placeholder="Enter your answer…",
+    ):
+        """Launch batched interactive user feedback (choice / input) for frontend rendering."""
+        del conversation_id  # Injected by runtime; this tool only builds the interaction payload
+
+        raw_questions = questions or []
+        if not raw_questions and prompt:
+            raw_questions = [
+                {
+                    "interaction_type": interaction_type,
+                    "prompt": prompt,
+                    "options": options,
+                    "choice_mode": choice_mode,
+                    "allow_custom_input": allow_custom_input,
+                    "custom_input_placeholder": custom_input_placeholder,
+                    "placeholder": placeholder,
+                }
+            ]
+
+        if not raw_questions:
+            return {
+                "ok": False,
+                "message": "Error: questions is required; list every question in a single call",
+            }
+
+        normalized_questions = []
+        for index, raw_question in enumerate(raw_questions):
+            normalized, error = self._normalize_feedback_question(raw_question, index)
+            if error:
+                return {"ok": False, "message": f"Error: {error}"}
+            normalized_questions.append(normalized)
+
+        desc = (description or "").strip()
+        if not desc:
+            desc = "User input required for the following items"
+
+        content_parts = [desc]
+        for index, question in enumerate(normalized_questions):
+            content_parts.extend(self._build_feedback_question_content(question, index))
+
+        content_parts.append(
+            "[System] Interactive feedback request sent to the user. "
+            "Wait until they submit all answers in the UI before continuing."
+        )
+        content_str = "\n".join(content_parts)
+        json_table = {
+            "description": desc,
+            "submitted": False,
+            "questions": normalized_questions,
+        }
+        return {"ok": True, "content": content_str, "json_table": json_table}
 
     async def user_option(self, info_type, module, conversation_id, content=None, old_text=None):
         if info_type not in ("userinfo", "agentinfo"):

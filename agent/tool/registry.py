@@ -1,3 +1,23 @@
+import os
+import sys
+
+
+def _bash_description() -> str:
+    if os.getenv("DEPLOYMENT_MODE") == "saas":
+        base = "Run shell commands in an isolated sandbox. Only the current conversation directory is accessible. Supports Python, Node, and Bash scripts."
+    else:
+        base = "Run command-line tools in the current conversation directory."
+    if sys.platform.startswith("win"):
+        os_hint = " The server is Windows; use Windows commands (cmd or PowerShell)."
+    elif sys.platform == "darwin":
+        os_hint = " The server is macOS; use macOS/Unix commands."
+    elif sys.platform.startswith("linux"):
+        os_hint = " The server is Linux; use Linux/bash commands."
+    else:
+        os_hint = f" The server OS is {sys.platform}; use commands appropriate for that system."
+    return base + os_hint
+
+
 TOOL_SCHEMAS = [
     {
         "type": "function",
@@ -104,7 +124,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "在隔离沙箱中执行 shell 命令。只能访问当前对话目录，支持运行 Python/Node/Bash 脚本。",
+            "description": _bash_description(),
             "parameters": {
                 "type": "object",
                 "required": ["command"],
@@ -451,6 +471,87 @@ TOOL_SCHEMAS = [
                     "old_text": {
                         "type": "string",
                         "description": "[module=edit 必填] 原内容中需要被替换掉的文本",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ask_user_feedback",
+            "description": (
+                "Launch batched interactive feedback and pause until the user submits all answers in the UI. "
+                "Use when you need decisions, preferences, or missing details from the user. "
+                "Put every question in the questions array in one call—do not invoke this tool repeatedly. "
+                "Each item may be choice (single/multiple, optional custom input) or input (free text). "
+                "Submitted answers arrive as the next user message."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["questions"],
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Overall intro shown to the user, e.g. 'Please confirm deployment and config choices'",
+                    },
+                    "questions": {
+                        "type": "array",
+                        "description": "All questions to ask in one batch",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "required": ["interaction_type", "prompt"],
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "description": "Question id for answer aggregation; defaults to index",
+                                },
+                                "interaction_type": {
+                                    "type": "string",
+                                    "enum": ["choice", "input"],
+                                    "description": "choice = multiple-choice; input = free-text",
+                                },
+                                "prompt": {
+                                    "type": "string",
+                                    "description": "Question text shown to the user",
+                                },
+                                "choice_mode": {
+                                    "type": "string",
+                                    "enum": ["single", "multiple"],
+                                    "description": "[choice] single or multiple selection; default single",
+                                },
+                                "options": {
+                                    "type": "array",
+                                    "description": "[choice required] strings or {key, label, value} objects",
+                                    "items": {
+                                        "oneOf": [
+                                            {"type": "string"},
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "key": {"type": "string"},
+                                                    "label": {"type": "string"},
+                                                    "value": {"type": "string"},
+                                                },
+                                            },
+                                        ]
+                                    },
+                                },
+                                "allow_custom_input": {
+                                    "type": "boolean",
+                                    "description": "[choice] allow an additional free-text field",
+                                },
+                                "custom_input_placeholder": {
+                                    "type": "string",
+                                    "description": "[choice + allow_custom_input] placeholder for custom input",
+                                },
+                                "placeholder": {
+                                    "type": "string",
+                                    "description": "[input] input placeholder",
+                                },
+                            },
+                        },
                     },
                 },
             },
