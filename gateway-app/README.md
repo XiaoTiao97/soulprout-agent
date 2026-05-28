@@ -1,6 +1,6 @@
 # Soulprout Gateway — 桌面应用（Tauri）
 
-将微信个人号接入 Soulprout Agent 的跨平台桌面工具。  
+将微信、飞书等平台接入 Soulprout Agent 的跨平台桌面工具。  
 用户**无需安装 Python 或任何依赖**，下载即用。
 
 ---
@@ -10,12 +10,17 @@
 ```
 soulprout-agent/
 ├── gateway/             ← Python 后端
-│   ├── main.py          ← FastAPI + 微信长轮询主入口
+│   ├── main.py          ← FastAPI + 平台适配器主入口
 │   ├── chat_caller.py   ← 调用 Agent Chat，收集完整回复
 │   ├── platforms/
-│   │   └── weixin.py    ← 个人微信适配器（参考 hermes-agent）
+│   │   ├── weixin.py    ← 个人微信适配器（参考 hermes-agent）
+│   │   ├── feishu.py    ← 飞书 WebSocket 适配器（参考 hermes-agent）
+│   │   └── wecom.py     ← 企业微信 WebSocket 适配器（参考 hermes-agent）
 │   ├── static/
-│   │   └── index.html   ← 微信登录管理界面
+│   │   ├── index.html   ← 管理面板
+│   │   ├── weixin.html  ← 微信扫码登录
+│   │   ├── feishu.html  ← 飞书扫码 / 手动凭证
+│   │   └── wecom.html   ← 企业微信扫码 / 手动凭证
 │   └── gateway.spec     ← PyInstaller 打包配置
 │
 └── gateway-app/         ← Tauri 桌面外壳（Rust）
@@ -112,10 +117,12 @@ python gateway/main.py
 ## 用户使用流程
 
 1. 下载安装包并安装
-2. 打开 **Soulprout Gateway**
-3. 点击「**获取二维码**」，用微信扫描
-4. 手机端确认登录
-5. 完成！微信消息将自动转发给 Soulprout Agent 并回复
+2. 打开 **Soulprout Gateway**，完成 Agent 账号登录
+3. 在「接入平台」中选择平台：
+   - **微信**：获取二维码 → 微信 App 扫描 → 确认登录
+   - **飞书**：默认「扫码创建」→ 飞书 App 扫描；或切换「手动填写」App ID / Secret
+   - **企业微信**：默认「扫码获取」→ 企业微信 App 扫描；或切换「手动填写」Bot ID / Secret
+4. 完成！对应平台消息将自动转发给 Soulprout Agent 并回复
 
 ---
 
@@ -127,17 +134,20 @@ python gateway/main.py
 # 管理界面端口（默认 8082）
 GATEWAY_WEB_PORT=8082
 
-# Agent 模型（通常继承 agent/.env，无需重复填写）
-# SOULPROUT_MODEL_SOURCE=deepseek
-# SOULPROUT_MODEL=deepseek-chat
+# 飞书（可选，通常通过 Web UI 配置）
+# FEISHU_APP_ID=cli_xxx
+# FEISHU_APP_SECRET=secret_xxx
+# FEISHU_DOMAIN=feishu
 ```
 
-微信凭证在扫码登录后自动保存到 `gateway_data/weixin/`，重启无需重新扫码。
+微信凭证保存在 `gateway_data/weixin/`，飞书凭证保存在 `gateway_data/feishu/config.json`，企业微信凭证保存在 `gateway_data/wecom/config.json`，重启无需重新配置。
 
 ---
 
 ## 参考
 
 - 微信 iLink Bot API 接入参考：[hermes-agent](https://github.com/NousResearch/hermes-agent)
+- 飞书 WebSocket 长连接接入参考：[hermes-agent `gateway/platforms/feishu.py`](https://github.com/NousResearch/hermes-agent/blob/main/gateway/platforms/feishu.py)
+- 企业微信 WebSocket 长连接接入参考：[hermes-agent `gateway/platforms/wecom.py`](https://github.com/NousResearch/hermes-agent/blob/main/gateway/platforms/wecom.py)
 - Tauri 文档：https://tauri.app
 - PyInstaller 文档：https://pyinstaller.org

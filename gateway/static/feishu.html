@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>飞书接入 · Soulprout Gateway</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #060d14;
+      --bg-card:      rgba(12, 22, 34, 0.88);
+      --accent:       #4c8bf5;
+      --accent-dim:   rgba(76, 139, 245, 0.12);
+      --accent-border:rgba(76, 139, 245, 0.22);
+      --text:         #e8eef8;
+      --text-sub:     rgba(232, 238, 248, 0.45);
+      --text-muted:   rgba(232, 238, 248, 0.22);
+      --border:       rgba(255, 255, 255, 0.06);
+    }
+
+    body {
+      font-family: 'Noto Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .bg-deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    .bg-radial {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 55% at 50% 38%, rgba(76,139,245,0.06) 0%, transparent 68%);
+    }
+
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 2rem;
+      background: rgba(6, 13, 20, 0.78);
+      backdrop-filter: blur(24px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-back {
+      display: inline-flex; align-items: center; gap: 0.375rem;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-sub); padding: 0.375rem 0.875rem; border-radius: 2rem;
+      font-size: 0.8125rem; font-family: inherit; cursor: pointer; text-decoration: none;
+    }
+    .btn-back:hover { border-color: var(--accent-border); color: var(--accent); }
+    .brand-logo {
+      width: 1.75rem; height: 1.75rem;
+      background: linear-gradient(135deg, #4c8bf5 0%, #2563eb 100%);
+      border-radius: 0.4rem; display: flex; align-items: center; justify-content: center;
+    }
+    .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
+    .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
+
+    .page-main { position: relative; z-index: 10; max-width: 540px; margin: 0 auto; padding: 6rem 1.5rem 3rem; }
+    .page-eyebrow { font-size: 10px; letter-spacing: 0.4em; text-transform: uppercase; color: rgba(76,139,245,0.55); margin-bottom: 0.5rem; }
+    .page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.375rem; display: flex; align-items: center; gap: 0.625rem; }
+    .page-desc { font-size: 0.875rem; color: var(--text-sub); line-height: 1.6; margin-bottom: 2rem; }
+
+    .section-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 1.25rem; padding: 1.5rem 1.75rem; margin-bottom: 1.25rem;
+    }
+    .section-label { font-size: 10px; letter-spacing: 0.35em; text-transform: uppercase; color: rgba(76,139,245,0.45); margin-bottom: 1.25rem; }
+
+    .status-row { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 0; }
+    .status-row + .status-row { border-top: 1px solid rgba(255,255,255,0.04); }
+    .status-label { font-size: 0.875rem; color: var(--text-sub); }
+    .badge { font-size: 10px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+    .badge-green { background: rgba(76,139,245,0.14); color: var(--accent); }
+    .badge-red { background: rgba(229,90,90,0.14); color: #e55a5a; }
+    .badge-gray { background: rgba(255,255,255,0.06); color: var(--text-sub); }
+
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .tab {
+      flex: 1; padding: 0.625rem 0.75rem; border-radius: 0.625rem; border: 1px solid var(--border);
+      background: transparent; color: var(--text-sub); font-family: inherit; font-size: 0.8125rem;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .tab.active { background: var(--accent-dim); border-color: var(--accent-border); color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding-top: 0.5rem; }
+    .qr-frame {
+      width: 192px; height: 192px; background: #fff; border-radius: 1rem;
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .qr-frame img { width: 100%; height: 100%; object-fit: contain; }
+    .qr-placeholder { font-size: 0.8125rem; color: #888; text-align: center; padding: 1.5rem; line-height: 1.6; }
+    .qr-hint { font-size: 0.8125rem; color: var(--text-sub); text-align: center; line-height: 1.7; }
+    .qr-link { font-size: 0.75rem; color: var(--accent); word-break: break-all; text-align: center; }
+
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8125rem; color: var(--text-sub); margin-bottom: 0.375rem; }
+    .input-field {
+      width: 100%; padding: 0.625rem 0.875rem; border-radius: 0.625rem;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.03);
+      color: var(--text); font-family: inherit; font-size: 0.875rem;
+    }
+    .input-field:focus { outline: none; border-color: var(--accent-border); }
+    select.input-field { cursor: pointer; }
+
+    .btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.625rem 1.25rem; border-radius: 0.625rem;
+      font-size: 0.875rem; font-weight: 500; font-family: inherit; cursor: pointer; border: none;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text-sub); border: 1px solid var(--border); }
+
+    .poll-msg { font-size: 0.8125rem; min-height: 1.1rem; text-align: center; color: var(--text-sub); margin-top: 0.75rem; }
+    .poll-msg.ok { color: var(--accent); }
+    .poll-msg.err { color: #e55a5a; }
+
+    .ref-note {
+      font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;
+      padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.04); margin-top: 1rem;
+    }
+    .ref-note a { color: rgba(76,139,245,0.7); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block; width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-deco"><div class="bg-radial"></div></div>
+
+<header class="header">
+  <div class="header-left">
+    <a href="/" class="btn-back">← 返回</a>
+    <a href="/" class="brand-logo">🌱</a>
+    <a href="/" class="brand-name">Soulprout</a>
+  </div>
+  <span class="page-tag">飞书接入</span>
+</header>
+
+<main class="page-main">
+  <p class="page-eyebrow">Platform · 接入配置</p>
+  <h1 class="page-title"><span>🪽</span> 飞书 / Lark</h1>
+  <p class="page-desc">通过 WebSocket 长连接接入飞书 Bot。推荐扫码自动创建应用；也可手动填写 App ID 与 App Secret。</p>
+
+  <div class="section-card">
+    <p class="section-label">连接状态</p>
+    <div class="status-row">
+      <span class="status-label">WebSocket</span>
+      <span id="badge-connected" class="badge badge-gray">检测中…</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Bot 名称</span>
+      <span id="txt-bot" style="font-size:0.8125rem;color:var(--text-sub)">—</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">App ID</span>
+      <span id="txt-app-id" style="font-size:0.8125rem;color:var(--text-sub)">—</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="refreshStatus()">刷新状态</button>
+      <button class="btn btn-secondary" onclick="reloadAdapter()">重新连接</button>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <p class="section-label">配置方式</p>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-qr" onclick="switchTab('qr')">扫码创建（推荐）</button>
+      <button class="tab" id="tab-manual" onclick="switchTab('manual')">手动填写凭证</button>
+    </div>
+
+    <!-- 扫码 -->
+    <div id="panel-qr" class="tab-panel active">
+      <div class="field">
+        <label>平台域名</label>
+        <select id="qr-domain" class="input-field">
+          <option value="feishu">飞书（国内）</option>
+          <option value="lark">Lark（国际）</option>
+        </select>
+      </div>
+      <div class="qr-wrap">
+        <div class="qr-frame" id="qr-frame">
+          <div class="qr-placeholder">点击「获取二维码」<br>后用飞书 App 扫描</div>
+        </div>
+        <p class="qr-hint">使用飞书 / Lark 手机 App 扫描二维码，按提示授权创建 Bot</p>
+        <a class="qr-link" id="qr-link" href="#" target="_blank" style="display:none"></a>
+      </div>
+      <p class="poll-msg" id="poll-msg"></p>
+      <div class="btn-row" style="justify-content:center">
+        <button id="btn-qr" class="btn btn-primary" onclick="startQR()">获取二维码</button>
+        <button id="btn-cancel" class="btn btn-secondary" onclick="cancelQR()" style="display:none">取消</button>
+      </div>
+    </div>
+
+    <!-- 手动 -->
+    <div id="panel-manual" class="tab-panel">
+      <div class="field">
+        <label>App ID</label>
+        <input id="manual-app-id" class="input-field" type="text" placeholder="cli_xxx" />
+      </div>
+      <div class="field">
+        <label>App Secret</label>
+        <input id="manual-app-secret" class="input-field" type="password" placeholder="secret_xxx" />
+      </div>
+      <div class="field">
+        <label>平台域名</label>
+        <select id="manual-domain" class="input-field">
+          <option value="feishu">飞书（国内）</option>
+          <option value="lark">Lark（国际）</option>
+        </select>
+      </div>
+      <p class="poll-msg" id="manual-msg"></p>
+      <div class="btn-row">
+        <button id="btn-save" class="btn btn-primary" onclick="saveManual()">保存并连接</button>
+      </div>
+      <p class="qr-hint" style="margin-top:0.75rem">
+        请在飞书开发者后台启用 Bot，并将事件订阅设为「使用长连接接收事件」。
+      </p>
+    </div>
+
+    <p class="ref-note">
+      飞书 WebSocket 接入实现参考
+      <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">hermes-agent</a>
+      项目的 gateway/platforms/feishu.py。
+    </p>
+  </div>
+</main>
+
+<script>
+async function api(url, opts) {
+  const r = await fetch(url, opts || {});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || data.message || `HTTP ${r.status}`);
+  return data;
+}
+
+function switchTab(name) {
+  document.getElementById('tab-qr').classList.toggle('active', name === 'qr');
+  document.getElementById('tab-manual').classList.toggle('active', name === 'manual');
+  document.getElementById('panel-qr').classList.toggle('active', name === 'qr');
+  document.getElementById('panel-manual').classList.toggle('active', name === 'manual');
+}
+
+function setPollMsg(text, cls) {
+  const el = document.getElementById('poll-msg');
+  el.textContent = text;
+  el.className = 'poll-msg' + (cls ? ' ' + cls : '');
+}
+
+function setManualMsg(text, cls) {
+  const el = document.getElementById('manual-msg');
+  el.textContent = text;
+  el.className = 'poll-msg' + (cls ? ' ' + cls : '');
+}
+
+async function refreshStatus() {
+  try {
+    const d = await api('/api/feishu/status');
+    const badge = document.getElementById('badge-connected');
+    badge.className = 'badge ' + (d.connected ? 'badge-green' : 'badge-red');
+    badge.textContent = d.connected ? '已连接' : (d.configured ? '未连接' : '未配置');
+    document.getElementById('txt-bot').textContent = d.bot_name || '—';
+    document.getElementById('txt-app-id').textContent = d.app_id ? (d.app_id.slice(0, 10) + '…') : '—';
+    if (d.app_id) document.getElementById('manual-app-id').value = d.app_id;
+    if (d.domain) {
+      document.getElementById('manual-domain').value = d.domain;
+      document.getElementById('qr-domain').value = d.domain;
+    }
+  } catch(e) {
+    document.getElementById('badge-connected').textContent = '无法连接';
+  }
+}
+
+async function reloadAdapter() {
+  try {
+    await api('/api/feishu/reload', { method: 'POST' });
+    setPollMsg('正在重新连接…', '');
+    setTimeout(refreshStatus, 2000);
+  } catch(e) {
+    setPollMsg('重连失败：' + e.message, 'err');
+  }
+}
+
+let _pollTimer = null;
+
+async function startQR() {
+  const domain = document.getElementById('qr-domain').value;
+  const btn = document.getElementById('btn-qr');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 加载中';
+  setPollMsg('正在获取二维码…', '');
+  try {
+    const d = await api('/api/feishu/login/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    });
+    if (!d.success) { setPollMsg(d.error || '获取失败', 'err'); resetQrBtn(); return; }
+    renderQR(d.qrcode_url || d.qr_url, d.qr_url);
+    setPollMsg('等待扫码…', '');
+    document.getElementById('btn-cancel').style.display = '';
+    document.getElementById('btn-qr').style.display = 'none';
+    _pollTimer = setInterval(pollQR, 2000);
+  } catch(e) {
+    setPollMsg('网络错误：' + e.message, 'err');
+    resetQrBtn();
+  }
+}
+
+function renderQR(imgUrl, linkUrl) {
+  const box = document.getElementById('qr-frame');
+  const link = document.getElementById('qr-link');
+  if (imgUrl && imgUrl.startsWith('http')) {
+    box.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    img.onerror = () => { box.innerHTML = '<div class="qr-placeholder">无法显示二维码<br>请点击下方链接</div>'; };
+    box.appendChild(img);
+  }
+  if (linkUrl) {
+    link.href = linkUrl;
+    link.textContent = linkUrl;
+    link.style.display = '';
+  }
+}
+
+async function pollQR() {
+  try {
+    const d = await api('/api/feishu/login/poll');
+    if (d.status === 'wait') setPollMsg('等待扫码…', '');
+    else if (d.status === 'confirmed') {
+      clearInterval(_pollTimer); _pollTimer = null;
+      setPollMsg('✓ 配置成功！正在连接…', 'ok');
+      cancelQRUIOnly();
+      setTimeout(refreshStatus, 2000);
+    } else if (d.status === 'error') {
+      clearInterval(_pollTimer); _pollTimer = null;
+      setPollMsg('✗ ' + (d.error || '失败'), 'err');
+      cancelQRUIOnly();
+    }
+  } catch(e) {
+    setPollMsg('轮询失败：' + e.message, 'err');
+  }
+}
+
+function cancelQR() {
+  clearInterval(_pollTimer); _pollTimer = null;
+  setPollMsg('已取消', '');
+  cancelQRUIOnly();
+  document.getElementById('qr-frame').innerHTML = '<div class="qr-placeholder">点击「获取二维码」<br>后用飞书 App 扫描</div>';
+  document.getElementById('qr-link').style.display = 'none';
+}
+
+function cancelQRUIOnly() {
+  document.getElementById('btn-cancel').style.display = 'none';
+  document.getElementById('btn-qr').style.display = '';
+  resetQrBtn();
+}
+
+function resetQrBtn() {
+  const btn = document.getElementById('btn-qr');
+  btn.disabled = false;
+  btn.textContent = '获取二维码';
+}
+
+async function saveManual() {
+  const app_id = document.getElementById('manual-app-id').value.trim();
+  const app_secret = document.getElementById('manual-app-secret').value.trim();
+  const domain = document.getElementById('manual-domain').value;
+  if (!app_id || !app_secret) {
+    setManualMsg('请填写 App ID 和 App Secret', 'err');
+    return;
+  }
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  setManualMsg('保存中…', '');
+  try {
+    const d = await api('/api/feishu/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id, app_secret, domain }),
+    });
+    setManualMsg('✓ ' + (d.message || '已保存'), 'ok');
+    document.getElementById('manual-app-secret').value = '';
+    setTimeout(refreshStatus, 2000);
+  } catch(e) {
+    setManualMsg('保存失败：' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+refreshStatus();
+setInterval(refreshStatus, 8000);
+</script>
+</body>
+</html>

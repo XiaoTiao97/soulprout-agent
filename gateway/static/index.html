@@ -575,6 +575,28 @@
             <path d="M9 18l6-6-6-6" />
           </svg>
         </a>
+        <a href="/feishu" class="platform-item">
+          <div class="platform-icon">🪽</div>
+          <div class="platform-info">
+            <div class="platform-name">飞书 / Lark</div>
+            <div class="platform-desc" id="feishu-status-text">加载中…</div>
+          </div>
+          <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </a>
+        <a href="/wecom" class="platform-item">
+          <div class="platform-icon">💼</div>
+          <div class="platform-info">
+            <div class="platform-name">企业微信</div>
+            <div class="platform-desc" id="wecom-status-text">加载中…</div>
+          </div>
+          <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </a>
       </div>
     </div>
   </div>
@@ -637,6 +659,8 @@ function showDash(d) {
   document.getElementById('dash-url').value = d.agent_url || '';
   updateModeUI(d.is_local);
   loadWeixinStatus();
+  loadFeishuStatus();
+  loadWecomStatus();
 }
 
 function updateModeUI(isLocal) {
@@ -736,7 +760,7 @@ async function testConn() {
 
 async function loadWeixinStatus() {
   try {
-    const d = await api('/api/status');
+    const d = await api('/api/weixin/status');
     const el = document.getElementById('weixin-status-text');
     if (!el) return;
     if (d.connected) {
@@ -744,6 +768,42 @@ async function loadWeixinStatus() {
       el.style.color = 'var(--accent)';
     } else {
       el.textContent = '未连接，点击进入配置';
+      el.style.color = 'var(--text-sub)';
+    }
+  } catch(e) {}
+}
+
+async function loadFeishuStatus() {
+  try {
+    const d = await api('/api/feishu/status');
+    const el = document.getElementById('feishu-status-text');
+    if (!el) return;
+    if (d.connected) {
+      el.textContent = `已连接 · ${d.bot_name || d.app_id || ''}`;
+      el.style.color = 'var(--accent)';
+    } else if (d.configured) {
+      el.textContent = '已配置但未连接，点击进入';
+      el.style.color = 'var(--text-sub)';
+    } else {
+      el.textContent = '未配置，点击进入扫码或填写凭证';
+      el.style.color = 'var(--text-sub)';
+    }
+  } catch(e) {}
+}
+
+async function loadWecomStatus() {
+  try {
+    const d = await api('/api/wecom/status');
+    const el = document.getElementById('wecom-status-text');
+    if (!el) return;
+    if (d.connected) {
+      el.textContent = `已连接 · ${d.bot_name || d.bot_id || ''}`;
+      el.style.color = 'var(--accent)';
+    } else if (d.configured) {
+      el.textContent = '已配置但未连接，点击进入';
+      el.style.color = 'var(--text-sub)';
+    } else {
+      el.textContent = '未配置，点击进入扫码或填写凭证';
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}

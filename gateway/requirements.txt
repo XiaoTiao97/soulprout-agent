@@ -1,8 +1,12 @@
 # ── Gateway 运行时依赖 ──────────────────────────────────────────
 # 安装命令：pip install -r gateway/requirements_gateway.txt
 
-# HTTP 客户端（微信 iLink API 长轮询）
+# HTTP 客户端（微信 iLink 长轮询、飞书 Open API、企业微信 WebSocket）
 aiohttp>=3.9.0
+
+# 飞书 WebSocket 长连接（实现参考 hermes-agent）
+lark-oapi>=1.4.0
+websockets>=12.0
 
 # AES 加密（iLink 媒体加密，可选但推荐）
 cryptography>=42.0.0
