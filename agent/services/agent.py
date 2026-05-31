@@ -555,9 +555,9 @@ class Chat:
             agentinfo_section = f"Agent-info: {prompt.AGENT_INFO_PERSONA_REMINDER}"
         agent_info_section = f"""# PERSONAL INFO\n{userinfo_section}\n{agentinfo_section}"""
         self.system_prompt = (
-            f"{agent_info_section}\n"
-            f"{prompt.AGENT_INFO}\n"
             f"{self.capabilities_prompt}\n"
+            f"{prompt.AGENT_INFO}\n"
+            f"{agent_info_section}\n"
         )
 
         tools = await self.mcp_list_tools()
@@ -702,7 +702,7 @@ class Chat:
     async def process_single_tool(self, name, arguments, message, tool_id):
         if name == "read_picture":
             result = await self.mcp_call_tool(name=name, arguments=arguments)
-            if not ("doubao" in self.model or "kimi" in self.model):
+            if not ("doubao" in self.model or "kimi" in self.model or "mimo" in self.model):
                 content = f"{self.model}不支持阅读图片"
             elif result.get("ok") and result.get("base64"):
                 self.picture_base64_result.append(result.get("base64"))
@@ -835,7 +835,7 @@ class Chat:
     async def upload_files(self):
         if not self.file_name_list:
             return None
-        file_content = f"FILE: 上传文件 -> {self.file_name_list}"
+        file_content = f"SYSTEM: The user uploads file(s) -> {self.file_name_list}"
         return await self.save_message(
             AgentMessage(
                 user_id=self.user_id,

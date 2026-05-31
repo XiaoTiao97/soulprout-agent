@@ -41,8 +41,6 @@ class Config:
         self.abstract_model = os.getenv("ABSTRACT_MODEL")
         self.skills_abstract_model_source = os.getenv("SKILLS_ABSTRACT_MODEL_SOURCE")
         self.skills_abstract_model = os.getenv("SKILLS_ABSTRACT_MODEL")
-        self.deepthink_model_source = os.getenv("DEEPTHINK_MODEL_SOURCE")
-        self.deepthink_model = os.getenv("DEEPTHINK_MODEL")
         self.plan_model_source = os.getenv("PLAN_MODEL_SOURCE")
         self.plan_model = os.getenv("PLAN_MODEL")
         self.compact_model_source = os.getenv("COMPACT_MODEL_SOURCE")
