@@ -17,6 +17,19 @@ class Config:
         self.glm_key = os.getenv("GLM_KEY")
         self.qianfan_key = os.getenv("QIANFAN_KEY")
         self.mimo_key = os.getenv("MIMO_KEY")
+
+        self.aliyun_access_key_id = os.getenv("ALIYUN_ACCESS_KEY_ID")
+        self.aliyun_access_key_secret = os.getenv("ALIYUN_ACCESS_KEY_SECRET")
+        self.nls_app_key = os.getenv("NLS_APP_KEY")
+        # 可选：控制台「获取临时 Token」填入，仅测试；生产用 AK/SK 自动 CreateToken
+        self.nls_token = os.getenv("NLS_TOKEN")
+
+        self.kimi_base_url = os.getenv("KIMI_BASE_URL", "https://api.moonshot.cn/v1")
+        self.deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        self.ark_base_url = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+        self.glm_base_url = os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
+        self.qianfan_base_url = os.getenv("QIANFAN_BASE_URL", "https://qianfan.baidubce.com/v2")
+        self.mimo_base_url = os.getenv("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1")
         self.mongodb_url = f"mongodb://{self.docker_server_host}:27017"
         self.mongodb_database = "soulprout"
         self.client = AsyncIOMotorClient(self.mongodb_url)
@@ -37,16 +50,21 @@ class Config:
         self.db_documents = self.database_kb["documents"]
         self.db_libraries = self.database_kb["libraries"]
 
-        self.abstract_model_source = os.getenv("ABSTRACT_MODEL_SOURCE")
-        self.abstract_model = os.getenv("ABSTRACT_MODEL")
-        self.skills_abstract_model_source = os.getenv("SKILLS_ABSTRACT_MODEL_SOURCE")
-        self.skills_abstract_model = os.getenv("SKILLS_ABSTRACT_MODEL")
-        self.plan_model_source = os.getenv("PLAN_MODEL_SOURCE")
-        self.plan_model = os.getenv("PLAN_MODEL")
-        self.compact_model_source = os.getenv("COMPACT_MODEL_SOURCE")
-        self.compact_model = os.getenv("COMPACT_MODEL")
-        self.collapse_model_source = os.getenv("COLLAPSE_MODEL_SOURCE")
-        self.collapse_model = os.getenv("COLLAPSE_MODEL")
+        self.pro_model_source = os.getenv("PRO_MODEL_SOURCE")
+        self.pro_model = os.getenv("PRO_MODEL")
+        self.flash_model_source = os.getenv("FLASH_MODEL_SOURCE")
+        self.flash_model = os.getenv("FLASH_MODEL")
+
+        self.abstract_model_source = self.flash_model_source
+        self.abstract_model = self.flash_model
+        self.skills_abstract_model_source = self.flash_model_source
+        self.skills_abstract_model = self.flash_model
+        self.plan_model_source = self.pro_model_source
+        self.plan_model = self.pro_model
+        self.compact_model_source = self.flash_model_source
+        self.compact_model = self.flash_model
+        self.collapse_model_source = self.flash_model_source
+        self.collapse_model = self.flash_model
         self.soulprout_model_source = os.getenv("SOULPROUT_MODEL_SOURCE")
         self.soulprout_model = os.getenv("SOULPROUT_MODEL")
 
@@ -98,13 +116,13 @@ class Config:
                     {"name": "glm-5.1-thinking", "context_window": 200000},
                 ]
             },
-            {
-                "model_source": "minimax",
-                "model_use": False if self.minimax_key in [default_key, None] else True,
-                "models": [
-                    {"name": "MiniMax-M2.5", "context_window": 204800}
-                ]
-            },
+            # {
+            #     "model_source": "minimax",
+            #     "model_use": False if self.minimax_key in [default_key, None] else True,
+            #     "models": [
+            #         {"name": "MiniMax-M2.5", "context_window": 204800}
+            #     ]
+            # },
             {
                 "model_source": "qianfan",
                 "model_use": False if self.qianfan_key in [default_key, None] else True,

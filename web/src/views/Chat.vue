@@ -29,7 +29,6 @@
             :currentStreamingMessage="currentStreamingMessage"
             :isGenerating="isGenerating"
             :planStreamContent="chatPlanStreamForWindow"
-            :planFoldAfterNonPlan="chatPlanFoldAfterNonPlan"
             :isLoading="isLoading"
             :timeoutError="timeoutError"
             :model_list="model_list"
@@ -140,10 +139,8 @@ const showToolOption = ref<boolean>(false)
 const showSkillOption = ref<boolean>(false)
 const isLoading = ref<boolean>(false)
 const isGenerating = ref<boolean>(false)
-/** 当前轮次 plan 内容；流式结束后仍保留供折叠区展示，直至下一轮发送 */
+/** 当前轮次 plan 流式内容；plan 段结束后清空，由下方 tool result 展示 */
 const chatPlanStreamForWindow = ref('')
-/** 主对话收到非 plan 类型分片时置 true，驱动 Plan 区立即折叠 */
-const chatPlanFoldAfterNonPlan = ref(false)
 /** 当前 SSE 请求内所有分片的 created_at（用于区分本轮与历史 toolMessages，避免跨轮合并 plan） */
 const streamingSessionCreatedAt = ref<number | null>(null)
 /** 收到 reload_history 时递增，驱动 ChatWindow 清空流式块并继续接收后续分片 */
@@ -254,7 +251,6 @@ function createConversation() {
   toolMessages.value = []
   fileMessages.value = []
   chatPlanStreamForWindow.value = ''
-  chatPlanFoldAfterNonPlan.value = false
   currentStreamingMessage.value = null
   isGenerating.value = false
   // 重置流状态
@@ -289,7 +285,6 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
     toolMessages.value = []
     fileMessages.value = []
     chatPlanStreamForWindow.value = ''
-    chatPlanFoldAfterNonPlan.value = false
     currentStreamingMessage.value = null
     if (chat_request.value.conversation_id) {
       await pickConversation(chat_request.value.conversation_id)
@@ -304,7 +299,6 @@ async function loadSoulproutConversation() {
   toolMessages.value = []
   fileMessages.value = []
   chatPlanStreamForWindow.value = ''
-  chatPlanFoldAfterNonPlan.value = false
   currentStreamingMessage.value = null
   chat_request.value = {
     conversation_id: userId || '',
@@ -344,7 +338,6 @@ async function deleteConversation(conversationId) {
       toolMessages.value = []
       fileMessages.value = []
       chatPlanStreamForWindow.value = ''
-      chatPlanFoldAfterNonPlan.value = false
       currentStreamingMessage.value = null
       isGenerating.value = false
       // 重置流状态
@@ -461,7 +454,6 @@ async function updateConversationAbstract(conversationId: string, abstract: stri
 async function pickConversation(conversationId) {
   try {
     chatPlanStreamForWindow.value = ''
-    chatPlanFoldAfterNonPlan.value = false
     const response = await axios.get<AgentMessage[]>(`/api/message/${conversationId}`)
     const response_conversation = await axios.get(`/api/conversation/${conversationId}`)
     agent_message_list.value = normalizeMessagesFromApi(response.data)
@@ -549,7 +541,7 @@ async function processMessageQueue() {
     } else if (chunk_json.type === 'user_feedback') {
       const t = chunk_json.type
       if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
-        chatPlanFoldAfterNonPlan.value = true
+        chatPlanStreamForWindow.value = ''
       }
       currentStreamingMessage.value = {
         user_id: chunk_json.user_id,
@@ -613,7 +605,7 @@ async function processMessageQueue() {
     } else {
       const t = chunk_json.type
       if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
-        chatPlanFoldAfterNonPlan.value = true
+        chatPlanStreamForWindow.value = ''
       }
       // 创建新的对象引用，确保Vue能检测到变化
       currentStreamingMessage.value = {
@@ -664,6 +656,7 @@ async function processMessageQueue() {
   isStreamEnded.value = false
   currentStreamingMessage.value = null
   delete chat_request.value.input_message_id
+  delete chat_request.value.user_feedback
   const at = streamingSessionCreatedAt.value
   if (at != null) {
     const last = toolMessages.value[toolMessages.value.length - 1]
@@ -702,12 +695,11 @@ const toggleTrigger = ref<number>(0)
 async function handleSendMessage(
   message: string,
   files: File[] = [],
-  options?: { input_message_id?: string },
+  options?: { input_message_id?: string; user_feedback?: boolean },
 ) {
   isGenerating.value = true
   isStreamEnded.value = false  // 重置流结束标志
   chatPlanStreamForWindow.value = ''
-  chatPlanFoldAfterNonPlan.value = false
   planStreamSegmentEnded.value = false
   chat_request.value.message = message
   chat_request.value.files = files
@@ -715,6 +707,11 @@ async function handleSendMessage(
     chat_request.value.input_message_id = options.input_message_id
   } else {
     delete chat_request.value.input_message_id
+  }
+  if (options?.user_feedback) {
+    chat_request.value.user_feedback = true
+  } else {
+    delete chat_request.value.user_feedback
   }
   
   // 重置状态
@@ -769,6 +766,11 @@ async function handleSendMessage(
       payload.input_message_id = options.input_message_id
     } else {
       delete payload.input_message_id
+    }
+    if (options?.user_feedback) {
+      payload.user_feedback = true
+    } else {
+      delete payload.user_feedback
     }
     if (chatMode.value === 'soulprout') {
       // Soulprout 模式：模型由后端环境变量决定，前端不传递；强制使用唯一 conversation_id
@@ -904,6 +906,7 @@ async function handleSendMessage(
         currentStreamingMessage.value = null
         chat_request.value.files = []  // 清理 files
         delete chat_request.value.input_message_id
+        delete chat_request.value.user_feedback
       }
     }
 
@@ -929,6 +932,7 @@ async function handleSendMessage(
     messageQueue.value = []  // 停止时清空队列
     chat_request.value.files = []  // 清理 files
     delete chat_request.value.input_message_id
+    delete chat_request.value.user_feedback
   }
 }
 
@@ -942,6 +946,7 @@ function stopGeneration() {
   timeoutError.value = '生成已停止'
   isGenerating.value = false
   delete chat_request.value.input_message_id
+  delete chat_request.value.user_feedback
 }
 
 const isExpanded = ref(false)

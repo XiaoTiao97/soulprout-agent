@@ -240,8 +240,34 @@
           </div>
         </div>
         <div class="input-options-right">
+          <button
+            class="voice-btn"
+            :class="{
+              'voice-btn--recording': isRecording,
+              'voice-btn--transcribing': isTranscribing,
+            }"
+            type="button"
+            :disabled="isTranscribing"
+            :title="voiceButtonTitle"
+            @click="toggleVoiceRecord"
+          >
+            <transition name="voice-countdown">
+              <span v-if="isRecording" class="voice-countdown">{{ recordingCountdown }}s</span>
+            </transition>
+            <span class="voice-btn-icon">
+              <span v-if="isTranscribing" class="voice-wave-loader" aria-hidden="true">
+                <span class="voice-wave-bar"></span>
+                <span class="voice-wave-bar"></span>
+                <span class="voice-wave-bar"></span>
+              </span>
+              <span v-else-if="isRecording" class="voice-stop-square" aria-hidden="true"></span>
+              <svg v-else class="voice-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
+              </svg>
+            </span>
+          </button>
           <button class="input_button" type="button" @click="handleButtonClick">
-            <div v-if="props.isGenerating" class="loading-spinner"></div>
+            <span v-if="props.isGenerating" class="input-stop-square" aria-hidden="true"></span>
             <img v-else :src="InputIconUrl" width="18" height="18" />
           </button>
           <div v-if="showGenerationPrompt" class="generation-prompt">
@@ -259,7 +285,6 @@
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { AgentCard } from '../types/interface'
 
-const StopIconUrl = new URL('@/assets/images/stop_icon.svg', import.meta.url).href
 const InputIconUrl = new URL('@/assets/images/mengya_input.svg', import.meta.url).href
 const DocIconUrl = new URL('@/assets/images/doc_update.svg', import.meta.url).href
 const ExcelIconUrl = new URL('@/assets/images/excel_update.svg', import.meta.url).href
@@ -321,6 +346,25 @@ const selectedSelect = ref<string[]>([])  // 存储 agent_id[]
 const selectedFiles = ref<File[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const filePreviewUrls = ref(new Map<string, string>())
+
+const isRecording = ref(false)
+const isTranscribing = ref(false)
+const recordingSec = ref(0)
+const MAX_RECORD_SEC = 60
+let mediaRecorder: MediaRecorder | null = null
+let recordChunks: Blob[] = []
+let recordStream: MediaStream | null = null
+let recordTimer: ReturnType<typeof setInterval> | null = null
+
+const recordingCountdown = computed(() =>
+  Math.max(0, MAX_RECORD_SEC - recordingSec.value)
+)
+
+const voiceButtonTitle = computed(() => {
+  if (isTranscribing.value) return '正在识别…'
+  if (isRecording.value) return `录音中，点击结束（剩余 ${recordingCountdown.value} 秒）`
+  return '语音输入'
+})
 
 // 默认开启的智能体，不计入选择数量且不可取消
 const DEFAULT_ENABLED_AGENTS = ['mengya_deepsearch', 'mengya_pptx']
@@ -729,10 +773,143 @@ onMounted(() => {
   document.addEventListener('click', handleAgentClickOutside)
 })
 
+function encodeWav(samples: Float32Array, sampleRate: number) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+  const writeStr = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
+  }
+  writeStr(0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  writeStr(8, 'WAVE')
+  writeStr(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeStr(36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+  let offset = 44
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+    offset += 2
+  }
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
+async function blobToWav16k(blob: Blob): Promise<Blob> {
+  const arrayBuffer = await blob.arrayBuffer()
+  const ctx = new AudioContext()
+  const decoded = await ctx.decodeAudioData(arrayBuffer)
+  await ctx.close()
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000)
+  const source = offline.createBufferSource()
+  source.buffer = decoded
+  source.connect(offline.destination)
+  source.start(0)
+  const rendered = await offline.startRendering()
+  return encodeWav(rendered.getChannelData(0), 16000)
+}
+
+function cleanupVoiceRecord() {
+  if (recordTimer) {
+    clearInterval(recordTimer)
+    recordTimer = null
+  }
+  isRecording.value = false
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    try {
+      mediaRecorder.stop()
+    } catch {
+      /* ignore */
+    }
+  } else {
+    recordStream?.getTracks().forEach((t) => t.stop())
+    recordStream = null
+  }
+}
+
+async function onRecordStopped() {
+  recordStream?.getTracks().forEach((t) => t.stop())
+  recordStream = null
+  if (!recordChunks.length) return
+  isTranscribing.value = true
+  try {
+    const blob = new Blob(recordChunks, { type: recordChunks[0].type })
+    const wav = await blobToWav16k(blob)
+    const formData = new FormData()
+    formData.append('audio', wav, 'recording.wav')
+    const res = await fetch('/api/asr/transcribe', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const detail = data.detail
+      throw new Error(typeof detail === 'string' ? detail : '语音识别失败')
+    }
+    const text = (data.text || '').trim()
+    if (!text) throw new Error('未识别到内容')
+    input.value = input.value ? `${input.value}${text}` : text
+    adjustHeight()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '语音识别失败'
+    alert(msg)
+  } finally {
+    isTranscribing.value = false
+    recordChunks = []
+    mediaRecorder = null
+  }
+}
+
+async function stopVoiceRecord() {
+  if (!isRecording.value) return
+  cleanupVoiceRecord()
+}
+
+async function toggleVoiceRecord() {
+  if (isTranscribing.value) return
+  if (isRecording.value) {
+    await stopVoiceRecord()
+    return
+  }
+  try {
+    recordStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch {
+    alert('无法访问麦克风，请检查浏览器权限')
+    return
+  }
+  recordChunks = []
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : 'audio/webm'
+  mediaRecorder = new MediaRecorder(recordStream, { mimeType: mime })
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) recordChunks.push(e.data)
+  }
+  mediaRecorder.onstop = () => {
+    void onRecordStopped()
+  }
+  mediaRecorder.start(200)
+  isRecording.value = true
+  recordingSec.value = 0
+  recordTimer = setInterval(() => {
+    recordingSec.value += 1
+    if (recordingSec.value >= MAX_RECORD_SEC) void stopVoiceRecord()
+  }, 1000)
+}
+
 onUnmounted(() => {
   document.removeEventListener('click', handleSettingsClickOutside)
   document.removeEventListener('click', handleAgentClickOutside)
   clearSelectedFiles()
+  if (recordTimer) clearInterval(recordTimer)
+  recordStream?.getTracks().forEach((t) => t.stop())
 })
 
 defineExpose({
@@ -1263,6 +1440,139 @@ defineExpose({
 
 .input-options-right {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
+  color: #374151;
+  cursor: pointer;
+  transition: width 0.28s ease, padding 0.28s ease, gap 0.28s ease,
+    background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.voice-btn:hover:not(:disabled) {
+  background: #eef1f5;
+  border-color: #dfe3e8;
+  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
+}
+
+.voice-btn:disabled {
+  cursor: default;
+}
+
+.voice-btn--recording,
+.voice-btn--transcribing {
+  border-color: #d1d5db;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e8eaed 100%);
+  color: #4b5563;
+  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.18);
+}
+
+.voice-btn--recording {
+  padding: 0 10px 0 12px;
+  gap: 8px;
+}
+
+.voice-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.voice-mic-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.voice-stop-square {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.voice-countdown {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.voice-countdown-enter-active,
+.voice-countdown-leave-active {
+  transition: opacity 0.2s ease, max-width 0.28s ease, margin-right 0.28s ease;
+  max-width: 40px;
+  overflow: hidden;
+}
+
+.voice-countdown-enter-from,
+.voice-countdown-leave-to {
+  opacity: 0;
+  max-width: 0;
+  margin-right: -8px;
+}
+
+.voice-wave-loader {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 18px;
+  height: 14px;
+}
+
+.voice-wave-bar {
+  width: 2px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  transform-origin: center bottom;
+  animation: voice-wave 0.9s ease-in-out infinite;
+}
+
+.voice-wave-bar:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.voice-wave-bar:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.voice-wave-bar:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes voice-wave {
+  0%, 100% {
+    transform: scaleY(0.35);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 
 .generation-prompt {
@@ -1446,6 +1756,19 @@ defineExpose({
   box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
 }
 
+.input-stop-square {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.upload-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .selected-files {
   font-size: 12px;
   color: #666;
@@ -1519,19 +1842,5 @@ defineExpose({
   width: 12px;
   height: 12px;
   display: block;
-}
-
-.loading-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #f5f5f5;
-  border-top: 2px solid transparent;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 </style>

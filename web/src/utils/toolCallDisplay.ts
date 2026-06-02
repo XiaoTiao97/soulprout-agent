@@ -98,7 +98,7 @@ export function getToolSummaryLabel(
 ): string {
   switch (toolName) {
     case 'get_action_blueprint':
-      return hasResult ? '已完成行动蓝图' : '正在制定行动计划…'
+      return hasResult ? '已完成行动蓝图' : '正在生成蓝图'
 
     case 'read': {
       const file = basename(args.file_path)

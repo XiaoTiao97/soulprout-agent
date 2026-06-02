@@ -27,4 +27,5 @@ alibabacloud_tea_util
 alibabacloud_docmind_api20220711==1.4.7
 alibabacloud_dm20151123
 alibabacloud_credentials
+aliyun-python-sdk-core>=2.15.1
 cryptography>=42.0.0

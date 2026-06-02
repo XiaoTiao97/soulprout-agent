@@ -1,5 +1,3 @@
-from dashscope.utils.oss_utils import upload_file
-
 from agent.utils.llm import LLM
 from agent.core.config import Config
 from agent.api.models.message import ChatResponse, Message, ModelConfig, ChatRequest, FileMessage
@@ -67,6 +65,7 @@ class Chat:
         self.session_id = getattr(request, "session_id", None) or str(uuid4())[:4]
         self.temp_file_path = request.temp_file_path
         self.file_name_list = request.file_name_list
+        self.user_feedback = getattr(request, "user_feedback", False)
 
         self.time_now = f"""{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} {datetime.now().strftime("%A")}"""
         self.capabilities_prompt = prompt.CAPABILITIES_PROMPT
@@ -122,7 +121,6 @@ class Chat:
         tool_message = Message(role="assistant")
         file_tool_message = FileMessage(role="file")
         tool_id = -1
-        llm = getattr(self.llm, model_config.model_source)
         think=False
         function_name = None
         arguments_total = ""
@@ -132,7 +130,8 @@ class Chat:
         past_text = ""
         file_name = ""
         file_stop = False
-        async for chunk in llm(messages, model_config):
+        stream = self.llm.chat(messages, model_config)
+        async for chunk in stream:
             if len(chunk.choices) == 0:
                 self.total_tokens = chunk.usage.total_tokens if hasattr(chunk, 'usage') and chunk.usage else None
                 print("tokens: ", self.total_tokens)
@@ -277,13 +276,11 @@ class Chat:
         return history_list
 
     async def get_abstract(self):
-        abstract_model_source = self.config.abstract_model_source + "_no_stream"
         try:
-            model_config = ModelConfig(model_source=abstract_model_source, model=self.config.abstract_model, tools=[], stream=False)
+            model_config = ModelConfig(model_source=self.config.abstract_model_source, model=self.config.abstract_model, tools=[], stream=False)
             message=[{"role": "system", "content": prompt.ABSTRACT_SYSTEM_PROMPT}]
             message.append({"role": "user", "content": prompt.ABSTRACT_USER_PROMPT.format(input_text=self.input_text)})
-            llm = getattr(self.llm, model_config.model_source)
-            abstract = await llm(message, model_config)
+            abstract = await self.llm.chat_no_stream(message, model_config)
             print(abstract)
         except Exception as e:
             abstract = self.input_text[0:12]
@@ -964,7 +961,8 @@ class Chat:
 
         await self.ensure_sub_agent_conversation()
         self.model_config = ModelConfig(model_source=self.model_source, model=self.model, tools=tools, stream=True)
-        await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="user", content=self.input_text, created_at=datetime.utcnow()))
+        user_msg_type = "user_feedback" if self.user_feedback else "text"
+        await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow()))
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="agent_for_frontend", role="agent", content=self.agent_name).model_dump_json()
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="agent_session_id", content=f"当前子智能体session_id={self.session_id}").model_dump_json()
 
@@ -1110,7 +1108,8 @@ class Chat:
 
         self.model_config = ModelConfig(model_source=self.model_source, model=self.model, tools=tools, stream=True)
         print("model_source:", self.model_source, "model:", self.model)
-        result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="user", content=self.input_text, created_at=datetime.utcnow()))
+        user_msg_type = "user_feedback" if self.user_feedback else "text"
+        result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow()))
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="input_message_id", content=str(result.id)).model_dump_json()
 
         # 处理上传文件

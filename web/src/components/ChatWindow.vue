@@ -1,9 +1,9 @@
 <template>
   <div class="conversation-container">
     <div class="conversation-answer">
-      <div class="answer-container" :class="{'no-history': !groupedMessages.length && !streamingBlocks.length && !showPlanInStreamingRow && !showPlanInHistory}" ref="answerContainer" @scroll="handleScroll">
+      <div class="answer-container" :class="{'no-history': !groupedMessages.length && !streamingBlocks.length && !showPlanInStreamingRow}" ref="answerContainer" @scroll="handleScroll">
         <!-- 有对话消息时显示消息列表 -->
-        <template v-if="groupedMessages.length || streamingBlocks.length || showPlanInStreamingRow || showPlanInHistory">
+        <template v-if="groupedMessages.length || streamingBlocks.length || showPlanInStreamingRow">
           <template v-for="(group, index) in groupedMessages" :key="index">
             <!-- 用户消息 -->
             <div v-if="group.role === 'user'" class="answer-single-me-agent">
@@ -105,27 +105,6 @@
                 </div>
               </template> -->
               <div class="answer-robot-container">
-                <div
-                  v-if="showPlanInHistory && index === lastAssistantLikeGroupIndex"
-                  class="chat-plan-collapsible"
-                >
-                  <div class="answer-robot-tool chat-plan-tool-row">
-                    <div
-                      class="answer-robot-tool-name chat-plan-tool-label"
-                      role="button"
-                      tabindex="0"
-                      :aria-expanded="planExpanded"
-                      aria-label="Consultation and Planning，点击展开或折叠"
-                      @click="planExpanded = !planExpanded"
-                      @keydown.enter.prevent="planExpanded = !planExpanded"
-                    >
-                      💡 Consultation and Planning
-                    </div>
-                  </div>
-                  <div v-show="planExpanded" class="chat-plan-body">
-                    <pre class="chat-plan-text">{{ planStreamContent }}</pre>
-                  </div>
-                </div>
                 <template v-for="(message, msgIndex) in group.messages" :key="msgIndex">
                   <div v-if="message.type === 'event'" class="answer-robot-event">
                     {{ message.content }}
@@ -201,33 +180,6 @@
               </div>
             </div>
           </template>
-
-          <!-- 仅有 plan、无 assistant 正文时：挂在用户消息之后 -->
-          <div
-            v-if="showPlanInHistory && lastAssistantLikeGroupIndex < 0"
-            class="answer-single-robot"
-          >
-            <div class="answer-robot-container">
-              <div class="chat-plan-collapsible">
-                <div class="answer-robot-tool chat-plan-tool-row">
-                  <div
-                    class="answer-robot-tool-name chat-plan-tool-label"
-                    role="button"
-                    tabindex="0"
-                    :aria-expanded="planExpanded"
-                    aria-label="Consultation and Planning，点击展开或折叠"
-                    @click="planExpanded = !planExpanded"
-                    @keydown.enter.prevent="planExpanded = !planExpanded"
-                  >
-                    💡 Consultation and Planning
-                  </div>
-                </div>
-                <div v-show="planExpanded" class="chat-plan-body">
-                  <pre class="chat-plan-text">{{ planStreamContent }}</pre>
-                </div>
-              </div>
-            </div>
-          </div>
           
           <!-- 流式消息显示区域 - 按顺序显示每个消息块 -->
           <div v-if="streamingBlocks.length || showPlanInStreamingRow" class="answer-single-robot">
@@ -235,24 +187,11 @@
               <img class="icon-robot" src="@/assets/images/mengya_chat.svg" alt="robot-logo" />
             </div> -->
             <div class="answer-robot-container">
-              <div v-if="showPlanInStreamingRow" class="chat-plan-collapsible">
-                <div class="answer-robot-tool chat-plan-tool-row">
-                  <div
-                    class="answer-robot-tool-name chat-plan-tool-label"
-                    role="button"
-                    tabindex="0"
-                    :aria-expanded="planExpanded"
-                    aria-label="Consultation and Planning，点击展开或折叠"
-                    @click="planExpanded = !planExpanded"
-                    @keydown.enter.prevent="planExpanded = !planExpanded"
-                  >
-                    💡 Consultation and Planning
-                  </div>
-                </div>
-                <div v-show="planExpanded" class="chat-plan-body">
-                  <pre class="chat-plan-text">{{ planStreamContent }}</pre>
-                </div>
-              </div>
+              <BlueprintBlock
+                v-if="showPlanInStreamingRow"
+                :content="planStreamContent"
+                pending
+              />
               <!-- Loading状态显示 -->
               <div v-if="isLoading" class="answer-robot-loading">
                 <div class="loading-spinner"></div>
@@ -387,6 +326,7 @@
 import { ref, nextTick, computed, watch, onMounted, onUnmounted, onUpdated } from 'vue'
 import MessageInput from '../components/MessageInput.vue'
 import ToolCallsBlock from './ToolCallsBlock.vue'
+import BlueprintBlock from './BlueprintBlock.vue'
 import WebSearchBlock from './WebSearchBlock.vue'
 import UserFeedbackBlock from './UserFeedbackBlock.vue'
 import type { UserFeedbackPayload } from './UserFeedbackBlock.vue'
@@ -425,8 +365,6 @@ interface Props {
   currentStreamingMessage: AgentMessage | null;
   isGenerating?: boolean;
   planStreamContent?: string;
-  /** 主对话收到非 plan 分片时为 true，立即折叠 Plan 区 */
-  planFoldAfterNonPlan?: boolean;
   isLoading: boolean;           // 新增
   timeoutError: string;         // 新增
   model_list: Record<string, string[]>;
@@ -458,7 +396,6 @@ interface MessageGroup {
 const props = withDefaults(defineProps<Props>(), {
   isGenerating: false,
   planStreamContent: '',
-  planFoldAfterNonPlan: false,
   reloadStreamingUiToken: 0,
   chatMode: 'task',
   toolMessages: () => [],
@@ -481,7 +418,7 @@ function getGenericToolCallItems(
   return buildGenericToolCallItems(toolCalls, fallbackId, messageType)
 }
 const emit = defineEmits<{
-  sendMessage: [message: string, files: File[], options?: { input_message_id?: string }]
+  sendMessage: [message: string, files: File[], options?: { input_message_id?: string; user_feedback?: boolean }]
   changeToolsUse: []
   selectModel: [model_source: string, model: string]
   selectAgent: [agent_use: string | null, agent_id: string[] | string | null]
@@ -537,11 +474,14 @@ function getFeedbackKey(message: Pick<AgentMessage, 'tool_call_id' | 'created_at
 function hasUserAnswerAfterFeedback(message: AgentMessage): boolean {
   const key = getFeedbackKey(message)
   const idx = props.agent_message_list.findIndex(
-    (m) => m.type === 'user_feedback' && getFeedbackKey(m) === key,
+    (m) => m.type === 'user_feedback' && m.table && getFeedbackKey(m) === key,
   )
   if (idx < 0) return false
   for (let i = idx + 1; i < props.agent_message_list.length; i++) {
     const next = props.agent_message_list[i]
+    if (next.role === 'user' && next.type === 'user_feedback') {
+      return true
+    }
     if (next.role === 'user' && next.type === 'text' && (next.content || '').trim()) {
       return true
     }
@@ -552,22 +492,7 @@ function hasUserAnswerAfterFeedback(message: AgentMessage): boolean {
   return false
 }
 
-function getFeedbackSubmittedAnswer(message: AgentMessage): string {
-  const key = getFeedbackKey(message)
-  if (submittedFeedbackAnswers.value[key]) return submittedFeedbackAnswers.value[key]
-  const idx = props.agent_message_list.findIndex(
-    (m) => m.type === 'user_feedback' && getFeedbackKey(m) === key,
-  )
-  if (idx < 0) return ''
-  for (let i = idx + 1; i < props.agent_message_list.length; i++) {
-    const next = props.agent_message_list[i]
-    if (next.role === 'user' && next.type === 'text' && (next.content || '').trim()) {
-      return (next.content || '').trim()
-    }
-    if (next.role === 'assistant' && next.type === 'get_tools') {
-      break
-    }
-  }
+function getFeedbackSubmittedAnswer(_message: AgentMessage): string {
   return ''
 }
 
@@ -582,23 +507,22 @@ function isFeedbackDisabledFromBlock(block: StreamBlock): boolean {
   return !!submittedFeedbackAnswers.value[key]
 }
 
-function getFeedbackSubmittedAnswerFromBlock(block: StreamBlock): string {
-  const key = block.tool_call_id || String(block.created_at)
-  return submittedFeedbackAnswers.value[key] || ''
+function getFeedbackSubmittedAnswerFromBlock(_block: StreamBlock): string {
+  return ''
 }
 
 function handleFeedbackSubmit(message: AgentMessage, answer: string) {
   const key = getFeedbackKey(message)
   if (isFeedbackDisabled(message)) return
   submittedFeedbackAnswers.value[key] = answer
-  handleSendMessage(answer, [])
+  handleSendMessage(answer, [], { user_feedback: true })
 }
 
 function handleFeedbackSubmitFromBlock(block: StreamBlock, answer: string) {
   const key = block.tool_call_id || String(block.created_at)
   if (submittedFeedbackAnswers.value[key]) return
   submittedFeedbackAnswers.value[key] = answer
-  handleSendMessage(answer, [])
+  handleSendMessage(answer, [], { user_feedback: true })
 }
 
 /** 工具结果走侧栏 toolMessages；主对话流中「未完成」= 仍在生成且当前最后一块仍是工具调用 */
@@ -667,39 +591,9 @@ function adjustUserEditTextareaHeight() {
   })
 }
 
-/** Plan 折叠：流式阶段默认展开；收到非 plan 分片后父级置 planFoldAfterNonPlan 则收起。
- * Consultation and Planning 正文来自父组件 planStreamContent；新一轮 plan 时由 Chat.vue 清旧块后重灌，此处不累积。 */
-const planExpanded = ref(true)
-
+/** 蓝图流式区：仅在 plan 段生成中展示，结束后由 tool result 承接 */
 const showPlanInStreamingRow = computed(
   () => props.isGenerating && !!props.planStreamContent
-)
-
-const showPlanInHistory = computed(
-  () => !props.isGenerating && !!props.planStreamContent
-)
-
-const lastAssistantLikeGroupIndex = computed(() => {
-  const groups = groupedMessages.value
-  for (let i = groups.length - 1; i >= 0; i--) {
-    if (groups[i].role === 'assistant' || groups[i].role === 'event') return i
-  }
-  return -1
-})
-
-watch(
-  () => props.planFoldAfterNonPlan,
-  (v) => {
-    if (v) planExpanded.value = false
-  }
-)
-
-watch(
-  () => props.planStreamContent,
-  (v, old) => {
-    const wasEmpty = !old || old === ''
-    if (wasEmpty && v) planExpanded.value = true
-  }
 )
 
 watch(
@@ -955,9 +849,13 @@ const renderMarkdown = (content: string | undefined) => {
   return html
 }
 
-// 显示消息列表（只包含历史消息）
+// 显示消息列表（只包含历史消息；user_feedback 类型的用户消息不在对话区展示）
 const displayMessages = computed(() => {
-  return props.agent_message_list.filter(msg => msg.type !== 'init')
+  return props.agent_message_list.filter(
+    (msg) =>
+      msg.type !== 'init' &&
+      !(msg.role === 'user' && msg.type === 'user_feedback'),
+  )
 })
 
 // 将连续的相同角色消息分组（user_feedback 归入 assistant 区展示）
@@ -1085,12 +983,17 @@ function handleSkillsUseChange() {
 }
 
 // 处理发送消息事件
-const handleSendMessage = (message: string, files: File[] = []) => {
+const handleSendMessage = (
+  message: string,
+  files: File[] = [],
+  options?: { user_feedback?: boolean },
+) => {
   const now = Date.now()
+  const isUserFeedback = !!options?.user_feedback
   const userMsg: AgentMessage = {
     user_id: '',
     conversation_id: '',
-    type: 'text',
+    type: isUserFeedback ? 'user_feedback' : 'text',
     role: 'user',
     content: message,
     created_at: now,
@@ -1126,7 +1029,7 @@ const handleSendMessage = (message: string, files: File[] = []) => {
   startStreaming()
   
   // 4. 触发父组件事件
-  emit('sendMessage', message, files)
+  emit('sendMessage', message, files, options)
 }
 
 // 监听currentStreamingMessage变化 - 处理来自父组件的流式数据
@@ -1286,8 +1189,7 @@ const hasMessages = computed(
   () =>
     groupedMessages.value.length > 0 ||
     streamingBlocks.value.length > 0 ||
-    showPlanInStreamingRow.value ||
-    showPlanInHistory.value
+    showPlanInStreamingRow.value
 )
 
 watch(hasMessages, (newVal, oldVal) => {
@@ -1734,41 +1636,6 @@ const handleCreateAgentClick = () => {
   100% { left: 100%; }
 }
 
-/* Plan：与工具标签同样式，点击标签本身展开/折叠正文 */
-.chat-plan-collapsible {
-  margin-bottom: 8px;
-  max-width: 100%;
-}
-
-.chat-plan-tool-row {
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.chat-plan-tool-label {
-  cursor: pointer;
-  user-select: none;
-  outline: none;
-}
-
-.chat-plan-tool-label:focus-visible {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
-  border-radius: 10px;
-}
-
-.chat-plan-body {
-  padding: 4px 0 8px 0;
-  padding-left: 20px;
-}
-
-.chat-plan-text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #a3a3a3;
-  font-size: 11px;
-  line-height: 1.5;
-}
 </style>
 
 <style>

@@ -41,14 +41,12 @@ class Compress:
         collapse_error = None
         while retries > 0:
             try:
-                collapse_model_source = self.config.collapse_model_source + "_no_stream"
-                model_config = ModelConfig(model_source=collapse_model_source,
+                model_config = ModelConfig(model_source=self.config.collapse_model_source,
                                            model=self.config.collapse_model,
                                            tools=[], stream=False)
                 message = [{"role": "system", "content": prompt.COLLAPSE_PROMPT}]
                 message.append({"role": "user", "content": f"Complete history：<{history}>. Now start."})
-                llm = getattr(LLM(self.config), model_config.model_source)
-                collapse_list_str = await llm(message, model_config)
+                collapse_list_str = await LLM(self.config).chat_no_stream(message, model_config)
                 collapse_list = ast.literal_eval(collapse_list_str)
                 retries = -1
             except Exception as collapse_error:
@@ -118,13 +116,11 @@ class Compress:
         retries = 3
         while retries > 0:
             try:
-                short_memory_model_source = self.config.short_memory_model_source + "_no_stream"
-                model_config = ModelConfig(model_source=short_memory_model_source, model=self.config.short_memory_model,
+                model_config = ModelConfig(model_source=self.config.compact_model_source, model=self.config.compact_model,
                                            tools=[], stream=False)
                 message = [{"role": "system", "content": prompt.COMPACT_PROMPT}]
                 message.append({"role": "user", "content": f"Complete Content：<{history_compact}>. Now output the summary content of this conversation"})
-                llm = getattr(LLM(self.config), model_config.model_source)
-                abstract = await llm(message, model_config)
+                abstract = await LLM(self.config).chat_no_stream(message, model_config)
                 print(abstract)
                 await delete_runtime_messages(self.is_sub_agent, _id_list)
                 await save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant",

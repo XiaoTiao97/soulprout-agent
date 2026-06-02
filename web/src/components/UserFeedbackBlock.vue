@@ -66,7 +66,7 @@
     </div>
 
     <div class="ufb-footer">
-      <span v-if="disabled && submittedAnswer" class="ufb-submitted">
+      <span v-if="disabled" class="ufb-submitted">
         已提交
       </span>
       <button

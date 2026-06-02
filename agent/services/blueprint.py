@@ -198,9 +198,9 @@ class Blueprint:
                 "content": prompt.PLAN_HISTORY_PROMPT.format(summary_info=summary_info),
             })
 
-            llm = getattr(self.llm, model_config.model_source)
             plan = ""
-            async for chunk in llm(message, model_config):
+            stream = self.llm.chat(message, model_config)
+            async for chunk in stream:
                 if len(chunk.choices) > 0:
                     plan += chunk.choices[0].delta.content
                     yield ChatResponse(

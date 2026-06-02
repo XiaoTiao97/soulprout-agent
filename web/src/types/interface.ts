@@ -28,6 +28,8 @@ export interface ChatRequest {
   agent_id?: string | string[] | null;  // 传递时使用 agent_id
   agent_name?: string | string[] | null;  // 仅用于展示，从 agent_card_list 根据 agent_id 查找
   files?: File[];
+  /** ask_user_feedback 确认提交时为 true，用户反馈内容不在对话区展示 */
+  user_feedback?: boolean;
 }
 
 export interface ToolCalls {

@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     agent_id: Union[None, str, List] = None
     temp_file_path: Union[None, str] = None
     file_name_list: Union[None, List] = None
+    user_feedback: Optional[bool] = False
     class Config:
         extra = "allow"
 
