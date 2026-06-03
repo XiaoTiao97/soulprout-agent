@@ -139,15 +139,16 @@ export function getToolSummaryLabel(
 
     case 'skills': {
       const mod = str(args.module)
-      if (mod === 'preview') {
+      if (mod === 'search') {
         const q = truncate(str(args.query), 28)
-        return hasResult ? `已预览技能${q ? `：${q}` : ''}` : `正在预览技能${q ? `：${q}` : '…'}`
+        return hasResult ? `已检索技能${q ? `：${q}` : ''}` : `正在检索技能${q ? `：${q}` : '…'}`
       }
+      if (mod === 'view') return hasResult ? '已查看全部技能' : '正在查看全部技能…'
       if (mod === 'load') {
         const skill = str(args.skill_name)
         return hasResult ? `已加载技能 ${skill || ''}`.trim() : `正在加载技能 ${skill || '…'}`.trim()
       }
-      if (mod === 'close_preview') return hasResult ? '已关闭技能预览' : '正在关闭技能预览…'
+      if (mod === 'close_search') return hasResult ? '已关闭技能检索结果' : '正在关闭技能检索结果…'
       return hasResult ? '技能操作完成' : '正在处理技能…'
     }
 
@@ -195,6 +196,7 @@ export function getToolSummaryLabel(
         const q = truncate(str(args.query), 28)
         return hasResult ? `已搜索记忆${q ? `：${q}` : ''}` : `正在搜索记忆${q ? `：${q}` : '…'}`
       }
+      if (mod === 'view') return hasResult ? '已查看全部记忆' : '正在查看全部记忆…'
       if (mod === 'remove') {
         return hasResult ? `已删除记忆 ${name || ''}`.trim() : `正在删除记忆 ${name || '…'}`.trim()
       }

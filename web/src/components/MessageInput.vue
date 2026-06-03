@@ -252,7 +252,7 @@
             @click="toggleVoiceRecord"
           >
             <transition name="voice-countdown">
-              <span v-if="isRecording" class="voice-countdown">{{ recordingCountdown }}s</span>
+              <span v-if="isRecording" class="voice-countdown">{{ recordingCountdown }}</span>
             </transition>
             <span class="voice-btn-icon">
               <span v-if="isTranscribing" class="voice-wave-loader" aria-hidden="true">
@@ -267,7 +267,7 @@
             </span>
           </button>
           <button class="input_button" type="button" @click="handleButtonClick">
-            <span v-if="props.isGenerating" class="input-stop-square" aria-hidden="true"></span>
+            <div v-if="props.isGenerating" class="loading-spinner"></div>
             <img v-else :src="InputIconUrl" width="18" height="18" />
           </button>
           <div v-if="showGenerationPrompt" class="generation-prompt">
@@ -285,6 +285,7 @@
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { AgentCard } from '../types/interface'
 
+const StopIconUrl = new URL('@/assets/images/stop_icon.svg', import.meta.url).href
 const InputIconUrl = new URL('@/assets/images/mengya_input.svg', import.meta.url).href
 const DocIconUrl = new URL('@/assets/images/doc_update.svg', import.meta.url).href
 const ExcelIconUrl = new URL('@/assets/images/excel_update.svg', import.meta.url).href
@@ -1475,17 +1476,20 @@ defineExpose({
   cursor: default;
 }
 
-.voice-btn--recording,
-.voice-btn--transcribing {
-  border-color: #d1d5db;
-  background: linear-gradient(180deg, #f3f4f6 0%, #e8eaed 100%);
-  color: #4b5563;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.18);
-}
-
 .voice-btn--recording {
   padding: 0 10px 0 12px;
   gap: 8px;
+  border-color: #fca5a5;
+  background: linear-gradient(180deg, #fffafa 0%, #fef2f2 100%);
+  color: #b91c1c;
+  box-shadow: 0 8px 18px -14px rgba(239, 68, 68, 0.25);
+}
+
+.voice-btn--transcribing {
+  border-color: #c8d7ff;
+  background: linear-gradient(180deg, #f8faff 0%, #eef3ff 100%);
+  color: #2b63ff;
+  box-shadow: 0 8px 18px -14px rgba(43, 99, 255, 0.2);
 }
 
 .voice-btn-icon {
@@ -1756,14 +1760,6 @@ defineExpose({
   box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
 }
 
-.input-stop-square {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: #fff;
-}
-
 .upload-option:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -1842,5 +1838,19 @@ defineExpose({
   width: 12px;
   height: 12px;
   display: block;
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #f5f5f5;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

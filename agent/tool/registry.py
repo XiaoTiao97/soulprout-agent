@@ -219,12 +219,14 @@ TOOL_SCHEMAS = [
             "name": "skills",
             "description": (
                 "统一的技能（skill）入口，通过 module 切换子动作：\n"
-                "- module=preview：基于 query 预览可用 skill（系统 skill 走向量召回 Top20 & score>=0.4，"
+                "- module=search：基于 query 检索可用 skill（系统 skill 走向量召回 Top20 & score>=0.4，"
                 "个人 skill 直接全量返回 name+description），用于挑选后续要加载的 skill。"
-                "**此模式下 query 必填且不能为空**——预览的目的就是按当前意图召回最相关的 skill，"
+                "**此模式下 query 必填且不能为空**——按当前意图召回最相关的 skill。\n"
+                "- module=view：查看当前用户可用的全部 skill（系统 + 个人，name+description），"
+                "不做 query 检索；返回内容默认截断至 10000 字符。\n"
                 "- module=load：将指定 skill 文件夹加载到工作区，需配合 source(system|user) 与 skill_name。"
                 "当系统 skill 与个人 skill 功能相似时，优先选择 source=user。\n"
-                "- module=close_preview：本轮 skill 选择完成后调用，将历史中的 preview 结果替换为占位字符串，"
+                "- module=close_search：本轮 skill 选择完成后调用，将历史中的 skills 工具结果替换为占位字符串，"
                 "避免技能列表持续占用上下文。"
             ),
             "parameters": {
@@ -233,13 +235,13 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "module": {
                         "type": "string",
-                        "enum": ["preview", "load", "close_preview"],
-                        "description": "子动作：preview / load / close_preview",
+                        "enum": ["search", "view", "load", "close_search"],
+                        "description": "子动作：search / view / load / close_search",
                     },
                     "query": {
                         "type": "string",
                         "description": (
-                            "[module=preview 必填，非空] 用于系统 skill 召回的检索语句，"
+                            "[module=search 必填，非空] 用于系统 skill 召回的检索语句，"
                             "应为当前用户意图或任务关键词；不可传空字符串"
                         ),
                         "minLength": 1,
@@ -343,13 +345,15 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "base_memory",
             "description": (
-                "记忆（memory）的基础操作工具，仅承担 load / search / remove 三个轻量子动作，"
+                "记忆（memory）的基础操作工具，仅承担 load / search / view / remove 四个轻量子动作，"
                 "通过 module 切换；**创建与编辑请使用独立的 create_memory / edit_memory 工具**。\n"
                 "- module=load：根据记忆 name 加载某条记忆的完整内容，并将该 name 记录到当前会话的 "
                 "memory_loaded，后续召回不再重复推送该记忆；返回该记忆的 name、description 与 content。\n"
                 "- module=search：基于 query 在当前用户的记忆库中做向量召回，返回相关记忆的 name 与 "
                 "description 列表（不返回 content，content 需再调用 module=load 获取）。"
                 "**此模式下 query 必填且不能为空**——应为当前用户意图或检索关键短句。\n"
+                "- module=view：查看当前用户下的全部记忆（含 name、description、content），"
+                "不做 query 检索；返回内容默认截断至 10000 字符。\n"
                 "- module=remove：根据记忆 name 永久删除当前用户的一条记忆，并从会话的 memory_loaded "
                 "中移除该 name。"
             ),
@@ -359,8 +363,8 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "module": {
                         "type": "string",
-                        "enum": ["load", "search", "remove"],
-                        "description": "子动作：load / search / remove",
+                        "enum": ["load", "search", "view", "remove"],
+                        "description": "子动作：load / search / view / remove",
                     },
                     "name": {
                         "type": "string",

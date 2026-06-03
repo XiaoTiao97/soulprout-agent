@@ -19,7 +19,11 @@ from agent.utils.vdb_client import VDBClient
 KB_COLLECTION = os.getenv("VDB_KB_COLLECTION", "kb_collection")
 MEMORY_COLLECTION = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
 SKILL_COLLECTION = os.getenv("VDB_SKILL_COLLECTION", "skill_collection")
-SKILLS_PREVIEW_CLOSED_TEXT = "Skills Preview Closed"
+VIEW_OUTPUT_MAX_LEN = 10000
+VIEW_TRUNCATED_SUFFIX = (
+    "\n\n...(content truncated: remaining output is too long and is not shown)"
+)
+SKILLS_SEARCH_CLOSED_TEXT = "Skills Search Closed"
 
 
 class SoulproutToolFunction:
@@ -37,6 +41,12 @@ class SoulproutToolFunction:
     async def _get_user_id_by_conversation_id(self, conversation_id):
         row = await self.config.db_conversation.find_one({"conversation_id": conversation_id})
         return row.get("user_id") if row else None
+
+    @staticmethod
+    def _truncate_view_output(text: str, max_len: int = VIEW_OUTPUT_MAX_LEN) -> str:
+        if len(text) <= max_len:
+            return text
+        return text[:max_len] + VIEW_TRUNCATED_SUFFIX
 
     async def get_action_blueprint(self, conversation_id=None):
         """Handled in Chat.process_single_tool; should not be invoked via ToolExecutor."""
@@ -143,6 +153,7 @@ class SoulproutToolFunction:
                     "--uid", "65534",
                     "--gid", "65534",
                     "--chdir", "/workspace",
+                    "--clearenv",
                     "--setenv", "HOME", "/workspace",
                     "--setenv", "PATH", "/usr/local/python3.12/bin:/usr/local/bin:/bin:/usr/bin",
                     "/bin/sh", "-c", command,
@@ -231,20 +242,22 @@ class SoulproutToolFunction:
         return f"错误：未知的 category={category}，仅支持 models / tools / agent_cards"
 
     async def skills(self, module, conversation_id, query=None, source=None, skill_name=None):
-        """统一 skills 工具：module=preview/load/close_preview。"""
-        if module == "preview":
+        """统一 skills 工具：module=search/view/load/close_search。"""
+        if module == "search":
             if not query or not str(query).strip():
-                return "错误：module=preview 时 query 必填且不能为空，请传入用于检索 skill 的关键词"
-            return await self._skills_preview(query, conversation_id)
+                return "错误：module=search 时 query 必填且不能为空，请传入用于检索 skill 的关键词"
+            return await self._skills_search(query, conversation_id)
+        if module == "view":
+            return await self._skills_view(conversation_id)
         if module == "load":
             if not source or not skill_name:
                 return "错误：module=load 时必须填写 source 与 skill_name"
             return await self._skills_load(source, skill_name, conversation_id)
-        if module == "close_preview":
-            return await self._skills_close_preview(conversation_id)
-        return f"错误：未知的 module={module}，仅支持 preview / load / close_preview"
+        if module == "close_search":
+            return await self._skills_close_search(conversation_id)
+        return f"错误：未知的 module={module}，仅支持 search / view / load / close_search"
 
-    async def _skills_preview(self, query, conversation_id):
+    async def _skills_search(self, query, conversation_id):
         """
         返回两类 skill：
             1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
@@ -309,6 +322,57 @@ class SoulproutToolFunction:
             payload["user_skills_error"] = user_error
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
+    async def _skills_view(self, conversation_id):
+        """列出当前用户可用的全部 skill（系统 + 个人），不做 query 检索。"""
+        from agent.skill.skill_server import (
+            get_system_skills_dir,
+            get_user_skills_root,
+            load_skills_from_subfolders,
+        )
+
+        system_skills: list[dict] = []
+        try:
+            for item in load_skills_from_subfolders(get_system_skills_dir(), "system"):
+                name = (item.get("name") or "").strip()
+                if not name:
+                    continue
+                system_skills.append({
+                    "name": name,
+                    "description": item.get("description") or "",
+                })
+        except Exception as e:
+            system_error = f"系统 skill 列表获取失败：{e}"
+        else:
+            system_error = None
+
+        user_skills: list[dict] = []
+        try:
+            user_id = await self._get_user_id_by_conversation_id(conversation_id)
+            if user_id:
+                for item in load_skills_from_subfolders(get_user_skills_root(user_id), "user"):
+                    name = (item.get("name") or "").strip()
+                    if not name:
+                        continue
+                    user_skills.append({
+                        "name": name,
+                        "description": item.get("description") or "",
+                    })
+        except Exception as e:
+            user_error = f"个人 skill 列表获取失败：{e}"
+        else:
+            user_error = None
+
+        payload = {
+            "system_skills": system_skills,
+            "user_skills": user_skills,
+        }
+        if system_error:
+            payload["system_skills_error"] = system_error
+        if user_error:
+            payload["user_skills_error"] = user_error
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        return self._truncate_view_output(text)
+
     async def _skills_load(self, source, skill_name, conversation_id):
         from agent.skill.manager import load_skill_to_workspace
 
@@ -317,9 +381,9 @@ class SoulproutToolFunction:
         result = await load_skill_to_workspace(conversation_id=conversation_id, user_id=user_id, skills=skills, workspace_base=self.config.local_file_path)
         return result.get("data") if result.get("success") else result.get("error", "加载失败")
 
-    async def _skills_close_preview(self, conversation_id):
+    async def _skills_close_search(self, conversation_id):
         """
-        关闭技能预览：将本会话历史中所有 skills(module=preview) 工具结果替换为占位字符串，
+        关闭技能检索结果：将本会话历史中所有 skills 工具结果替换为占位字符串，
         以节省后续轮次的上下文占用。
         """
         from agent.database.crud.message import replace_tool_results_by_function_name
@@ -328,11 +392,11 @@ class SoulproutToolFunction:
             updated = await replace_tool_results_by_function_name(
                 conversation_id=conversation_id,
                 function_name="skills",
-                new_content=SKILLS_PREVIEW_CLOSED_TEXT,
+                new_content=SKILLS_SEARCH_CLOSED_TEXT,
             )
-            return SKILLS_PREVIEW_CLOSED_TEXT if updated else "未找到可关闭的 skills 预览结果"
+            return SKILLS_SEARCH_CLOSED_TEXT if updated else "未找到可关闭的 skills 检索结果"
         except Exception as e:
-            return f"错误：关闭技能预览失败，失败原因：{e}"
+            return f"错误：关闭技能检索结果失败，失败原因：{e}"
 
     async def web_search(self, query, count=10, conversation_id=None):
         def search():
@@ -388,7 +452,7 @@ class SoulproutToolFunction:
 
     # ─────────────────────────────────────────────────────────────────────────
     # 记忆相关工具：
-    #   - base_memory：基础操作 load / search / remove
+    #   - base_memory：基础操作 load / search / view / remove
     #   - create_memory：独立的创建工具
     #   - edit_memory：独立的编辑工具
     # ─────────────────────────────────────────────────────────────────────────
@@ -443,7 +507,7 @@ class SoulproutToolFunction:
         return results[0] if results else None
 
     async def base_memory(self, module, conversation_id, name=None, query=None):
-        """统一 memory 工具：module=load/search/remove。"""
+        """统一 memory 工具：module=load/search/view/remove。"""
         if module == "load":
             if not name:
                 return "错误：module=load 时 name 必填"
@@ -452,11 +516,13 @@ class SoulproutToolFunction:
             if not query or not str(query).strip():
                 return "错误：module=search 时 query 必填且不能为空，请传入用于检索记忆的关键短句"
             return await self._memory_search(query, conversation_id)
+        if module == "view":
+            return await self._memory_view(conversation_id)
         if module == "remove":
             if not name:
                 return "错误：module=remove 时 name 必填"
             return await self._memory_remove(name, conversation_id)
-        return f"错误：未知的 module={module}，仅支持 load / search / remove"
+        return f"错误：未知的 module={module}，仅支持 load / search / view / remove"
 
     async def _memory_load(self, name, conversation_id):
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
@@ -517,6 +583,36 @@ class SoulproutToolFunction:
             return json.dumps({"memories": hits}, ensure_ascii=False, indent=2)
         except Exception as e:
             return f"错误：检索记忆失败，失败原因：{e}"
+
+    async def _memory_view(self, conversation_id):
+        """列出当前 user_id 下的全部记忆（含 content），不做 query 检索。"""
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            await self.vdb_client.ensure_collection(MEMORY_COLLECTION, "memory")
+            user_esc = self._escape_filter_value(user_id)
+            results = await self.vdb_client.query(
+                MEMORY_COLLECTION,
+                filter=f'user_id == "{user_esc}"',
+                limit=500,
+                output_fields=["name", "description", "content", "memory_type"],
+            )
+            memories = []
+            for item in results:
+                name = item.get("name")
+                if not name:
+                    continue
+                memories.append({
+                    "name": name,
+                    "description": item.get("description") or "",
+                    "content": item.get("content") or "",
+                    "memory_type": item.get("memory_type"),
+                })
+            text = json.dumps({"memories": memories}, ensure_ascii=False, indent=2)
+            return self._truncate_view_output(text)
+        except Exception as e:
+            return f"错误：查看记忆失败，失败原因：{e}"
 
     async def _memory_remove(self, name, conversation_id):
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
