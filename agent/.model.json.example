@@ -1,0 +1,72 @@
+[
+    {
+    "display_name": "DeepSeek",
+    "model_source": "deepseek",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-xxx",
+    "models": [
+      {"name": "deepseek-v4-pro", "context_window": 1000000},
+      {"name": "deepseek-v4-flash", "context_window": 1000000},
+      {"name": "deepseek-v4-pro-thinking", "context_window": 1000000},
+      {"name": "deepseek-v4-flash-thinking", "context_window": 1000000}
+    ]
+  },
+  {
+    "display_name": "火山方舟",
+    "model_source": "ark",
+    "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+    "api_key": "sk-xxx",
+    "models": [
+      {"name": "doubao-seed-2-0-pro-260215", "context_window": 256000},
+      {"name": "doubao-seed-2-0-lite-260215", "context_window": 256000},
+      {"name": "doubao-seed-2-0-mini-260215", "context_window": 256000},
+      {"name": "doubao-seed-2-0-pro-260215-thinking", "context_window": 256000},
+      {"name": "doubao-seed-2-0-lite-260215-thinking", "context_window": 256000},
+      {"name": "doubao-seed-2-0-mini-260215-thinking", "context_window": 256000}
+    ]
+  },
+  {
+    "display_name": "Kimi",
+    "model_source": "kimi",
+    "base_url": "https://api.moonshot.cn/v1",
+    "api_key": "sk-xxx",
+    "models": [
+      {"name": "kimi-k2.6-thinking", "context_window": 256000},
+      {"name": "kimi-k2.6", "context_window": 256000}
+    ]
+  },
+  {
+    "display_name": "MiMo",
+    "model_source": "mimo",
+    "base_url": "https://api.xiaomimimo.com/v1",
+    "api_key": "sk-xxx",
+    "models": [
+      {"name": "mimo-v2.5-pro-thinking", "context_window": 1000000},
+      {"name": "mimo-v2.5-pro", "context_window": 1000000},
+      {"name": "mimo-v2.5-thinking", "context_window": 1000000},
+      {"name": "mimo-v2.5", "context_window": 1000000}
+    ]
+  },
+  {
+    "display_name": "智谱 GLM",
+    "model_source": "glm",
+    "base_url": "https://open.bigmodel.cn/api/paas/v4/",
+    "api_key": "sk-xxx",
+    "models": [
+      {"name": "glm-5.1", "context_window": 200000},
+      {"name": "glm-5.1-thinking", "context_window": 200000}
+    ]
+  },
+  {
+    "display_name": "千帆",
+    "model_source": "qianfan",
+    "base_url": "https://qianfan.baidubce.com/v2",
+    "api_key": "sk-xxx",
+    "models": [
+      {"name": "kimi-k2.5-thinking", "context_window": 256000},
+      {"name": "kimi-k2.5", "context_window": 256000},
+      {"name": "glm-5-thinking", "context_window": 198000},
+      {"name": "glm-5", "context_window": 198000}
+    ]
+  }
+]

@@ -597,6 +597,17 @@
             <path d="M9 18l6-6-6-6" />
           </svg>
         </a>
+        <a href="/xiaoai" class="platform-item">
+          <div class="platform-icon">🔊</div>
+          <div class="platform-info">
+            <div class="platform-name">小爱音箱</div>
+            <div class="platform-desc" id="xiaoai-status-text">加载中…</div>
+          </div>
+          <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </a>
       </div>
     </div>
   </div>
@@ -661,6 +672,7 @@ function showDash(d) {
   loadWeixinStatus();
   loadFeishuStatus();
   loadWecomStatus();
+  loadXiaoaiStatus();
 }
 
 function updateModeUI(isLocal) {
@@ -804,6 +816,24 @@ async function loadWecomStatus() {
       el.style.color = 'var(--text-sub)';
     } else {
       el.textContent = '未配置，点击进入扫码或填写凭证';
+      el.style.color = 'var(--text-sub)';
+    }
+  } catch(e) {}
+}
+
+async function loadXiaoaiStatus() {
+  try {
+    const d = await api('/api/xiaoai/status');
+    const el = document.getElementById('xiaoai-status-text');
+    if (!el) return;
+    if (d.connected) {
+      el.textContent = `已连接 · ${d.device_name || ''}`;
+      el.style.color = 'var(--accent)';
+    } else if (d.configured) {
+      el.textContent = '已配置但未连接，点击进入';
+      el.style.color = 'var(--text-sub)';
+    } else {
+      el.textContent = '未配置，点击进入填写小米账号';
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}

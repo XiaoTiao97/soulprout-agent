@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from gateway.platforms.feishu import FeishuAdapter, FeishuQRSession
     from gateway.platforms.wecom import WecomAdapter, WecomQRSession
     from gateway.platforms.weixin import QRLoginSession, WeixinAdapter
+    from gateway.platforms.xiaoai import XiaoaiAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ if _static_dir.exists():
 _weixin_adapter: Optional["WeixinAdapter"] = None
 _feishu_adapter: Optional["FeishuAdapter"] = None
 _wecom_adapter: Optional["WecomAdapter"] = None
+_xiaoai_adapter: Optional["XiaoaiAdapter"] = None
 _qr_session: Optional["QRLoginSession"] = None
 _feishu_qr_session: Optional["FeishuQRSession"] = None
 _wecom_qr_session: Optional["WecomQRSession"] = None
@@ -67,6 +69,11 @@ def set_feishu_adapter(adapter: "FeishuAdapter") -> None:
 def set_wecom_adapter(adapter: "WecomAdapter") -> None:
     global _wecom_adapter
     _wecom_adapter = adapter
+
+
+def set_xiaoai_adapter(adapter: "XiaoaiAdapter") -> None:
+    global _xiaoai_adapter
+    _xiaoai_adapter = adapter
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +120,16 @@ async def wecom_page():
     )
 
 
+@app.get("/xiaoai", response_class=HTMLResponse)
+async def xiaoai_page():
+    html_path = _static_dir / "xiaoai.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        content="<h1>Soulprout Gateway</h1><p>static/xiaoai.html not found</p>"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 微信状态 & 登录
 # ---------------------------------------------------------------------------
@@ -136,6 +153,11 @@ async def api_feishu_status():
 @app.get("/api/wecom/status")
 async def api_wecom_status():
     return JSONResponse(await _wecom_status_payload())
+
+
+@app.get("/api/xiaoai/status")
+async def api_xiaoai_status():
+    return JSONResponse(await _xiaoai_status_payload())
 
 
 async def _weixin_status_payload() -> Dict[str, Any]:
@@ -177,6 +199,26 @@ async def _feishu_status_payload() -> Dict[str, Any]:
         "app_id": cfg.get("app_id", ""),
         "domain": cfg.get("domain", "feishu"),
         "bot_name": (_feishu_adapter.bot_name if _feishu_adapter else "") or cfg.get("bot_name", ""),
+    }
+
+
+async def _xiaoai_status_payload() -> Dict[str, Any]:
+    connected = _xiaoai_adapter is not None and _xiaoai_adapter.is_connected
+    cfg: Dict[str, Any] = {}
+    try:
+        from gateway.platforms.xiaoai import get_public_config
+        from gateway.platforms.xiaoai_miot import has_xiaoai_config
+        configured = has_xiaoai_config()
+        cfg = get_public_config()
+    except Exception:
+        configured = False
+    return {
+        "platform": "xiaoai",
+        "connected": connected,
+        "configured": configured,
+        "device_name": (_xiaoai_adapter.device_name if _xiaoai_adapter else "") or cfg.get("did", ""),
+        "last_error": (_xiaoai_adapter.last_error if _xiaoai_adapter else "") or "",
+        "config": cfg,
     }
 
 
@@ -405,6 +447,98 @@ async def api_wecom_reload():
         return JSONResponse({"success": False, "error": "adapter 未初始化"}, status_code=400)
     try:
         asyncio.create_task(_reconnect_wecom())
+        return JSONResponse({"success": True, "message": "正在重新连接…"})
+    except Exception as exc:
+        return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
+
+
+@app.get("/api/xiaoai/config")
+async def api_xiaoai_get_config():
+    from gateway.platforms.xiaoai import get_public_config
+    from gateway.platforms.xiaoai_miot import has_xiaoai_config
+    return JSONResponse({
+        "configured": has_xiaoai_config(),
+        "config": get_public_config(),
+    })
+
+
+@app.post("/api/xiaoai/settings")
+async def api_xiaoai_settings(request: Request):
+    from gateway.platforms.xiaoai_miot import save_xiaoai_config
+
+    try:
+        body: Dict[str, Any] = await request.json()
+    except Exception:
+        return JSONResponse({"success": False, "error": "请求体不是合法 JSON"}, status_code=400)
+
+    user_id = str(body.get("user_id") or "").strip()
+    did = str(body.get("did") or "").strip()
+    password = str(body.get("password") or "")
+    pass_token = str(body.get("pass_token") or "")
+    keywords_raw = body.get("call_ai_keywords")
+    heartbeat_ms = int(body.get("heartbeat_ms") or 1000)
+    debug = bool(body.get("debug"))
+
+    if not user_id or not did:
+        return JSONResponse({"success": False, "error": "请填写小米 ID 和设备名称"}, status_code=400)
+
+    keywords: Optional[list] = None
+    if isinstance(keywords_raw, list):
+        keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
+    elif isinstance(keywords_raw, str):
+        keywords = [k.strip() for k in keywords_raw.replace("，", ",").split(",") if k.strip()]
+
+    save_xiaoai_config(
+        user_id=user_id,
+        did=did,
+        password=password,
+        pass_token=pass_token,
+        call_ai_keywords=keywords,
+        heartbeat_ms=heartbeat_ms,
+        debug=debug,
+    )
+
+    if _xiaoai_adapter is not None:
+        asyncio.create_task(_reconnect_xiaoai())
+
+    return JSONResponse({"success": True, "message": "配置已保存，正在重新连接…"})
+
+
+@app.post("/api/xiaoai/test")
+async def api_xiaoai_test(request: Request):
+    from gateway.platforms.xiaoai_miot import load_xiaoai_config, test_mina_login
+
+    try:
+        body: Dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+
+    cfg = load_xiaoai_config() or {}
+    user_id = str(body.get("user_id") or cfg.get("user_id") or "").strip()
+    did = str(body.get("did") or cfg.get("did") or "").strip()
+    password = str(body.get("password") or cfg.get("password") or "")
+    pass_token = str(body.get("pass_token") or cfg.get("pass_token") or "")
+
+    if not user_id or not did:
+        return JSONResponse({"success": False, "message": "请填写小米 ID 和设备名称"}, status_code=400)
+    if not password and not pass_token:
+        return JSONResponse({"success": False, "message": "请填写密码或 passToken"}, status_code=400)
+
+    result = await test_mina_login(
+        user_id=user_id,
+        password=password,
+        pass_token=pass_token,
+        did=did,
+    )
+    return JSONResponse(result)
+
+
+@app.post("/api/xiaoai/reload")
+async def api_xiaoai_reload():
+    if _xiaoai_adapter is None:
+        return JSONResponse({"success": False, "error": "adapter 未初始化"}, status_code=400)
+    try:
+        asyncio.create_task(_reconnect_xiaoai())
         return JSONResponse({"success": True, "message": "正在重新连接…"})
     except Exception as exc:
         return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
@@ -722,6 +856,25 @@ async def _reconnect_wecom() -> None:
             logger.warning("[web] 企业微信 adapter 重连失败")
     except Exception as exc:
         logger.error("[web] 企业微信重连异常: %s", exc, exc_info=True)
+
+
+async def _reconnect_xiaoai() -> None:
+    if _xiaoai_adapter is None:
+        return
+    try:
+        if _xiaoai_adapter.is_connected:
+            await _xiaoai_adapter.disconnect()
+        loaded = _xiaoai_adapter.reload_credentials()
+        if not loaded:
+            logger.warning("[web] 重新加载小爱配置失败，无法重连")
+            return
+        ok = await _xiaoai_adapter.connect()
+        if ok:
+            logger.info("[web] 小爱音箱 adapter 已重新连接")
+        else:
+            logger.warning("[web] 小爱音箱 adapter 重连失败")
+    except Exception as exc:
+        logger.error("[web] 小爱音箱重连异常: %s", exc, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

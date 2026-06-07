@@ -2,7 +2,7 @@
 Blueprint 模块：负责行动蓝图（action blueprint）规划，以及为规划所需的 skill 信息召回。
 
 - get_skill_info: 与 skills(module=search) 工具同模式
-    1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
+    1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.6
     2. 个人 skill 库：按当前 user_id 直接列出全部
 - stream_action_blueprint: 调用规划专家模型，基于历史对话、可用工具与召回的 skill
   流式输出主 Agent 可直接执行的结构化蓝图；蓝图作为 get_action_blueprint 工具结果
@@ -55,7 +55,10 @@ class Blueprint:
         self.soulprout_tools = soulprout_tools or []
         self.tool_executor = tool_executor
 
-        self.vdb_client = VDBClient()
+        self.vdb_client = VDBClient(
+            dense_weight=config.hybrid_search_dense_weight,
+            sparse_weight=config.hybrid_search_sparse_weight,
+        )
         self.llm = LLM(config)
         self.last_blueprint_text = ""
 
@@ -98,7 +101,7 @@ class Blueprint:
     async def get_skill_info(self):
         """
         返回供规划专家参考的 skill 列表：
-        1. 系统 skill：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
+        1. 系统 skill：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.6
         2. 个人 skill：按当前 user_id 全量列出
         """
         system_skills: list[dict] = []

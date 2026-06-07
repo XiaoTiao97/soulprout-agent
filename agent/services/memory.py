@@ -14,7 +14,7 @@ class Memory:
     记忆模块：负责对话级别的记忆召回与同步。
 
     - recall: 在用户每一轮输入处理前调用，对 memory_collection 执行 hybrid_search，
-      Top-K & score >= 0.4（可通过 MEMORY_RECALL_SCORE 配置）& 排除已在 memory_loaded 中的记忆，
+      Top-K & score >= 0.6 & 排除已在 memory_loaded 中的记忆，
       命中后以 type="memory" / role="user" 的消息写入历史。
     - sync_with_history: compress 之后调用，扫描当前 runtime history 里
       所有 base_memory(module=load) 工具调用的 name，把 Conversation.memory_loaded 中
@@ -29,7 +29,10 @@ class Memory:
         self.conversation_id = conversation_id
         self.input_text = input_text
 
-        self.vdb_client = VDBClient()
+        self.vdb_client = VDBClient(
+            dense_weight=config.hybrid_search_dense_weight,
+            sparse_weight=config.hybrid_search_sparse_weight,
+        )
         self.memory_collection = config.memory_collection
         self.top_k = config.memory_recall_top_k
         self.score_threshold = config.memory_recall_score_threshold

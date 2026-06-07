@@ -7,8 +7,9 @@ VDB 服务 HTTP 客户端。
 使用方式：
     from agent.utils.vdb_client import VDBClient
 
-    client = VDBClient()                           # 使用默认地址
+    client = VDBClient()                           # 使用默认地址与默认融合权重 0.8 / 0.2
     client = VDBClient(base_url="http://vdb:8888") # 自定义地址
+    client = VDBClient(dense_weight=0.8, sparse_weight=0.2)
 
     # 确保 collection 存在（幂等）
     await client.ensure_collection("kb_collection", "kb")
@@ -33,8 +34,15 @@ import aiohttp
 
 
 class VDBClient:
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        dense_weight: Optional[float] = None,
+        sparse_weight: Optional[float] = None,
+    ):
         self._base = (base_url or os.getenv("VDB_BASE_URL", "http://localhost:8888")).rstrip("/")
+        self._dense_weight = 0.8 if dense_weight is None else dense_weight
+        self._sparse_weight = 0.2 if sparse_weight is None else sparse_weight
 
     # ─────────────────────────────────────────────────────────────────────────
     # 内部请求助手
@@ -142,12 +150,12 @@ class VDBClient:
     ) -> list[dict]:
         """
         Hybrid Search（embedding + BM25）。只需传原始文本，服务端自动向量化并融合检索。
-        融合权重可通过 HYBRID_SEARCH_DENSE_WEIGHT / HYBRID_SEARCH_SPARSE_WEIGHT 环境变量配置。
+        融合权重默认使用实例化时的 dense_weight / sparse_weight（默认 0.8 / 0.2）。
         """
         if dense_weight is None:
-            dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
+            dense_weight = self._dense_weight
         if sparse_weight is None:
-            sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
+            sparse_weight = self._sparse_weight
         payload: dict = {
             "query": query,
             "limit": limit,

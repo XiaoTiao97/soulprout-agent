@@ -1100,7 +1100,7 @@ class Chat:
         # 对于知识库的系统提示词处理
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
         print("system_prompt:", self.system_prompt)
-        # 召回相关记忆（hybrid_search Top10 & score>=0.4 & 排除已加载），命中后写入 memory 类型消息
+        # 召回相关记忆（hybrid_search Top10 & score>=0.6 & 排除已加载），命中后写入 memory 类型消息
         await self.recall_memory_process()
 
         tool_name_list = [tool.get("function").get("name") for tool in tools]

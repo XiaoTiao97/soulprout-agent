@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,28 +10,7 @@ load_dotenv()
 class Config:
     def __init__(self):
         self.docker_server_host = os.getenv("DOCKER_SERVER_HOST", "localhost")
-        self.deepseek_key = os.getenv("DEEPSEEK_KEY")
-        self.ernie_key = os.getenv("ERNIE_KEY")
-        self.ark_key = os.getenv("ARK_KEY")
-        self.qwen_key = os.getenv("QWEN_KEY")
-        self.minimax_key = os.getenv("MINIMAX_KEY")
-        self.kimi_key = os.getenv("KIMI_KEY")
-        self.glm_key = os.getenv("GLM_KEY")
-        self.qianfan_key = os.getenv("QIANFAN_KEY")
-        self.mimo_key = os.getenv("MIMO_KEY")
-
-        self.aliyun_access_key_id = os.getenv("ALIYUN_ACCESS_KEY_ID")
-        self.aliyun_access_key_secret = os.getenv("ALIYUN_ACCESS_KEY_SECRET")
-        self.nls_app_key = os.getenv("NLS_APP_KEY")
-        # 可选：控制台「获取临时 Token」填入，仅测试；生产用 AK/SK 自动 CreateToken
-        self.nls_token = os.getenv("NLS_TOKEN")
-
-        self.kimi_base_url = os.getenv("KIMI_BASE_URL", "https://api.moonshot.cn/v1")
-        self.deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-        self.ark_base_url = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
-        self.glm_base_url = os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
-        self.qianfan_base_url = os.getenv("QIANFAN_BASE_URL", "https://qianfan.baidubce.com/v2")
-        self.mimo_base_url = os.getenv("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1")
+        self._load_model()
         self.mongodb_url = f"mongodb://{self.docker_server_host}:27017"
         self.mongodb_database = "soulprout"
         self.client = AsyncIOMotorClient(self.mongodb_url)
@@ -67,73 +48,6 @@ class Config:
         self.collapse_model = self.flash_model
         self.soulprout_model_source = os.getenv("SOULPROUT_MODEL_SOURCE")
         self.soulprout_model = os.getenv("SOULPROUT_MODEL")
-
-        default_key = "sk-xxx"
-        self.models_info_list = [
-            {
-                "model_source": "ark",
-                "model_use": False if self.ark_key in [default_key, None] else True,
-                "models": [
-                    {"name": "doubao-seed-2-0-pro-260215", "context_window": 256000},
-                    {"name": "doubao-seed-2-0-lite-260215", "context_window": 256000},
-                    {"name": "doubao-seed-2-0-mini-260215", "context_window": 256000},
-                    {"name": "doubao-seed-2-0-pro-260215-thinking", "context_window": 256000},
-                    {"name": "doubao-seed-2-0-lite-260215-thinking", "context_window": 256000},
-                    {"name": "doubao-seed-2-0-mini-260215-thinking", "context_window": 256000},
-                ]
-            },
-            {
-                "model_source": "kimi",
-                "model_use": False if self.kimi_key in [default_key, None] else True,
-                "models": [
-                    {"name": "kimi-k2.6-thinking", "context_window": 256000},
-                    {"name": "kimi-k2.6", "context_window": 256000}
-                ]
-            },
-            {
-                "model_source": "deepseek",
-                "model_use": False if self.deepseek_key in [default_key, None] else True,
-                "models": [
-                    {"name": "deepseek-v4-pro", "context_window": 1000000},
-                    {"name": "deepseek-v4-flash", "context_window": 1000000},
-                ]
-            },
-            {
-                "model_source": "mimo",
-                "model_use": False if self.mimo_key in [default_key, None] else True,
-                "models": [
-                    {"name": "mimo-v2.5-pro-thinking", "context_window": 1000000},
-                    {"name": "mimo-v2.5-pro", "context_window": 1000000},
-                    {"name": "mimo-v2.5-thinking", "context_window": 1000000},
-                    {"name": "mimo-v2.5", "context_window": 1000000},
-                ]
-            },
-            {
-                "model_source": "glm",
-                "model_use": False if self.glm_key in [default_key, None] else True,
-                "models": [
-                    {"name": "glm-5.1", "context_window": 200000},
-                    {"name": "glm-5.1-thinking", "context_window": 200000},
-                ]
-            },
-            # {
-            #     "model_source": "minimax",
-            #     "model_use": False if self.minimax_key in [default_key, None] else True,
-            #     "models": [
-            #         {"name": "MiniMax-M2.5", "context_window": 204800}
-            #     ]
-            # },
-            {
-                "model_source": "qianfan",
-                "model_use": False if self.qianfan_key in [default_key, None] else True,
-                "models": [
-                    {"name": "kimi-k2.5-thinking", "context_window": 256000},
-                    {"name": "kimi-k2.5", "context_window": 256000},
-                    {"name": "glm-5-thinking", "context_window": 198000},
-                    {"name": "glm-5", "context_window": 198000}
-                ]
-            }
-        ]
         self.local_file_path = "/home/soulprout_data/"
         self.deployment_mode = os.getenv("DEPLOYMENT_MODE")
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
@@ -143,18 +57,37 @@ class Config:
 
         # ─── 记忆模块（vdb memory_collection + 召回参数）──────────────────────
         self.memory_collection = os.getenv("VDB_MEMORY_COLLECTION", "memory_collection")
-        self.memory_recall_top_k = int(os.getenv("MEMORY_RECALL_TOP_K", "10"))
-        # hybrid_search 融合权重：dense=embedding，sparse=BM25（默认 0.7 / 0.3）
-        self.hybrid_search_dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
-        self.hybrid_search_sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
-        # hybrid_search 融合权重：dense=embedding，sparse=BM25（默认 0.7 / 0.3）
-        self.hybrid_search_dense_weight = float(os.getenv("HYBRID_SEARCH_DENSE_WEIGHT", "0.7"))
-        self.hybrid_search_sparse_weight = float(os.getenv("HYBRID_SEARCH_SPARSE_WEIGHT", "0.3"))
-        # hybrid_search 融合分阈值：score >= 该值视为可匹配（默认 0.6）
-        self.hybrid_search_score_threshold = float(os.getenv("HYBRID_SEARCH_SCORE", "0.6"))
-        self.memory_recall_score_threshold = float(
-            os.getenv("MEMORY_RECALL_SCORE", str(self.hybrid_search_score_threshold))
-        )
+        self.memory_recall_top_k = 10
+        # hybrid_search 融合权重：dense=embedding，sparse=BM25
+        self.hybrid_search_dense_weight = 0.8
+        self.hybrid_search_sparse_weight = 0.2
+        # hybrid_search 融合分阈值：score >= 该值视为可匹配
+        self.hybrid_search_score_threshold = 0.6
+        self.memory_recall_score_threshold = 0.6
+
+    def _load_model(self):
+        model_json = Path(__file__).resolve().parent.parent / ".model.json"
+        if not model_json.is_file():
+            raise FileNotFoundError(f"缺少 {model_json}，请复制 agent/.model.json.example 为 agent/.model.json 并配置")
+        with open(model_json, encoding="utf-8") as f:
+            model_providers = json.load(f)
+        default_key = "sk-xxx"
+        self.models_info_list = []
+        for p in model_providers:
+            model_source = p["model_source"]
+            api_key = p.get("api_key")
+            base_url = p.get("base_url")
+            setattr(self, f"{model_source}_key", api_key)
+            if base_url:
+                setattr(self, f"{model_source}_base_url", base_url)
+            models = p.get("models")
+            if models:
+                self.models_info_list.append({
+                    "model_source": model_source,
+                    "display_name": p.get("display_name", model_source),
+                    "model_use": False if api_key in [default_key, None, ""] else True,
+                    "models": models,
+                })
 
     def kb_agent_card(self):
         return AgentCard(

@@ -30,7 +30,10 @@ class SoulproutToolFunction:
     def __init__(self, config):
         self.config = config
         self.file_process = AsyncFileProcess()
-        self.vdb_client = VDBClient()
+        self.vdb_client = VDBClient(
+            dense_weight=config.hybrid_search_dense_weight,
+            sparse_weight=config.hybrid_search_sparse_weight,
+        )
         host = os.getenv("DOCKER_SERVER_HOST", "localhost")
         self.agent_base_url = f"http://{host}:8080"
         self.main_base_url = f"http://{host}:8080"
@@ -260,7 +263,7 @@ class SoulproutToolFunction:
     async def _skills_search(self, query, conversation_id):
         """
         返回两类 skill：
-            1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.4
+            1. 系统 skill 库：通过 description 的 hybrid_search 召回 Top20 且 _score>=0.6
             2. 个人 skill 库：按当前 user_id 直接列出全部
         每条返回 name 与 description 两个字段。
         """

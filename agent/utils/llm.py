@@ -5,8 +5,8 @@ class LLM:
         self.config = config
 
     async def chat(self, messages, model_config):
-        key_attr = model_config.model_source+"_key"
-        url_attr = model_config.model_source+"_base_url"
+        key_attr = model_config.model_source + "_key"
+        url_attr = model_config.model_source + "_base_url"
         client = AsyncOpenAI(api_key=getattr(self.config, key_attr), base_url=getattr(self.config, url_attr))
         tools = model_config.tools
         thinking = False

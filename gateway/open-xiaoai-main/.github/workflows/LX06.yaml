@@ -1,0 +1,43 @@
+name: 小爱音箱 Pro（LX06）
+on:
+  workflow_dispatch:
+    inputs:
+      ota:
+        description: " 请输入 OTA 版本信息"
+        type: string
+        required: true
+
+jobs:
+  build:
+    name: 小爱音箱 Pro 固件更新
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 🔥 构建固件
+        id: build
+        run: |
+          cd packages/client-patch
+          docker run --rm -e OTA=${{ inputs.ota }} -v $(pwd)/assets:/app/assets -v $(pwd)/patches:/app/patches idootop/open-xiaoai:latest
+          MODEL=$(cat assets/.model)
+          VERSION=$(cat assets/.version)
+          TAG=${MODEL}_${VERSION}
+          FIRMWARE=$(basename $(ls \assets/*.bin 2>/dev/null | head -n 1) .bin)
+          cp assets/$FIRMWARE/root.squashfs assets/${TAG}.squashfs
+          cp assets/$FIRMWARE/root-patched.squashfs assets/${TAG}_patched.squashfs
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: ✅ 发布固件
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: 小爱音箱 Pro v${{ steps.build.outputs.version }}
+          tag: ${{ steps.build.outputs.tag }}
+          body: 小爱音箱 Pro v${{ steps.build.outputs.version }} 固件更新
+          draft: false
+          prerelease: false
+          makeLatest: latest
+          removeArtifacts: true
+          artifacts: packages/client-patch/assets/*.squashfs

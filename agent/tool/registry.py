@@ -219,7 +219,7 @@ TOOL_SCHEMAS = [
             "name": "skills",
             "description": (
                 "统一的技能（skill）入口，通过 module 切换子动作：\n"
-                "- module=search：基于 query 检索可用 skill（系统 skill 走向量召回 Top20 & score>=0.4，"
+                "- module=search：基于 query 检索可用 skill（系统 skill 走向量召回 Top20 & score>=0.6，"
                 "个人 skill 直接全量返回 name+description），用于挑选后续要加载的 skill。"
                 "**此模式下 query 必填且不能为空**——按当前意图召回最相关的 skill。\n"
                 "- module=view：查看当前用户可用的全部 skill（系统 + 个人，name+description），"

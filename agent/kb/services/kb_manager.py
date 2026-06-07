@@ -28,7 +28,10 @@ class KBManager:
         self.chunk_crud = MongoDBCRUD(config.db_chunks)
         self.agents_box = AgentsBox(config)
         self.file_process = AsyncFileProcess()
-        self.vdb_client = VDBClient()
+        self.vdb_client = VDBClient(
+            dense_weight=config.hybrid_search_dense_weight,
+            sparse_weight=config.hybrid_search_sparse_weight,
+        )
         self.kb_collection = config.kb_collection
 
     async def _ensure_vdb(self):
