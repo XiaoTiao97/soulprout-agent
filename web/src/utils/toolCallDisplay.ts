@@ -226,6 +226,13 @@ export function getToolSummaryLabel(
         : `等待用户反馈${prompt ? `：${prompt}` : '…'}`
     }
 
+    case 'conversation_option': {
+      const mod = str(args.module)
+      if (mod === 'clear') return hasResult ? '已清除对话上下文' : '正在清除对话上下文…'
+      if (mod === 'compress') return hasResult ? '已压缩对话上下文' : '正在压缩对话上下文…'
+      return hasResult ? '对话操作完成' : '正在处理对话…'
+    }
+
     case 'user_option': {
       const mod = str(args.module)
       const info = str(args.info_type) === 'agentinfo' ? '智能体配置' : '用户档案'

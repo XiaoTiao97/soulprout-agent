@@ -31,7 +31,7 @@ You have a persistent memory system.  <MEMORY>  tags mark auto-recalled memories
 # Tools:
 1. Local File Tools: You can use the read/write/edit tools to view, write, or modify local files.
 2. BASH: Use this tool to operate a local system.
-3. KNOWLEDGE BASE: If the prompt contains KNOWLEDGE BASE, it indicates a bound knowledge base; use soulprout_kb_tool for simple queries or soulprout_kb_agent for complex ones."""
+3. KNOWLEDGE BASE: If the prompt contains KNOWLEDGE BASE, it indicates a bound knowledge base; use soulprout_kb_tool for simple queries or use call_sub_agent (name: soulprout_kb_agent) for complex ones."""
 
 ABSTRACT_SYSTEM_PROMPT = "You are a content summary and title assistant. You need to summarize the user's input into a concise abstract as the title of the conversation according to the following requirements."
 ABSTRACT_USER_PROMPT = "First-round user input: <{input_text}>Please summarize the above user input into an abstract within 12 characters as the title of this conversation."
@@ -241,3 +241,6 @@ You need to collapse and compress the intermediate process into a brief summary,
 Output as a string-form list:
 [{'start_id': 'xxx', 'end_id': 'xxx', 'collapse_content': 'xxx'}, {...}]
 """
+
+# 当前对话初始状态绑定的智能体有，可以使用call_sub_agent来调用已经存在或临时新建的智能体
+SUB_AGENT_PROMPT = """SUB AGENT: The following agents are provided in the initial state: {agents_dict}. You can use call_sub_agent to invoke existing agents or temporarily create new ones."""

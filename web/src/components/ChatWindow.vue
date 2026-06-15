@@ -267,9 +267,62 @@
           </div>
         </template>
 
-        <!-- 无对话历史时显示欢迎界面（Soulprout 模式暂不展示任何引导内容） -->
-        <template v-else-if="chatMode !== 'soulprout'">
-          <div :style="{ display: isVisible ? 'flex' : 'none' }" class="no-history-container" @mouseenter="showSuggestions = true">
+        <!-- 无对话历史时显示欢迎界面 -->
+        <template v-else>
+          <!-- Soul 模式欢迎页 -->
+          <div
+            v-if="chatMode === 'soulprout'"
+            :style="{ display: isVisible ? 'flex' : 'none' }"
+            class="no-history-container no-history-container--soul"
+          >
+            <div class="no-history-title-row">
+              <p :class="['no-history-content1', { active: showContent1 }]">越用越懂你的AI伙伴</p>
+            </div>
+            <div :class="['soul-channel-desc', { active: showContent2 }]">
+              <div class="soul-channel-line">
+                <span class="soul-channel-desc-label">下载应用，体验多渠道接入：</span>
+                <div class="soul-channel-list">
+                  <div
+                    v-for="channel in soulChannels"
+                    :key="channel.name"
+                    class="soul-channel-item"
+                    :class="{ 'soul-channel-item--unsupported': !channel.supported }"
+                  >
+                    <span
+                      class="soul-channel-box"
+                      :class="{ 'soul-channel-box--checked': channel.supported }"
+                      aria-hidden="true"
+                    >
+                      <svg
+                        v-if="channel.supported"
+                        class="soul-channel-box-icon"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M2.5 6L5 8.5L9.5 3.5"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span class="soul-channel-name">{{ channel.name }}</span>
+                  </div>
+                  <span class="soul-channel-ellipsis" aria-hidden="true">…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Task 模式欢迎页 -->
+          <div
+            v-else
+            :style="{ display: isVisible ? 'flex' : 'none' }"
+            class="no-history-container"
+            @mouseenter="showSuggestions = true"
+          >
             <div class="no-history-title-row" @mouseenter="showViewHint = false">
               <p :class="['no-history-content1', { active: showContent1 }]">你好{{ username }}，需要我做些什么？🌱</p>
               <span v-if="showViewHint" :class="['view-hint', { active: showHintActive }]">👈 查看这里</span>
@@ -372,7 +425,9 @@ interface Props {
   username: string;
   /** 父组件在 reload_history 时递增，用于清空流式块 UI */
   reloadStreamingUiToken?: number;
-  /** 当前聊天模式：'soulprout' | 'task'；Soulprout 模式下隐藏欢迎页与高级设置入口 */
+  /** 切换模式且无历史消息时递增，用于重播欢迎页动画 */
+  welcomeAnimationToken?: number;
+  /** 当前聊天模式：'soulprout' | 'task'；Soulprout 模式下隐藏高级设置入口 */
   chatMode?: 'soulprout' | 'task';
   /** 工具消息（含工具调用结果），用于 web_search 展示 */
   toolMessages?: AgentMessage[];
@@ -397,7 +452,8 @@ const props = withDefaults(defineProps<Props>(), {
   isGenerating: false,
   planStreamContent: '',
   reloadStreamingUiToken: 0,
-  chatMode: 'task',
+  welcomeAnimationToken: 0,
+  chatMode: 'soulprout',
   toolMessages: () => [],
 })
 
@@ -551,6 +607,14 @@ const messageInput = ref<InstanceType<typeof MessageInput> | null>(null)
 const showSuggestions = ref(false)
 const showViewHint = ref(true)
 const showHintActive = ref(false)
+
+const soulChannels = [
+  { name: '微信', supported: true },
+  { name: '飞书', supported: true },
+  { name: '企业微信', supported: true },
+  { name: '小爱音箱', supported: true },
+  { name: 'Rokid AI 眼镜', supported: false },
+] as const
 
 const editingUserMessageId = ref<string | null>(null)
 const editingUserDraft = ref('')
@@ -755,8 +819,8 @@ function handleStopGeneration() {
   // 根据 agent_id 设置 agent_name，用于界面显示（发送时仍用 agent_id）
   if (agent_use && agent_id) {
     if (typeof agent_id === 'string') {
-      // 特殊智能体：mengya_create_agent 显示中文名称
-      if (agent_id === 'mengya_create_agent') {
+      // 特殊智能体：soulprout_create_agent 显示中文名称
+      if (agent_id === 'soulprout_create_agent') {
         props.chat_request.agent_name = '创建Agent专家/团队';
       } else {
         const agent = agent_card_list.value.find(a => (a.agent_id || a.name) === agent_id);
@@ -1062,18 +1126,45 @@ watch(() => props.agent_message_list, () => {
   })
 }, { deep: true, immediate: true })
 
+let welcomeAnimationTimers: ReturnType<typeof setTimeout>[] = []
+
+function clearWelcomeAnimationTimers() {
+  welcomeAnimationTimers.forEach(clearTimeout)
+  welcomeAnimationTimers = []
+}
+
+function scheduleWelcomeAnimationStep(fn: () => void, delay: number) {
+  welcomeAnimationTimers.push(setTimeout(fn, delay))
+}
+
+function replayWelcomeAnimation() {
+  clearWelcomeAnimationTimers()
+  isVisible.value = false
+  showSuggestions.value = false
+  showViewHint.value = true
+  showHintActive.value = false
+  showLogo.value = false
+  showContent1.value = false
+  showContent2.value = false
+
+  nextTick(() => {
+    isVisible.value = true
+  })
+}
+
 // 欢迎动画逻辑
 watch(isVisible, (val) => {
+  clearWelcomeAnimationTimers()
   if (val) {
     showLogo.value = false
     showContent1.value = false
     showContent2.value = false
     showHintActive.value = false
 
-    setTimeout(() => (showLogo.value = true), 0)
-    setTimeout(() => (showContent1.value = true), 50)
-    setTimeout(() => (showHintActive.value = true), 1050) // 主标题出现后约1秒再出灰色小字
-    setTimeout(() => (showContent2.value = true), 900)
+    scheduleWelcomeAnimationStep(() => { showLogo.value = true }, 0)
+    scheduleWelcomeAnimationStep(() => { showContent1.value = true }, 50)
+    scheduleWelcomeAnimationStep(() => { showHintActive.value = true }, 1050)
+    scheduleWelcomeAnimationStep(() => { showContent2.value = true }, 900)
   } else {
     showLogo.value = false
     showContent1.value = false
@@ -1083,7 +1174,7 @@ watch(isVisible, (val) => {
 })
 
 // 初始化显示
-setTimeout(() => { isVisible.value = true }, 500)
+scheduleWelcomeAnimationStep(() => { isVisible.value = true }, 500)
 
 // Add copy function in script
 const copyToClipboard = (text: string | undefined, timestamp: number) => {
@@ -1184,6 +1275,7 @@ const handleCodeCopy = (e) => {
 // Call attachCopyListeners in onMounted and onUpdated
 onMounted(attachCopyListeners)
 onUpdated(attachCopyListeners)
+onUnmounted(clearWelcomeAnimationTimers)
 
 const hasMessages = computed(
   () =>
@@ -1194,15 +1286,18 @@ const hasMessages = computed(
 
 watch(hasMessages, (newVal, oldVal) => {
   if (!newVal && oldVal) {
-    isVisible.value = false
-    showSuggestions.value = false
-    showViewHint.value = true
-    showHintActive.value = false
-    nextTick(() => {
-      isVisible.value = true
-    })
+    replayWelcomeAnimation()
   }
 })
+
+watch(
+  () => props.welcomeAnimationToken,
+  () => {
+    if (!hasMessages.value) {
+      replayWelcomeAnimation()
+    }
+  },
+)
 
 const prefillInput = (text: string) => {
   messageInput.value?.setInput(text)
@@ -1210,7 +1305,7 @@ const prefillInput = (text: string) => {
 
 // 定制Agent员工：选中智能体并直接发送
 const handleCreateAgentClick = () => {
-  handleSelectAgent('expert-agent', 'mengya_create_agent')
+  handleSelectAgent('expert-agent', 'soulprout_create_agent')
   handleSendMessage('你好，请为我开始创建', [])
 }
 </script>
@@ -1634,6 +1729,113 @@ const handleCreateAgentClick = () => {
 @keyframes view-hint-shine {
   0%, 83% { left: -100%; }
   100% { left: 100%; }
+}
+
+.no-history-container--soul {
+  max-width: 720px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.no-history-container--soul .no-history-title-row {
+  align-items: center;
+}
+
+.no-history-container .no-history-content1 {
+  font-size: 30px;
+  font-weight: 550;
+  height: auto;
+  line-height: 1.2;
+  margin-bottom: 5px;
+  letter-spacing: 1px;
+  color: rgb(0, 0, 0);
+}
+
+.soul-channel-desc {
+  margin: 14px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  color: rgba(71, 85, 105, 0.92);
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.soul-channel-desc.active {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.soul-channel-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.soul-channel-desc-label {
+  flex-shrink: 0;
+  color: rgba(100, 116, 139, 0.95);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.soul-channel-list {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.soul-channel-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(51, 65, 85, 0.95);
+  flex-shrink: 0;
+}
+
+.soul-channel-item--unsupported {
+  color: rgba(100, 116, 139, 0.88);
+}
+
+.soul-channel-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.75);
+  border-radius: 3px;
+  background: rgba(248, 250, 252, 0.9);
+  flex-shrink: 0;
+}
+
+.soul-channel-box--checked {
+  border-color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+
+.soul-channel-box-icon {
+  width: 8px;
+  height: 8px;
+}
+
+.soul-channel-name {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.soul-channel-ellipsis {
+  flex-shrink: 0;
+  color: rgba(100, 116, 139, 0.75);
+  font-size: 12px;
+  line-height: 12px;
 }
 
 </style>

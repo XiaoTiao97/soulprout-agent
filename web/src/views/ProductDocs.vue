@@ -61,12 +61,12 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import logo from '@/assets/images/soulprout_logo.png'
 
-import part1Raw from '@/utils/第一部分_认识萌芽.md?raw'
-import part2Raw from '@/utils/第二部分_快速上手.md?raw'
-import part3Raw from '@/utils/第三部分_四大功能库详解.md?raw'
-import part4Raw from '@/utils/第四部分_专家模式实战.md?raw'
-import part5Raw from '@/utils/第五部分_其他功能.md?raw'
-import part6Raw from '@/utils/第六部分_私有化部署.md?raw'
+import part1Raw from '@/utils/docs/第一部分_认识Soulprout.md?raw'
+import part2Raw from '@/utils/docs/第二部分_快速上手.md?raw'
+import part3Raw from '@/utils/docs/第三部分_四大功能库详解.md?raw'
+import part4Raw from '@/utils/docs/第四部分_专家模式实战.md?raw'
+import part5Raw from '@/utils/docs/第五部分_Soul模式.md?raw'
+import part6Raw from '@/utils/docs/第六部分_开源与私有化部署.md?raw'
 
 // 文档图片：用 import 方式加载，打包进 assets，确保生产环境一定能访问到
 const docImageModules = import.meta.glob('@/assets/docs-images/*.png', { eager: true, as: 'url' })

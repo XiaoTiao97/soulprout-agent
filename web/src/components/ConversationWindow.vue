@@ -9,7 +9,7 @@
                         src="@/assets/images/logo.png"
                         alt="Soulprout"
                     />
-                    <button class="close-sidebar" @click="$emit('SidebarChange')" aria-label="关闭边栏" data-testid="close-sidebar-button">
+                    <button class="close-sidebar hover-hint" data-tip="扩展/关闭" @click="$emit('SidebarChange')" aria-label="关闭边栏" data-testid="close-sidebar-button">
                         <img class="icon-xl-heavy max-md:hidden" width="20" height="20" src="@/assets/images/aspect_ratio.svg" alt="" />
                     </button>
                 </div>
@@ -62,11 +62,11 @@
                 <button
                   type="button"
                   role="tab"
-                  class="chat-mode-option"
+                  class="chat-mode-option hover-hint"
                   :class="{ 'chat-mode-option--active': chatMode === 'soulprout' }"
                   :aria-selected="chatMode === 'soulprout'"
                   :tabindex="chatMode === 'soulprout' ? 0 : -1"
-                  title="Soul 模式：日常陪伴对话"
+                  data-tip="Soul 模式：越用越懂你的AI伙伴"
                   @click="handleSwitchMode('soulprout')"
                 >
                   <svg class="chat-mode-option-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -79,11 +79,11 @@
                 <button
                   type="button"
                   role="tab"
-                  class="chat-mode-option"
+                  class="chat-mode-option hover-hint"
                   :class="{ 'chat-mode-option--active': chatMode === 'task' }"
                   :aria-selected="chatMode === 'task'"
                   :tabindex="chatMode === 'task' ? 0 : -1"
-                  title="Task 模式：任务式多会话协作"
+                  data-tip="任务模式：专心做好一件事"
                   @click="handleSwitchMode('task')"
                 >
                   <svg class="chat-mode-option-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -1,6 +1,6 @@
 from agent.utils.llm import LLM
 from agent.core.config import Config
-from agent.api.models.message import ChatResponse, Message, ModelConfig, ChatRequest, FileMessage
+from agent.api.models.message import ChatResponse, Message, ModelConfig, ChatRequest, FileMessage, TempSubAgent
 from agent.api.models.agent_card import AgentCard
 from agent.database.models.message import AgentMessage, SubAgentMessage
 from agent.database.models.conversation import Conversation, SubAgentConversation
@@ -56,8 +56,8 @@ class Chat:
         self.is_sub_agent = getattr(request, "is_sub_agent", False)
         self.model_source = request.model_source
         self.model = request.model
-        self.tools_use = request.tools_use
-        self.skills_use = request.skills_use if request.skills_use else False
+        self.tools_use = getattr(request, "tools_use", True)
+        self.skills_use = getattr(request, "skills_use", True)
         self.kb_use = request.kb_use
         self.agent_use = request.agent_use
         self.agent_id = request.agent_id
@@ -66,6 +66,7 @@ class Chat:
         self.temp_file_path = request.temp_file_path
         self.file_name_list = request.file_name_list
         self.user_feedback = getattr(request, "user_feedback", False)
+        self.temp_sub_agent = getattr(request, "temp_sub_agent", False)
 
         self.time_now = f"""{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} {datetime.now().strftime("%A")}"""
         self.capabilities_prompt = prompt.CAPABILITIES_PROMPT
@@ -78,6 +79,7 @@ class Chat:
         self.sub_agents = []
         self.picture_base64_result = []
         self.pause_for_user_feedback = False
+        self.stop_after_conversation_clear = False
         self.agents_dict = {}
         self.total_tokens = 0
         self.round_limit = 200
@@ -98,6 +100,7 @@ class Chat:
             "edit_memory",
             "get_action_blueprint",
             "ask_user_feedback",
+            "conversation_option",
         ]
 
     async def mcp_list_tools(self):
@@ -114,6 +117,32 @@ class Chat:
 
     async def delete_runtime_messages(self, message_ids):
         return await delete_runtime_messages(self.is_sub_agent, message_ids)
+
+    def normalize_sub_agent_skills(self, skills):
+        """将 call_sub_agent 的 skills 参数规范为 AgentCard.skills 格式。"""
+        if not skills:
+            return None
+        if isinstance(skills, dict):
+            normalized = {}
+            system_skills = skills.get("system")
+            user_skills = skills.get("user")
+            if system_skills:
+                normalized["system"] = list(system_skills)
+            if user_skills:
+                normalized["user"] = list(user_skills)
+            return normalized or None
+        if isinstance(skills, list):
+            return {"system": list(skills)} if skills else None
+        return None
+
+
+    def normalize_sub_agent_string_list(self, value):
+        """将 tools/kbs/files 等参数规范为字符串列表。"""
+        if not value:
+            return []
+        if isinstance(value, list):
+            return [str(item) for item in value if item is not None and str(item).strip()]
+        return []
 
     # llm_stream/大模型流式输出
     async def llm_stream(self, messages, model_config):
@@ -493,6 +522,7 @@ class Chat:
         skills_use_dict = agent_card.skills
         skills_list = await self.expert_load_skills(skills_use_dict) if skills_use_dict else []
         self.system_prompt += f"\nThe following skills has been loaded to workspace: {skills_list}" if skills_use_dict else ""
+        self.system_prompt += prompt.SUB_AGENT_PROMPT.format(agents_dict=self.agents_dict)
         self.model_source = agent_card.model_source
         self.model = agent_card.model
         self.kb_use = agent_card.kbs
@@ -576,68 +606,68 @@ class Chat:
             agent_name_list.append(agent_card.name)
         self.sub_agents = agent_name_list
         for tool in tools:
-            tname = tool.get("function", {}).get("name")
-            if tname in ("call_sub_agent", "soulprout_kb_agent", "soulprout_kb_tool"):
+            name = tool.get("function", {}).get("name")
+            if name in ("call_sub_agent", "soulprout_kb_tool"):
                 tools_use_final.append(tool)
         if len(tools_use_final) > 0:
             self.tools_use = True
         return tools_use_final
 
-    async def multi_agent_call(self, name, arguments):
-        target_name = name
+    async def multi_agent_call(self, arguments):
         module = arguments.get("module")
-        if name == "call_sub_agent":
-            target_name = arguments.get("name")
-            if module and module != "exist":
-                error_resp = ChatResponse(
-                    conversation_id=self.conversation_id,
-                    user_id=self.user_id,
-                    type="error",
-                    content="call_sub_agent 当前仅支持 module=exist"
-                ).model_dump_json()
-                yield error_resp
-                return
-            if not target_name:
-                error_resp = ChatResponse(
-                    conversation_id=self.conversation_id,
-                    user_id=self.user_id,
-                    type="error",
-                    content="call_sub_agent 缺少 name 参数"
-                ).model_dump_json()
-                yield error_resp
-                return
+        target_name = arguments.get("name")
         purpose = arguments.get("purpose")
         sid = arguments.get("session_id")
         session_id = sid if sid and len(sid) == 4 else None
         print("arguments: ", arguments)
         print("session_id: ", session_id)
-        target_agent_id = None
-        if self.agents_dict:
-            target_agent_id = self.agents_dict.get(target_name)
+        target_agent_id = self.agents_dict.get(target_name)
         if not target_agent_id and target_name:
             target_card = await self.config.db_agent_card.find_one({"name": target_name})
             target_agent_id = target_card.get("agent_id") if target_card else None
         if not target_agent_id:
-            error_resp = ChatResponse(
+            target_agent_id = arguments.get("agent_id")
+
+        if module and module == "exist":
+            if not target_agent_id:
+                error_resp = ChatResponse(
+                    conversation_id=self.conversation_id,
+                    user_id=self.user_id,
+                    type="error",
+                    content=f"未找到子智能体: {target_name}",
+                ).model_dump_json()
+                yield error_resp
+                return
+            chat_request_data = ChatRequest(
+                agent_id=target_agent_id,
+                message=purpose,
                 conversation_id=self.conversation_id,
                 user_id=self.user_id,
-                type="error",
-                content=f"未找到子智能体: {target_name}"
-            ).model_dump_json()
-            yield error_resp
-            return
-        chat_request_data = ChatRequest(
-            model_source=self.model_source,
-            model=self.model,
-            agent_id=target_agent_id,
-            message=purpose,
-            kb_use=self.kb_use,
-            conversation_id=self.conversation_id,
-            user_id=self.user_id,
-            session_id=session_id,
-            is_sub_agent=True,
-            agent_use="expert-agent",
-        )
+                session_id=session_id,
+                is_sub_agent=True,
+                agent_use="expert-agent",
+            )
+        else:
+            sub_name = arguments.get("name") if arguments.get("name") else "unknown_agent"
+            sub_system_prompt = arguments.get("system_prompt") if arguments.get("system_prompt") else ""
+            sub_skills = self.normalize_sub_agent_skills(arguments.get("skills"))
+            sub_tools = self.normalize_sub_agent_string_list(arguments.get("tools"))
+            sub_kbs = self.normalize_sub_agent_string_list(arguments.get("kbs") or arguments.get("kb"))
+            sub_files = self.normalize_sub_agent_string_list(arguments.get("files"))
+            sub_agent_id = str(uuid4())
+            temp_sub_agent = TempSubAgent(user_id=self.user_id, agent_id=sub_agent_id, description="temp_sub_agent", model_source=self.config.pro_model_source, model=self.config.pro_model, name=sub_name, system_prompt=sub_system_prompt, skills=sub_skills, tools=sub_tools, kbs=sub_kbs, files=sub_files)
+            chat_request_data = ChatRequest(
+                message=purpose,
+                model_source=self.config.pro_model_source,
+                model=self.config.pro_model,
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                agent_id=sub_agent_id,
+                session_id=session_id,
+                is_sub_agent=True,
+                agent_use="temp-expert-agent",
+                temp_sub_agent=temp_sub_agent,
+            )
         print(f"Sending request: {chat_request_data}")
         sub_chat = Chat(chat_request_data)
         async for chunk in sub_chat.run():
@@ -649,7 +679,7 @@ class Chat:
         agent_session_id = ""
         agent_display_name = arguments.get("name") if name == "call_sub_agent" else name
         try:
-            async for result in self.multi_agent_call(name=name, arguments=arguments):
+            async for result in self.multi_agent_call(arguments=arguments):
                 result_tool = ChatResponse(**json.loads(result))
                 if result_tool.type == "error":
                     result_agent = f"子智能体{agent_display_name}调用失败，请检查问题后重试"
@@ -695,6 +725,15 @@ class Chat:
             AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="agent",
                          role="tool", content=result_message,
                          tool_call_id=message.tool_calls[tool_id].id, created_at=datetime.utcnow()))
+        if result_message.strip():
+            yield ChatResponse(
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                type="agent",
+                role="tool",
+                content=result_message,
+                tool_call_id=message.tool_calls[tool_id].id,
+            ).model_dump_json()
 
     async def process_single_tool(self, name, arguments, message, tool_id):
         if name == "read_picture":
@@ -759,6 +798,71 @@ class Chat:
                     created_at=datetime.utcnow(),
                 )
             )
+        elif name == "conversation_option":
+            module = arguments.get("module")
+            tool_call_id = message.tool_calls[tool_id].id
+            if module == "clear":
+                history = await self.get_runtime_history()
+                ids = [item.id for item in history]
+                if ids:
+                    await self.delete_runtime_messages(ids)
+                memory = Memory(
+                    self.config, self.is_sub_agent, self.session_id,
+                    self.user_id, self.conversation_id, "",
+                )
+                await memory._set_memory_loaded([])
+                self.messages = [{"role": "system", "content": self.system_prompt}]
+                self.stop_after_conversation_clear = True
+                yield ChatResponse(
+                    conversation_id=self.conversation_id,
+                    user_id=self.user_id,
+                    type="reload_history",
+                    role="assistant",
+                    content="",
+                ).model_dump_json()
+                return
+            elif module == "compress":
+                ok = await Compress(
+                    self.config, self.is_sub_agent, self.session_id,
+                    self.user_id, self.conversation_id, self.model,
+                ).run(force=True)
+                content = "上下文压缩成功" if ok else "上下文压缩失败或无内容可压缩"
+                reload = ok
+            else:
+                content = "错误：module 必须为 clear 或 compress"
+                reload = False
+
+            self.messages.append({"role": "tool", "content": content, "tool_call_id": tool_call_id})
+            yield ChatResponse(
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                type="tool",
+                role="tool",
+                content=content,
+                tool_call_id=tool_call_id,
+            ).model_dump_json()
+            await self.save_message(
+                AgentMessage(
+                    user_id=self.user_id,
+                    conversation_id=self.conversation_id,
+                    type="tool",
+                    role="tool",
+                    content=content,
+                    tool_call_id=tool_call_id,
+                    created_at=datetime.utcnow(),
+                )
+            )
+            if reload:
+                history = await self.get_history()
+                history.insert(0, {"role": "system", "content": self.system_prompt})
+                self.messages = history
+                yield ChatResponse(
+                    conversation_id=self.conversation_id,
+                    user_id=self.user_id,
+                    type="reload_history",
+                    role="assistant",
+                    content="",
+                ).model_dump_json()
         else:
             result = await self.mcp_call_tool(name=name, arguments=arguments)
 
@@ -804,7 +908,7 @@ class Chat:
                     print(f"处理生成器时出错: {e}")
 
     async def agents_and_tools_call(self, message, name_list, arguments_list):
-        tasks = [self.process_single_agent(name, arguments_list[i], message, i) if name in ("soulprout_kb_agent", "call_sub_agent") else self.process_single_tool(name, arguments_list[i], message, i) for i, name in enumerate(name_list)]
+        tasks = [self.process_single_agent(name, arguments_list[i], message, i) if name == "call_sub_agent" else self.process_single_tool(name, arguments_list[i], message, i) for i, name in enumerate(name_list)]
 
         # 并行处理所有生成器，实时产生结果
         async for result in self.merge_async_generators(tasks):
@@ -892,6 +996,9 @@ class Chat:
         if self.agent_id == "soulprout_kb_agent":
             self.agent_card = self.config.kb_agent_card()
             preserve_kb_use = self.kb_use
+        elif self.agent_use == "temp-expert-agent":
+            self.agent_card = AgentCard(**self.temp_sub_agent.model_dump())
+            preserve_kb_use = None
         else:
             agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
             if not agent_card:
@@ -1042,7 +1149,10 @@ class Chat:
                         reasoning_content_total += reasoning_content
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="reasoner_content", content=reasoning_content).model_dump_json()
 
-            if self.pause_for_user_feedback:
+            if self.stop_after_conversation_clear:
+                self.stop_after_conversation_clear = False
+                finish = True
+            elif self.pause_for_user_feedback:
                 self.pause_for_user_feedback = False
                 finish = True
             elif len(message_total) > 0:
@@ -1073,10 +1183,10 @@ class Chat:
 
         # Process expert pick
         if self.agent_use in ["expert-agent"]:
+            agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
+            self.agent_card = AgentCard(**agent_card)
             tools = await self.expert_agent_init_process()
             if self.agent_id and isinstance(self.agent_id, str):
-                agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
-                self.agent_card = AgentCard(**agent_card)
                 self.agent_name = self.agent_card.name_zh if self.agent_card.name_zh else self.agent_card.name
 
         # Soulprout 模式：注入 USERINFO / AGENTINFO 并使用 soulprout_tools
@@ -1136,7 +1246,7 @@ class Chat:
             async for message in self.llm_stream(self.messages, self.model_config):
                 if message.role == "assistant" and message.tool_calls:
                     self.messages.append(message.__dict__)
-                    tool_calls_type = "get_agents" if message.tool_calls[0].function.name in ("soulprout_kb_agent", "call_sub_agent") else "get_tools"
+                    tool_calls_type = "get_agents" if message.tool_calls[0].function.name == "call_sub_agent" else "get_tools"
                     message_save = {
                         "user_id": self.user_id,
                         "conversation_id": self.conversation_id,
@@ -1157,6 +1267,8 @@ class Chat:
                         ]
                     else:
                         message_save["tool_calls"] = None
+                    if message.tool_calls:
+                        message_save["tool_call_id"] = message.tool_calls[0].id
                     if len(message_total) > 0:
                         self.messages[-1]["content"] = message_total
                         message_save["content"] = message_total
@@ -1201,7 +1313,10 @@ class Chat:
                         reasoning_content_total += reasoning_content
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="reasoner_content", content=reasoning_content).model_dump_json()
 
-            if self.pause_for_user_feedback:
+            if self.stop_after_conversation_clear:
+                self.stop_after_conversation_clear = False
+                finish = True
+            elif self.pause_for_user_feedback:
                 self.pause_for_user_feedback = False
                 finish = True
             elif len(message_total) > 0:

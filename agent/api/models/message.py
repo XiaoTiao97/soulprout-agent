@@ -2,6 +2,19 @@ from pydantic import BaseModel
 from typing import Optional, Literal, Dict, List, Any, Union
 from datetime import datetime
 
+class TempSubAgent(BaseModel):
+    user_id: str
+    agent_id: str
+    description: str
+    model_source: str
+    model: str
+    name: str
+    system_prompt: Optional[str] = ""
+    skills: Optional[Dict[Literal["system", "user"], list]] = None
+    tools: Optional[List[str]] = []
+    kbs: Optional[List[str]] = []
+    files: Optional[List[str]] = []
+
 class ChatRequest(BaseModel):
     model_source: Optional[str] = "deepseek"
     model: Optional[str] = "deepseek-chat"
@@ -18,6 +31,7 @@ class ChatRequest(BaseModel):
     temp_file_path: Union[None, str] = None
     file_name_list: Union[None, List] = None
     user_feedback: Optional[bool] = False
+    temp_sub_agent: Optional[TempSubAgent] = None
     class Config:
         extra = "allow"
 

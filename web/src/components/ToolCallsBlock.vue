@@ -68,7 +68,7 @@
             </div>
           </div>
 
-          <div class="tc-detail-block">
+          <div v-if="showResults" class="tc-detail-block">
             <div class="tc-detail-block-title">返回结果</div>
             <div v-if="getRawResult(item.toolCallId)" class="tc-result-wrap">
               <div
@@ -111,6 +111,8 @@ const props = defineProps<{
   agentMessageList?: AgentMessage[]
   /** 流式进行中且当前块尚无结果时显示扫光 */
   pending?: boolean
+  /** 是否展示工具返回结果，子智能体侧栏仅展示调用时可设为 false */
+  showResults?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -208,11 +210,15 @@ function hasArguments(item: ToolCallItem): boolean {
 }
 
 function getLabel(item: ToolCallItem): string {
+  if (props.showResults === false) {
+    return getToolSummaryLabel(item.toolName, item.arguments, true)
+  }
   const result = getRawResult(item.toolCallId)
   return getToolSummaryLabel(item.toolName, item.arguments, !!result, result)
 }
 
 function isPending(item: ToolCallItem): boolean {
+  if (props.showResults === false) return false
   return !!props.pending && !getRawResult(item.toolCallId)
 }
 </script>

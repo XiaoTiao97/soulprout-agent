@@ -35,6 +35,7 @@
             :userId="currentUserId"
             :username="currentUsername"
             :reloadStreamingUiToken="reloadStreamingUiToken"
+            :welcomeAnimationToken="welcomeAnimationToken"
             :chatMode="chatMode"
             :toolMessages="toolMessages"
             @sendMessage="handleSendMessage"
@@ -67,6 +68,7 @@
               :conversationId="chat_request.conversation_id || ''"
               :webOpenTrigger="webOpenTrigger"
               :fileOpenTrigger="fileOpenTrigger"
+              :isGenerating="isGenerating"
             />
           </div>
         </transition>
@@ -126,7 +128,9 @@ const conversation_list = ref<ConversationBase[]>([])
 const chat_request = ref<Partial<ChatRequest>>({})
 const agent_message_list = ref<AgentMessage[]>([])
 /** 当前聊天模式：'soulprout' 直接对接 user_id 唯一会话；'task' 为常规任务模式 */
-const chatMode = ref<'soulprout' | 'task'>('task')
+const chatMode = ref<'soulprout' | 'task'>('soulprout')
+/** 切换模式且无历史消息时递增，驱动 ChatWindow 重播欢迎页动画 */
+const welcomeAnimationToken = ref(0)
 /** 切到 Soulprout 模式前缓存任务模式的 chat_request，便于切回任务模式时恢复 */
 const cachedTaskChatRequest = ref<Partial<ChatRequest> | null>(null)
 chat_request.value.tools_use = true
@@ -290,6 +294,13 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
       await pickConversation(chat_request.value.conversation_id)
     }
   }
+  if (
+    agent_message_list.value.length === 0 &&
+    !currentStreamingMessage.value &&
+    !chatPlanStreamForWindow.value
+  ) {
+    welcomeAnimationToken.value += 1
+  }
 }
 
 /** Soulprout 唯一会话以 user_id 为 conversation_id：尝试拉取已存在的消息列表，无则置空，由首次发送时后端建会话 */
@@ -396,7 +407,7 @@ function normalizeMessagesFromApi(raw: AgentMessage[]): AgentMessage[] {
 function isToolSidebarMessage(msg: AgentMessage): boolean {
   if (msg.role === 'file') return false
   if (msg.type === 'user_feedback') return false
-  return msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools'
+  return msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools' || msg.type === 'get_agents'
 }
 
 /** 会话上缓存的蓝图注入 toolMessages（与原 cot_plan 行为一致；日后可单独改 blueprint 展示样式） */
@@ -621,17 +632,22 @@ async function processMessageQueue() {
       }
     }
 
-    if (chunk_json.type === 'get_tools' && chunk_json.role === 'assistant') {
-      // console.log('额外添加 get_tools 消息到 toolMessages')
+    if (
+      (chunk_json.type === 'get_tools' || chunk_json.type === 'get_agents') &&
+      chunk_json.role === 'assistant'
+    ) {
+      const toolCallId =
+        chunk_json.tool_call_id ||
+        (chunk_json.tool_calls?.[0]?.id ?? '')
       toolMessages.value.push({
         user_id: chunk_json.user_id || '',
         conversation_id: chunk_json.conversation_id || '',
         type: chunk_json.type,
         role: chunk_json.role,
         content: chunk_json.content || '',
-        tool_call_id: chunk_json.tool_call_id || '',
+        tool_call_id: toolCallId,
         tool_calls: chunk_json.tool_calls || undefined,
-        created_at: chunk_json.created_at
+        created_at: chunk_json.created_at,
       })
     }
 
@@ -1168,12 +1184,15 @@ function handleResize() {
 }
 
 // ✅ 生命周期中调用
-onMounted(() => {
-  fetchCurrentUserId()  // 先获取 userId
-  fetchConversations()  // 然后获取会话列表
-  getLLMmodels()
-  loadSavedWidths()  // 加载保存的宽度设置
+onMounted(async () => {
+  loadSavedWidths()
   window.addEventListener('resize', handleResize)
+  await fetchCurrentUserId()
+  await fetchConversations()
+  await getLLMmodels()
+  if (chatMode.value === 'soulprout') {
+    await loadSoulproutConversation()
+  }
 })
 
 onUnmounted(() => {

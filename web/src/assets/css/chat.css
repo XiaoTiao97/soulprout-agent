@@ -289,8 +289,8 @@ body::before {
   border: none;
   color: darkslategray;
   background-color: transparent;
-  position: relative; /* 为后面的文字定位做准备 */
-  cursor: pointer;    /* 鼠标变小手 */
+  position: relative;
+  cursor: pointer;
   padding: 6px;
   margin-top: 8px;
   transition: background-color 0.2s ease;
@@ -301,8 +301,12 @@ body::before {
   background-color: rgba(226, 226, 226, 0.800);
 }
 
-.close-sidebar::after {
-  content: '扩展/关闭';
+.hover-hint {
+  position: relative;
+}
+
+.hover-hint::after {
+  content: attr(data-tip);
   position: absolute;
   top: 100%;
   left: 50%;
@@ -313,14 +317,16 @@ body::before {
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 10px;
+  font-weight: 400;
+  letter-spacing: normal;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
   margin-top: 4px;
-  z-index: 10;
+  z-index: 10000;
 }
 
-.close-sidebar:hover::after {
+.hover-hint:hover::after {
   opacity: 1;
 }
 

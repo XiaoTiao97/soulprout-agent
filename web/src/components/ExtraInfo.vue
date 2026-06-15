@@ -83,53 +83,85 @@
             ref="agentMessagesContainer"
             @scroll="handleScroll"
           >
-            <div v-for="(group, index) in groupedSubAgentMessages" :key="group.tool_call_id" class="tool-message">
+            <article
+              v-for="(group, index) in groupedSubAgentMessages"
+              :key="`${group.tool_call_id}-${index}`"
+              class="sub-agent-card"
+              :class="{
+                'sub-agent-card--focused': props.scrollToId === group.tool_call_id,
+                'sub-agent-card--streaming': isSubAgentStreaming(index),
+              }"
+              :ref="el => toolRefs[index] = el as HTMLElement"
+            >
+              <header class="sub-agent-header">
+                <div class="sub-agent-identity">
+                  <span class="sub-agent-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="8" r="3.5" />
+                      <path d="M5 20c0-3.3 3.1-5 7-5s7 1.7 7 5" />
+                    </svg>
+                  </span>
+                  <h4 class="sub-agent-name">{{ getSubAgentName(group) }}</h4>
+                </div>
+                <span v-if="isSubAgentStreaming(index)" class="sub-agent-live-badge">
+                  <span class="sub-agent-live-dot" aria-hidden="true"></span>
+                  生成中
+                </span>
+              </header>
+
               <div
-                class="tool-frame tool-card-new"
-                :class="{ highlighted: props.highlightedId === group.tool_call_id }"
-                :ref="el => toolRefs[index] = el as HTMLElement"
+                class="sub-agent-body"
+                :class="{ 'sub-agent-body--expanded': isSubAgentExpanded(group, index) }"
+                :ref="el => setSubAgentBodyRef(getSubAgentStateKey(group, index), el as HTMLElement | null)"
               >
-                <div class="tool-card-header">
-                  <span class="tool-badge-icon">{{ getGroupIcon(group) }}</span>
-                  <span class="tool-name-chip">{{ getSubAgentDisplayName(group) }}</span>
-                  <span class="tool-args-chip">{{ truncateText(getGroupArgsInline(group), 80) }}</span>
-                  <button
-                    v-if="hasToolContent(group)"
-                    class="tool-expand-btn"
-                    @click="toggleExpand(group.tool_call_id, true)"
-                  >{{ isExpanded(group.tool_call_id) ? '▲' : '▼' }}</button>
-                </div>
-                <div v-if="!isExpanded(group.tool_call_id) && getGroupToolResult(group)" class="tool-result-row">
-                  <span class="tool-result-text">{{ truncateText(getGroupToolResult(group), 120) }}</span>
-                </div>
-                <div v-if="isExpanded(group.tool_call_id)" class="tool-expanded-body">
-                  <div v-if="Object.keys(getGroupToolArgs(group)).length > 0" class="tool-full-args">
-                    <div v-for="(value, key) in getGroupToolArgs(group)" :key="key" class="tool-arg-full-row">
-                      <span class="tool-arg-key">{{ key }}</span>
-                      <pre class="tool-arg-value">{{ typeof value === 'string' ? value : JSON.stringify(value, null, 2) }}</pre>
-                    </div>
+                <template v-for="(msg, msgIndex) in sortSubAgentMessages(group.messages)" :key="msgIndex">
+                  <div v-if="msg.type === 'reasoner_content'" class="sub-agent-reasoner">
+                    <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
                   </div>
-                  <div v-if="getGroupToolResult(group)" class="tool-full-result-section">
-                    <div class="tool-result-label">返回结果</div>
-                    <div class="p-content-markdown tool-result-content" v-html="renderMarkdown(getGroupToolResult(group))"></div>
+                  <div v-else-if="msg.type === 'get_tools' && msg.tool_calls?.length" class="sub-agent-tools">
+                    <ToolCallsBlock
+                      :calls="buildToolCallItems(msg.tool_calls, msg.tool_call_id, msg.type)"
+                      :show-results="false"
+                    />
                   </div>
-                  <template v-for="(msg, msgIndex) in group.messages" :key="msgIndex">
-                    <div v-if="msg.type === 'event'" class="answer-robot-event">{{ msg.content }}</div>
-                    <div v-else-if="msg.role === 'agent' && msg.type !== 'tool'" class="text-message-wrapper">
-                      <div class="answer-robot-content">
-                        <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
-                      </div>
-                    </div>
-                    <div v-else-if="msg.type === 'reasoner_content'" class="answer-robot-reasoner">
-                      <div class="p-content-markdown" v-html="renderMarkdown(msg.content ?? '')"></div>
-                    </div>
-                    <div v-else-if="msg.type === 'agent_for_frontend'" class="answer-robot-tool">
-                      <div class="answer-robot-tool-name-extra">⚙️ {{ msg.content }}</div>
-                    </div>
-                  </template>
-                </div>
+                  <div
+                    v-else-if="(msg.type === 'text' || (msg.role === 'agent' && msg.type !== 'get_tools' && msg.type !== 'tool')) && msg.content"
+                    class="sub-agent-text"
+                  >
+                    <div class="p-content-markdown" v-html="renderMarkdown(msg.content)"></div>
+                  </div>
+                  <div v-else-if="msg.role === 'tool' && msg.type === 'agent' && msg.content" class="sub-agent-text">
+                    <div class="p-content-markdown" v-html="renderMarkdown((msg.content || '').replace(SESSION_ID_PREFIX, ''))"></div>
+                  </div>
+                </template>
               </div>
-            </div>
+
+              <footer class="sub-agent-footer">
+                <button
+                  type="button"
+                  class="sub-agent-expand-btn"
+                  :aria-expanded="isSubAgentExpanded(group, index)"
+                  :aria-label="isSubAgentExpanded(group, index) ? '收起' : '展开'"
+                  @click.stop="toggleSubAgentExpand(group, index)"
+                >
+                  <svg
+                    class="sub-agent-expand-icon"
+                    :class="{ 'sub-agent-expand-icon--up': isSubAgentExpanded(group, index) }"
+                    viewBox="0 0 16 16"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 6l4 4 4-4" />
+                  </svg>
+                </button>
+              </footer>
+            </article>
           </div>
           <div v-else class="preview-empty">
             <p class="preview-empty-text">预览窗口</p>
@@ -488,6 +520,8 @@ import VueOfficePdf from '@vue-office/pdf'
 
 import VueOfficePptx from '@vue-office/pptx'
 import mammoth from 'mammoth';
+import ToolCallsBlock from './ToolCallsBlock.vue'
+import { buildToolCallItems } from '../utils/toolCallDisplay'
 
 // Toast UI Editor imports
 import Editor from '@toast-ui/editor'
@@ -504,6 +538,7 @@ const props = defineProps<{
   conversationId: string
   webOpenTrigger?: { url: string; nonce: number } | null
   fileOpenTrigger?: { filePath: string; nonce: number } | null
+  isGenerating?: boolean
 }>()
 
 type PreviewTab = 'files' | 'agents' | 'web'
@@ -514,18 +549,72 @@ function isSubAgentToolName(name: string): boolean {
   return SUB_AGENT_TOOL_NAMES.has(name)
 }
 
-function isSubAgentGroup(group: { messages: AgentMessage[] }): boolean {
-  const name = getGroupToolName(group)
-  if (isSubAgentToolName(name)) return true
-  for (const msg of group.messages) {
-    if (msg.tool_calls?.length) {
-      for (const tc of msg.tool_calls) {
-        if (isSubAgentToolName(tc.function?.name || '')) return true
+const SUB_AGENT_SKIP_TYPES = new Set(['get_agents', 'agent_for_frontend', 'agent_session_id'])
+
+function resolveSubAgentCallId(msg: AgentMessage): string | null {
+  if (msg.type === 'get_agents') {
+    const tc = msg.tool_calls?.[0]
+    if (tc?.id && isSubAgentToolName(tc.function?.name || '')) return tc.id
+    return null
+  }
+  if (!msg.tool_call_id) return null
+  if (
+    msg.type === 'agent_for_frontend' ||
+    msg.type === 'text' ||
+    msg.type === 'reasoner_content' ||
+    msg.type === 'agent_session_id' ||
+    (msg.type === 'get_tools' && msg.role === 'agent') ||
+    (msg.role === 'tool' && msg.type === 'agent')
+  ) {
+    return msg.tool_call_id
+  }
+  return null
+}
+
+function sortSubAgentMessages(messages: AgentMessage[]): AgentMessage[] {
+  return [...messages]
+    .filter((m) => !SUB_AGENT_SKIP_TYPES.has(m.type))
+    .sort((a, b) => {
+      const pick = (t: unknown) => (typeof t === 'number' ? t : Date.parse(String(t)) || 0)
+      return pick(a.created_at) - pick(b.created_at)
+    })
+}
+
+const groupedSubAgentMessages = computed(() => {
+  const map = new Map<string, { tool_call_id: string; messages: AgentMessage[] }>()
+  for (const msg of props.toolMessages) {
+    const callId = resolveSubAgentCallId(msg)
+    if (!callId) continue
+    if (!map.has(callId)) {
+      map.set(callId, { tool_call_id: callId, messages: [] })
+    }
+    const group = map.get(callId)!
+    if (msg.type === 'text' || msg.type === 'reasoner_content') {
+      const last = group.messages[group.messages.length - 1]
+      if (last?.type === msg.type && last.role !== 'tool') {
+        last.content = (last.content || '') + (msg.content || '')
+      } else {
+        group.messages.push({ ...msg, content: msg.content || '' })
       }
+    } else {
+      group.messages.push(msg)
     }
   }
-  return false
-}
+  return [...map.values()]
+    .filter((g) => g.messages.some((m) =>
+      m.type === 'agent_for_frontend' ||
+      m.type === 'text' ||
+      m.type === 'get_tools' ||
+      (m.role === 'tool' && m.type === 'agent')
+    ))
+    .sort((a, b) => {
+      const pickTime = (g: { messages: AgentMessage[] }) => {
+        const t = g.messages[0]?.created_at
+        return typeof t === 'number' ? t : Date.parse(String(t)) || 0
+      }
+      return pickTime(a) - pickTime(b)
+    })
+})
 
 const groupedToolMessages = computed(() => {
   const groups: any[] = []  // 或定义接口
@@ -548,7 +637,8 @@ const groupedToolMessages = computed(() => {
         } else {
           group.messages.push({
             type: msg.type,
-            content: msg.content || ''
+            role: msg.role || 'agent',
+            content: msg.content || '',
           })
         }
       } else {
@@ -622,7 +712,8 @@ const groupedToolMessages = computed(() => {
         } else {
           group.messages.push({
             type: msg.type,
-            content: msg.content || ''
+            role: msg.role || 'agent',
+            content: msg.content || '',
           })
         }
       } else if (msg.type === 'plan') {
@@ -661,9 +752,59 @@ const groupedToolMessages = computed(() => {
     })
 })
 
-const groupedSubAgentMessages = computed(() =>
-  groupedToolMessages.value.filter((g) => isSubAgentGroup(g))
-)
+const SESSION_ID_PREFIX = /^当前子智能体session_id=\w+\n?/
+
+function getSubAgentName(group: { messages: AgentMessage[] }): string {
+  for (const msg of group.messages) {
+    if (msg.type === 'agent_for_frontend' && msg.content) return msg.content
+  }
+  const args = getGroupToolArgs(group)
+  return args.name ? String(args.name) : '子智能体'
+}
+
+const subAgentBodyRefs = ref<Record<string, HTMLElement | null>>({})
+const subAgentExpanded = ref<Record<string, boolean>>({})
+
+function getSubAgentStateKey(group: { tool_call_id: string }, index: number): string {
+  return group.tool_call_id ? String(group.tool_call_id) : `sub-agent-${index}`
+}
+
+function setSubAgentBodyRef(key: string, el: HTMLElement | null) {
+  if (el) {
+    subAgentBodyRefs.value[key] = el
+  } else {
+    const next = { ...subAgentBodyRefs.value }
+    delete next[key]
+    subAgentBodyRefs.value = next
+  }
+}
+
+function isSubAgentExpanded(group: { tool_call_id: string }, index: number): boolean {
+  return !!subAgentExpanded.value[getSubAgentStateKey(group, index)]
+}
+
+function toggleSubAgentExpand(group: { tool_call_id: string }, index: number) {
+  const key = getSubAgentStateKey(group, index)
+  subAgentExpanded.value = {
+    ...subAgentExpanded.value,
+    [key]: !subAgentExpanded.value[key],
+  }
+}
+
+function isSubAgentStreaming(groupIndex: number): boolean {
+  if (!props.isGenerating) return false
+  return groupIndex === groupedSubAgentMessages.value.length - 1
+}
+
+function scrollSubAgentBodiesToTail() {
+  nextTick(() => {
+    for (const [key, el] of Object.entries(subAgentBodyRefs.value)) {
+      if (el && !subAgentExpanded.value[key]) {
+        el.scrollTop = el.scrollHeight
+      }
+    }
+  })
+}
 
 // 移除占位符renderMarkdown和相关注释
 // 添加必要的导入和markdown配置
@@ -767,10 +908,6 @@ function escapeHtml(unsafe) {
 }
 
 // 为refs添加类型
-const expanded = ref<Map<string, boolean>>(new Map())
-  const contentRefs = ref<any[]>([])
-const needsExpand = ref<boolean[]>([])
-  const isManuallyCollapsed = ref<Map<string, boolean>>(new Map())
 const toolRefs = ref<HTMLElement[]>([])
 const agentMessagesContainer = ref<HTMLElement | null>(null)
 const isAutoScroll = ref(true)
@@ -1332,19 +1469,6 @@ const parseArguments = (argsString: string): Record<string, any> => {
 
 // ─── 工具卡片辅助函数 ──────────────────────────────────────────────────
 
-/** 从 group 中提取工具名称 */
-function getGroupToolName(group: any): string {
-  for (const msg of group.messages) {
-    if (msg.tool_calls && msg.tool_calls.length > 0) {
-      return msg.tool_calls[0].function?.name || ''
-    }
-  }
-  for (const msg of group.messages) {
-    if (msg.type === 'agent_for_frontend') return msg.content || ''
-  }
-  return ''
-}
-
 /** 从 group 中提取第一个 tool_call 的 parsed arguments */
 function getGroupToolArgs(group: any): Record<string, any> {
   for (const msg of group.messages) {
@@ -1355,17 +1479,6 @@ function getGroupToolArgs(group: any): Record<string, any> {
   return {}
 }
 
-/** 将 args 拼成内联字符串（key=value 形式，用 · 分隔） */
-function getGroupArgsInline(group: any): string {
-  const args = getGroupToolArgs(group)
-  const entries = Object.entries(args)
-  if (entries.length === 0) return ''
-  return entries.map(([k, v]) => {
-    const val = typeof v === 'string' ? v : JSON.stringify(v)
-    return `${k}=${val}`
-  }).join('  ·  ')
-}
-
 /** 从 group 中提取工具调用结果（role=tool 消息） */
 function getGroupToolResult(group: any): string {
   for (const msg of group.messages) {
@@ -1374,33 +1487,6 @@ function getGroupToolResult(group: any): string {
     }
   }
   return ''
-}
-
-/** 根据消息类型选择图标 */
-function getGroupIcon(group: any): string {
-  return '⚙️'
-}
-
-/** 子智能体卡片显示名称 */
-function getSubAgentDisplayName(group: any): string {
-  const args = getGroupToolArgs(group)
-  const agentName = args.name ? String(args.name) : ''
-  const toolName = getGroupToolName(group)
-  if (agentName) return `${agentName}(子智能体)`
-  if (toolName === 'soulprout_kb_agent') return '知识库子智能体'
-  if (toolName === 'call_sub_agent') return '子智能体'
-  return '子智能体'
-}
-
-/** 判断是否有可展开内容 */
-function hasToolContent(group: any): boolean {
-  return Object.keys(getGroupToolArgs(group)).length > 0 || !!getGroupToolResult(group)
-}
-
-/** 截断文本 */
-function truncateText(str: string, max: number): string {
-  if (!str) return ''
-  return str.length > max ? str.slice(0, max) + '…' : str
 }
 
 /** 提取域名 */
@@ -1430,20 +1516,7 @@ function getWebSearchResultCount(group: any): number {
   return parseWebSearchResults(group).length
 }
 
-// isExpanded
-const isExpanded = (id: string): boolean => expanded.value.get(id) || false
-
-  // toggleExpand（纯状态切换，无高度动画）
-  const toggleExpand = (id: string, isManual: boolean = false) => {
-    const toExpand = !isExpanded(id)
-    expanded.value.set(id, toExpand)
-    isManuallyCollapsed.value.set(id, !toExpand && isManual)
-    nextTick(() => {
-      scrollAgentMessagesToBottom()
-    })
-}
-
-// checkOverflow（contentRefs 已不再使用，仅保留 copy 监听器绑定）
+// checkOverflow（仅保留 copy 监听器绑定）
 const checkOverflow = () => {
   nextTick(() => {
     attachCopyListeners()
@@ -1464,20 +1537,16 @@ const debouncedCheckOverflow = () => {
 const autoSwitchedSubAgents = ref(new Set<string>())
 
 watch(groupedSubAgentMessages, (newGroups) => {
-  newGroups.forEach(group => {
+  newGroups.forEach((group) => {
     const id = group.tool_call_id
-    if (!expanded.value.has(id)) {
-      expanded.value.set(id, false)
-      isManuallyCollapsed.value.set(id, false)
-    }
     if (!autoSwitchedSubAgents.value.has(id)) {
       autoSwitchedSubAgents.value.add(id)
       activeTab.value = 'agents'
-      expanded.value.set(id, true)
     }
   })
   nextTick(() => {
     scrollAgentMessagesToBottom()
+    scrollSubAgentBodiesToTail()
   })
 }, { deep: true })
 
@@ -1490,7 +1559,6 @@ watch(() => [props.scrollToId, props.toggleTrigger], () => {
     if (ref) {
       ref.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
-    toggleExpand(props.scrollToId, false)
   }
 })
 
@@ -1498,6 +1566,7 @@ watch(() => [props.scrollToId, props.toggleTrigger], () => {
 watch(() => props.toolMessages, () => {
   nextTick(() => {
     scrollAgentMessagesToBottom()
+    scrollSubAgentBodiesToTail()
   })
 }, { deep: true, immediate: true })
 
@@ -3115,10 +3184,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
 .agent-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 16px 18px;
+  padding: 16px 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .agent-messages::-webkit-scrollbar {
@@ -4018,6 +4087,202 @@ const handleKeyDown = (event: KeyboardEvent) => {
   border-radius: 6px;
   margin-bottom: 8px;
   border-left: 3px solid rgba(47, 79, 79, 0.565);
+}
+
+.sub-agent-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 4px 12px rgba(17, 24, 39, 0.03);
+  transition: box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.sub-agent-card--focused {
+  border-color: rgba(107, 114, 128, 0.32);
+  box-shadow:
+    0 0 0 1px rgba(107, 114, 128, 0.1),
+    0 6px 18px rgba(17, 24, 39, 0.07);
+}
+
+.sub-agent-card--streaming {
+  border-color: rgba(107, 114, 128, 0.24);
+}
+
+.sub-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 9px;
+  border-bottom: 1px solid rgba(243, 244, 246, 0.95);
+  border-radius: 12px 12px 0 0;
+}
+
+.sub-agent-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sub-agent-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(47, 79, 79, 0.08);
+  color: rgba(47, 79, 79, 0.82);
+}
+
+.sub-agent-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub-agent-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(243, 244, 246, 0.92);
+  flex-shrink: 0;
+}
+
+.sub-agent-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6b7280;
+  animation: sub-agent-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes sub-agent-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sub-agent-body {
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 108px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 14px 12px;
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+.sub-agent-body--expanded {
+  max-height: min(420px, 45vh);
+}
+
+.sub-agent-body:not(.sub-agent-body--expanded)::after {
+  content: '';
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  height: 28px;
+  margin-top: -28px;
+  background: linear-gradient(to bottom, transparent, #fafafa);
+  pointer-events: none;
+}
+
+.sub-agent-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sub-agent-body::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.sub-agent-footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  padding: 4px 14px 10px;
+  border-top: 1px solid rgba(243, 244, 246, 0.95);
+  background: linear-gradient(180deg, rgba(250, 250, 250, 0.6) 0%, #fafafa 100%);
+  border-radius: 0 0 12px 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.sub-agent-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #6b7280;
+  background: rgba(243, 244, 246, 0.85);
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.sub-agent-expand-btn:hover {
+  color: #374151;
+  background: #ffffff;
+  border-color: rgba(209, 213, 219, 0.95);
+}
+
+.sub-agent-expand-icon {
+  transition: transform 0.2s ease;
+}
+
+.sub-agent-expand-icon--up {
+  transform: rotate(180deg);
+}
+
+.sub-agent-reasoner {
+  background: rgba(245, 245, 245, 0.75);
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border-left: 2px solid rgba(47, 79, 79, 0.38);
+}
+
+.sub-agent-tools {
+  margin: 4px 0 8px;
+}
+
+.sub-agent-text {
+  margin: 6px 0;
+}
+
+:deep(.sub-agent-body .p-content-markdown) {
+  font-size: 12px !important;
+  color: #4b5563;
+  line-height: 1.65;
 }
 
 /* ═══════════════════════════════════════════════════════

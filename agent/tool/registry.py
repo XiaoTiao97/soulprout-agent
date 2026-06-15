@@ -289,21 +289,6 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "soulprout_kb_agent",
-            "description": "知识库智能体，适合复杂检索任务。",
-            "parameters": {
-                "type": "object",
-                "required": ["purpose"],
-                "properties": {
-                    "purpose": {"type": "string", "description": "检索目标说明"},
-                    "session_id": {"type": "string", "description": "子智能体会话ID"},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "soulprout_kb_tool",
             "description": "知识库基础RAG检索工具。",
             "parameters": {
@@ -564,19 +549,57 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "call_sub_agent",
-            "description": "召唤一个agent以执行任务。两种模式：1. 运行一个已存在的agent。2. 创建并运行一个新的agent，并为该agent临时注入信息",
+            "name": "conversation_option",
+            "description": (
+                "对话上下文管理工具。\n"
+                "- module=clear：完全清除当前对话上下文\n"
+                "- module=compress：立即执行一次上下文压缩"
+            ),
             "parameters": {
                 "type": "object",
-                "required": ["module", "purpose"],
+                "required": ["module"],
+                "properties": {
+                    "module": {
+                        "type": "string",
+                        "enum": ["clear", "compress"],
+                        "description": "clear 清除上下文 / compress 压缩上下文",
+                    }
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "call_sub_agent",
+            "description": "召唤子智能体立即执行任务（不写入专家库）。两种模式：\n"
+                "1. module=exist：调用专家库中已创建的智能体，使用其既有配置（system_prompt/tools/skills/kbs 等），无需重新定义。\n"
+                "2. module=new：临时创建并运行子智能体（不入库），调用时通过 system_prompt/tools/skills/kbs 现场定义其行为与能力。\n"
+                "与 create_agent 的区别：create_agent 将智能体永久沉淀到专家库；call_sub_agent 仅用于本次/续聊会话内的即时执行。",
+            "parameters": {
+                "type": "object",
+                "required": ["module", "purpose", "name"],
                 "properties": {
                     "module": {"type": "string", "description": "召唤agent的模式：exist（已存在）/ new（新建并运行）"},
                     "purpose": {"type": "string", "description": "需要向子智能体交代的上下文、指令与目标"},
-                    "name": {"type": "string", "description": "[module=exist 必填] 目标智能体在库中的英文 name；[module=new 可选] 新智能体名（仅允许英文与下划线，否则将自动生成）"},
+                    "name": {"type": "string", "description": "[必填] module=exist时填入目标智能体在库中的英文 name；module=new时自定义新智能体名（仅允许英文与下划线）"},
+                    "agent_id": {"type": "string", "description": "[仅 exist 时生效] 填写已存在的子智能体的id"},
                     "system_prompt": {"type": "string", "description": "[仅 new 时生效] 子智能体系统提示词，缺省为通用子代理提示"},
-                    "skills": {"type": "array", "items": {"type": "string"}, "description": "[仅 new] 以 system 技能名列表形式加载的 skill 名称"},
+                    "skills": {
+                        "type": "object",
+                        "description": (
+                            "[仅 new] 绑定的技能（skill）集合，按来源分组：system 为系统技能名列表，user 为个人技能名列表。"
+                            "对应 AgentCard.skills: Dict[Literal['system','user'], list]"
+                        ),
+                        "properties": {
+                            "system": {"type": "array", "items": {"type": "string"}},
+                            "user": {"type": "array", "items": {"type": "string"}},
+                        },
+                    },
+                    "tools": {"type": "array", "items": {"type": "string"}, "description": "[仅 new] 需要为改子智能体添加的工具列表"},
                     "kbs": {"type": "array", "items": {"type": "string"}, "description": "[仅 new] 子智能体绑定的知识库 id 列表"},
-                    "session_id": {"type": "string", "description": "续聊时传入上一次子智能体返回的 4 位会话 id"},
+                    "files": {"type": "array", "items": {"type": "string"}, "description": "[仅 new] 子智能体绑定的文件名列表(文件需要在当前workspace)"},
+                    "session_id": {"type": "string", "description": "需要继续之前的子智能体对话时传入上一次子智能体返回的 4 位会话 id"},
                 },
             },
         },
