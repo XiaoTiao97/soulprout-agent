@@ -26,11 +26,13 @@ _SETTINGS_PATH = Path(__file__).resolve().parent.parent / "gateway_data" / "sett
 # 默认值
 # ---------------------------------------------------------------------------
 
+_DEFAULT_AGENT_URL = "https://www.mengya.chat"
+
 _DEFAULTS: dict = {
     # Agent HTTP 服务地址（不含路径），支持：
-    #   http://localhost:8080     → 本地自部署
-    #   https://www.mengya.chat  → 官方托管服务
-    "agent_url": "http://localhost:8080",
+    #   https://www.mengya.chat  → Soulprout 官方云服务（默认）
+    #   http://localhost:8080    → 本地自部署
+    "agent_url": _DEFAULT_AGENT_URL,
 
     # 已登录后保存的 JWT token。可由 gateway 自动写入，也允许用户手动填写。
     "agent_token": "",
@@ -113,6 +115,17 @@ def get_agent_email() -> str:
 
 def get_agent_login_mode() -> str:
     return load_settings().get("agent_login_mode", _DEFAULTS["agent_login_mode"]) or "email"
+
+
+def get_default_agent_url() -> str:
+    env_url = os.getenv("AGENT_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    return _DEFAULT_AGENT_URL
+
+
+def normalize_agent_url(url: str) -> str:
+    return (url or "").strip().rstrip("/")
 
 
 def is_local_agent(url: Optional[str] = None) -> bool:

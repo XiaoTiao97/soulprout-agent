@@ -7,7 +7,7 @@
           <div
             class="preview-tab-switch"
             role="tablist"
-            aria-label="预览视窗切换"
+            :aria-label="t('extraInfo.tabSwitch')"
             :data-active="activeTab"
           >
             <span class="preview-tab-thumb" aria-hidden="true"></span>
@@ -18,7 +18,7 @@
               :class="{ 'preview-tab-option--active': activeTab === 'files' }"
               :aria-selected="activeTab === 'files'"
               @click="activeTab = 'files'"
-            >文件</button>
+            >{{ t('extraInfo.tabFiles') }}</button>
             <button
               type="button"
               role="tab"
@@ -26,7 +26,7 @@
               :class="{ 'preview-tab-option--active': activeTab === 'agents' }"
               :aria-selected="activeTab === 'agents'"
               @click="activeTab = 'agents'"
-            >子智能体</button>
+            >{{ t('extraInfo.tabAgents') }}</button>
             <button
               type="button"
               role="tab"
@@ -34,7 +34,7 @@
               :class="{ 'preview-tab-option--active': activeTab === 'web' }"
               :aria-selected="activeTab === 'web'"
               @click="activeTab = 'web'"
-            >网页</button>
+            >{{ t('extraInfo.tabWeb') }}</button>
           </div>
         </div>
 
@@ -45,18 +45,18 @@
             <div class="preview-header">
               <h4 class="preview-header-title">{{ selectedFile }}</h4>
               <div class="header-actions">
-                <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">编辑</button>
+                <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">{{ t('extraInfo.edit') }}</button>
                 <div v-if="isHtml && !isEditing" class="export-container">
-                  <button class="export-button" @click="toggleExportOptions">导出</button>
+                  <button class="export-button" @click="toggleExportOptions">{{ t('extraInfo.export') }}</button>
                   <div v-if="showExportOptions" class="export-dropdown">
                     <button class="dropdown-item" @click="exportWithFormat('pdf')">PDF</button>
                     <button class="dropdown-item" @click="exportWithFormat('pptx')">PPTX</button>
                   </div>
                 </div>
-                <img v-if="!isEditing" :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
+                <img v-if="!isEditing" :src="DownloadIcon" :alt="t('extraInfo.download')" class="icon-button" @click="downloadFile(selectedFile)" />
               </div>
-              <div v-if="exporting" class="export-feedback">导出中...</div>
-              <div v-if="exportSuccess" class="export-feedback success">导出成功！</div>
+              <div v-if="exporting" class="export-feedback">{{ t('extraInfo.exporting') }}</div>
+              <div v-if="exportSuccess" class="export-feedback success">{{ t('extraInfo.exportSuccess') }}</div>
               <div v-if="exportError" class="export-feedback error">{{ exportError }}</div>
             </div>
             <div class="preview-content">
@@ -71,7 +71,7 @@
             </div>
           </div>
           <div v-else class="preview-empty">
-            <p class="preview-empty-text">预览窗口</p>
+            <p class="preview-empty-text">{{ t('extraInfo.previewEmpty') }}</p>
           </div>
         </template>
 
@@ -105,7 +105,7 @@
                 </div>
                 <span v-if="isSubAgentStreaming(index)" class="sub-agent-live-badge">
                   <span class="sub-agent-live-dot" aria-hidden="true"></span>
-                  生成中
+                  {{ t('extraInfo.generating') }}
                 </span>
               </header>
 
@@ -141,7 +141,7 @@
                   type="button"
                   class="sub-agent-expand-btn"
                   :aria-expanded="isSubAgentExpanded(group, index)"
-                  :aria-label="isSubAgentExpanded(group, index) ? '收起' : '展开'"
+                  :aria-label="isSubAgentExpanded(group, index) ? t('extraInfo.collapse') : t('extraInfo.expand')"
                   @click.stop="toggleSubAgentExpand(group, index)"
                 >
                   <svg
@@ -164,7 +164,7 @@
             </article>
           </div>
           <div v-else class="preview-empty">
-            <p class="preview-empty-text">预览窗口</p>
+            <p class="preview-empty-text">{{ t('extraInfo.previewEmpty') }}</p>
           </div>
         </template>
 
@@ -174,18 +174,18 @@
             <div class="preview-header web-preview-header">
               <h4 class="preview-header-title web-preview-title" :title="selectedWebUrl">{{ extractDomain(selectedWebUrl) }}</h4>
               <div class="header-actions">
-                <button type="button" class="edit-button" @click="openWebInNewTab">在新标签页打开</button>
+                <button type="button" class="edit-button" @click="openWebInNewTab">{{ t('extraInfo.openInNewTab') }}</button>
               </div>
             </div>
             <div class="preview-content web-preview-content">
               <div v-if="webIframeBlocked" class="web-blocked-notice">
-                <p>该网页无法嵌入预览，已为你在新标签页打开。</p>
-                <button type="button" class="edit-button" @click="openWebInNewTab">重新打开</button>
+                <p>{{ t('extraInfo.embedBlocked') }}</p>
+                <button type="button" class="edit-button" @click="openWebInNewTab">{{ t('extraInfo.reopen') }}</button>
               </div>
               <template v-else>
                 <div v-if="webIframeLoading" class="web-preview-loading" role="status" aria-live="polite">
                   <div class="web-preview-spinner" aria-hidden="true"></div>
-                  <p class="web-preview-loading-text">网页加载中…</p>
+                  <p class="web-preview-loading-text">{{ t('extraInfo.webLoading') }}</p>
                 </div>
                 <iframe
                   :key="selectedWebUrl"
@@ -201,7 +201,7 @@
             </div>
           </div>
           <div v-else class="preview-empty">
-            <p class="preview-empty-text">预览窗口</p>
+            <p class="preview-empty-text">{{ t('extraInfo.previewEmpty') }}</p>
           </div>
         </template>
         </div>
@@ -210,13 +210,13 @@
         <aside
           class="file-list-float"
           :class="{ 'file-list-float--collapsed': !isFileListExpanded }"
-          aria-label="文件列表"
+          :aria-label="t('extraInfo.fileList')"
         >
           <button
             v-if="!isFileListExpanded"
             type="button"
             class="file-list-rail"
-            aria-label="展开文件列表"
+            :aria-label="t('extraInfo.expandFileList')"
             @click="isFileListExpanded = true"
           >
             <span class="file-list-rail-icon" aria-hidden="true">
@@ -231,7 +231,7 @@
               <button
                 type="button"
                 class="file-list-float-collapse"
-                aria-label="收起文件列表"
+                :aria-label="t('extraInfo.collapseFileList')"
                 @click="isFileListExpanded = false"
               >
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -239,13 +239,13 @@
                 </svg>
               </button>
               <div class="file-list-float-heading">
-                <span class="file-list-float-title">文件</span>
+                <span class="file-list-float-title">{{ t('extraInfo.tabFiles') }}</span>
                 <span class="file-list-float-count">{{ floatFileCount }}</span>
               </div>
               <button
                 type="button"
                 class="file-list-float-refresh"
-                aria-label="刷新文件列表"
+                :aria-label="t('extraInfo.refreshFileList')"
                 @click="fetchFiles"
               >
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -298,7 +298,7 @@
                 </li>
               </ul>
               <div v-else class="fl-tree-empty">
-                <p class="fl-tree-empty-title">暂无文件</p>
+                <p class="fl-tree-empty-title">{{ t('extraInfo.noFiles') }}</p>
               </div>
             </div>
           </template>
@@ -309,8 +309,8 @@
     <!-- 全屏文件库弹窗 -->
     <div v-if="showFileLibrary" class="file-library-full-panel">
       <header class="full-panel-header">
-        <span class="full-panel-title">文件编辑</span>
-        <button type="button" class="full-panel-close" aria-label="关闭" @click="closeEditPanel">
+        <span class="full-panel-title">{{ t('extraInfo.fileEdit') }}</span>
+        <button type="button" class="full-panel-close" :aria-label="t('common.close')" @click="closeEditPanel">
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>
@@ -320,13 +320,13 @@
         <aside
           class="full-panel-sidebar"
           :class="{ 'full-panel-sidebar--collapsed': !isFullPanelFileListExpanded }"
-          aria-label="文件列表"
+          :aria-label="t('extraInfo.fileList')"
         >
           <button
             v-if="!isFullPanelFileListExpanded"
             type="button"
             class="file-list-rail full-panel-rail"
-            aria-label="展开文件列表"
+            :aria-label="t('extraInfo.expandFileList')"
             @click="isFullPanelFileListExpanded = true"
           >
             <span class="file-list-rail-icon" aria-hidden="true">
@@ -341,7 +341,7 @@
               <button
                 type="button"
                 class="file-list-float-collapse"
-                aria-label="收起文件列表"
+                :aria-label="t('extraInfo.collapseFileList')"
                 @click="isFullPanelFileListExpanded = false"
               >
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -349,13 +349,13 @@
                 </svg>
               </button>
               <div class="file-list-float-heading">
-                <span class="file-list-float-title">文件</span>
+                <span class="file-list-float-title">{{ t('extraInfo.tabFiles') }}</span>
                 <span class="file-list-float-count">{{ floatFileCount }}</span>
               </div>
               <button
                 type="button"
                 class="file-list-float-refresh"
-                aria-label="刷新文件列表"
+                :aria-label="t('extraInfo.refreshFileList')"
                 @click="fetchFiles"
               >
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -408,7 +408,7 @@
                 </li>
               </ul>
               <div v-else class="fl-tree-empty">
-                <p class="fl-tree-empty-title">暂无文件</p>
+                <p class="fl-tree-empty-title">{{ t('extraInfo.noFiles') }}</p>
               </div>
             </div>
           </template>
@@ -419,12 +419,12 @@
             <div class="preview-header">
               <h4 class="preview-header-title" :title="selectedFile">{{ selectedFile }}</h4>
               <div class="header-actions">
-                <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">编辑</button>
+                <button v-if="isEditableFile && !isEditing" class="edit-button" @click="startEditing">{{ t('extraInfo.edit') }}</button>
                 <div
                   v-if="isEditing && isMarkdownFile"
                   class="edit-mode-switch"
                   role="tablist"
-                  aria-label="编辑模式切换"
+                  :aria-label="t('extraInfo.editModeSwitch')"
                   :data-active="editMode"
                 >
                   <span class="edit-mode-thumb" aria-hidden="true"></span>
@@ -443,23 +443,23 @@
                     :class="{ 'edit-mode-option--active': editMode === 'source' }"
                     :aria-selected="editMode === 'source'"
                     @click="switchEditMode('source')"
-                  >源码</button>
+                  >{{ t('extraInfo.source') }}</button>
                 </div>
                 <button v-if="isEditing" class="save-button" @click="saveFile" :disabled="saving">
-                  {{ saving ? '保存中...' : '保存' }}
+                  {{ saving ? t('extraInfo.saving') : t('extraInfo.save') }}
                 </button>
-                <button v-if="isEditing" class="cancel-button" @click="() => cancelEditing()">退出编辑</button>
+                <button v-if="isEditing" class="cancel-button" @click="() => cancelEditing()">{{ t('extraInfo.exitEdit') }}</button>
                 <div v-if="isHtml && !isEditing" class="export-container">
-                  <button class="export-button" @click="toggleExportOptions">导出</button>
+                  <button class="export-button" @click="toggleExportOptions">{{ t('extraInfo.export') }}</button>
                   <div v-if="showExportOptions" class="export-dropdown">
                     <button class="dropdown-item" @click="exportWithFormat('pdf')">PDF</button>
                     <button class="dropdown-item" @click="exportWithFormat('pptx')">PPTX</button>
                   </div>
                 </div>
-                <img v-if="!isEditing" :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
+                <img v-if="!isEditing" :src="DownloadIcon" :alt="t('extraInfo.download')" class="icon-button" @click="downloadFile(selectedFile)" />
               </div>
-              <div v-if="exporting" class="export-feedback">导出中...</div>
-              <div v-if="exportSuccess" class="export-feedback success">导出成功！</div>
+              <div v-if="exporting" class="export-feedback">{{ t('extraInfo.exporting') }}</div>
+              <div v-if="exportSuccess" class="export-feedback success">{{ t('extraInfo.exportSuccess') }}</div>
               <div v-if="exportError" class="export-feedback error">{{ exportError }}</div>
             </div>
             <div class="preview-content">
@@ -472,11 +472,11 @@
                   v-else
                   v-model="editedContent"
                   class="edit-textarea"
-                  placeholder="在此编辑文件内容..."
+                  :placeholder="t('extraInfo.editPlaceholder')"
                   @keydown="handleKeyDown"
                   ref="editTextarea"
                 ></textarea>
-                <div v-if="saveSuccess" class="save-feedback success">保存成功</div>
+                <div v-if="saveSuccess" class="save-feedback success">{{ t('extraInfo.saveSuccess') }}</div>
                 <div v-if="saveError" class="save-feedback error">{{ saveError }}</div>
               </div>
               <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
@@ -489,7 +489,7 @@
             </div>
           </div>
           <div v-else class="preview-empty">
-            <p class="preview-empty-text">预览窗口</p>
+            <p class="preview-empty-text">{{ t('extraInfo.previewEmpty') }}</p>
           </div>
         </main>
       </div>
@@ -499,7 +499,10 @@
 
 <script lang="ts" setup>
 import { computed, ref, onMounted, onUnmounted, nextTick, watch, onErrorCaptured } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { AgentMessage } from '../types/interface'
+
+const { t } = useI18n()
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -759,7 +762,7 @@ function getSubAgentName(group: { messages: AgentMessage[] }): string {
     if (msg.type === 'agent_for_frontend' && msg.content) return msg.content
   }
   const args = getGroupToolArgs(group)
-  return args.name ? String(args.name) : '子智能体'
+  return args.name ? String(args.name) : t('extraInfo.defaultSubAgent')
 }
 
 const subAgentBodyRefs = ref<Record<string, HTMLElement | null>>({})
@@ -1222,7 +1225,7 @@ const showUnsavedChangesDialog = (): Promise<'save' | 'discard' | 'cancel'> => {
     `
 
     const title = document.createElement('h3')
-    title.textContent = '未保存的更改'
+    title.textContent = t('extraInfo.unsavedTitle')
     title.style.cssText = `
       margin: 0 0 16px 0;
       color: #1f2937;
@@ -1231,7 +1234,7 @@ const showUnsavedChangesDialog = (): Promise<'save' | 'discard' | 'cancel'> => {
     `
 
     const message = document.createElement('p')
-    message.textContent = '您的更改尚未保存，确定要退出吗？'
+    message.textContent = t('extraInfo.unsavedMessage')
     message.style.cssText = `
       margin: 0 0 24px 0;
       color: #6b7280;
@@ -1270,9 +1273,9 @@ const showUnsavedChangesDialog = (): Promise<'save' | 'discard' | 'cancel'> => {
       return button
     }
 
-    const saveButton = createButton('保存并退出', true)
-    const discardButton = createButton('直接退出')
-    const cancelButton = createButton('取消')
+    const saveButton = createButton(t('extraInfo.saveAndExit'), true)
+    const discardButton = createButton(t('extraInfo.discardExit'))
+    const cancelButton = createButton(t('common.cancel'))
 
     saveButton.onclick = () => {
       document.body.removeChild(dialog)
@@ -1347,21 +1350,21 @@ const fetchFileContent = async (filename: string) => {
             const result = await mammoth.convertToHtml({ arrayBuffer });
             fileContent.value = result.value;
           } catch (err) {
-            previewError.value = '无法转换该 DOCX 文件';
+            previewError.value = t('extraInfo.cannotConvertDocx');
           }
         } else {
-          previewError.value = '无法读取 DOCX 文件';
+          previewError.value = t('extraInfo.cannotReadDocx');
         }
       };
       reader.onerror = () => {
-        previewError.value = '读取 DOCX 文件失败';
+        previewError.value = t('extraInfo.readDocxFailed');
       };
       reader.readAsArrayBuffer(blob);
     } else if (isTextFile.value) {
       blob.text().then(text => {
         fileContent.value = text
       }).catch(err => {
-        previewError.value = '无法读取文件内容'
+        previewError.value = t('extraInfo.cannotReadContent')
       })
     } else {
       fileContent.value = ''
@@ -1399,7 +1402,7 @@ const fetchFileContent = async (filename: string) => {
       }
     })
   } catch (error) {
-    previewError.value = '无法显示该文件类型'
+    previewError.value = t('extraInfo.cannotPreviewType')
     fileUrl.value = ''
     fileContent.value = ''
   }
@@ -1574,7 +1577,7 @@ watch(() => props.toolMessages, () => {
 const handleBeforeUnload = (event: BeforeUnloadEvent) => {
   if (isEditing.value && isContentModified.value) {
     event.preventDefault()
-    event.returnValue = '您的更改尚未保存，确定要离开吗？'
+    event.returnValue = t('extraInfo.leaveUnsaved')
     return event.returnValue
   }
 }
@@ -2412,7 +2415,7 @@ const toggleExportOptions = () => {
 const exportWithFormat = async (format) => {
   showExportOptions.value = false
   if (!selectedFile.value) {
-    exportError.value = '请选择文件'
+    exportError.value = t('extraInfo.selectFileExport')
     setTimeout(() => { exportError.value = '' }, 3000)
     return
   }
@@ -2443,7 +2446,7 @@ const exportWithFormat = async (format) => {
     setTimeout(() => { exportSuccess.value = false }, 3000) // 3秒后隐藏成功提示
   } catch (error) {
     exporting.value = false
-    exportError.value = '导出失败，请重试'
+    exportError.value = t('extraInfo.exportFailed')
     setTimeout(() => { exportError.value = '' }, 3000)
   }
 }
@@ -2705,7 +2708,7 @@ const saveFile = async () => {
 
   } catch (error) {
     saving.value = false
-    saveError.value = '保存失败，请重试'
+    saveError.value = t('extraInfo.saveFailed')
     setTimeout(() => {
       saveError.value = ''
     }, 3000)

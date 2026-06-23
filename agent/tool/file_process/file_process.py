@@ -4,8 +4,6 @@ from pdfminer.high_level import extract_text
 from docx import Document
 import openpyxl
 import json
-import dashscope
-from http import HTTPStatus
 from pathlib import Path
 import re
 import aiofiles
@@ -143,21 +141,6 @@ class AsyncFileProcess:
         loop = asyncio.get_event_loop()
         text = await loop.run_in_executor(self.executor, extract_ppt_complete_info, file)
         return text
-
-    def embed_with_qwen(self, text_list):
-        dashscope.api_key = 'sk-23367ada9faf462eb6b8ce668598067d'
-        embedding_list = []
-        for text in text_list:
-            resp = dashscope.TextEmbedding.call(
-                model=dashscope.TextEmbedding.Models.text_embedding_v2,
-                input=text)
-            if resp.status_code == HTTPStatus.OK:
-                embedding = resp.output['embeddings'][0]['embedding']
-                embedding_list.append(embedding)
-            else:
-                print(resp)
-                return resp
-        return embedding_list
 
     async def file_parse(self, file_name, file_bytes):
         text = ""

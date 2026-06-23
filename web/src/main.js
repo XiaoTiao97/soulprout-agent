@@ -1,9 +1,10 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import i18n from './i18n'
 import './assets/css/init.css'
 
-createApp(App).use(router).mount('#app')
+createApp(App).use(router).use(i18n).mount('#app')
 
 document.body.addEventListener('mouseover', (event) => {
   const el = event.target instanceof Element ? event.target.closest('[title], [data-tip]') : null

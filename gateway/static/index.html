@@ -272,6 +272,68 @@
       line-height: 1.6;
     }
 
+    /* Connection picker on login */
+    .conn-block {
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.875rem 1rem;
+      background: rgba(255,255,255,0.02);
+    }
+    .conn-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .conn-title {
+      font-size: 0.8125rem;
+      color: var(--text-sub);
+    }
+    .conn-toggle {
+      background: transparent;
+      border: none;
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0;
+      white-space: nowrap;
+    }
+    .conn-options {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .conn-option {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--text-sub);
+      cursor: pointer;
+    }
+    .conn-option input { accent-color: var(--accent); }
+    .conn-custom { margin-top: 0.625rem; }
+    .conn-current {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      word-break: break-all;
+    }
+    .conn-current code { color: var(--accent); }
+
+    .url-readonly {
+      padding: 0.75rem 1rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 0.625rem;
+      font-size: 0.875rem;
+      color: var(--text-sub);
+      word-break: break-all;
+      margin-bottom: 0.75rem;
+    }
+
     /* ─── Dashboard ─── */
     .dashboard { width: 100%; max-width: 560px; }
 
@@ -503,6 +565,32 @@
       <p class="card-desc">使用你的 Soulprout 账号登录，即可管理 Gateway 平台接入配置。</p>
 
       <form class="form" onsubmit="return false">
+        <div class="conn-block">
+          <div class="conn-head">
+            <span class="conn-title">连接 Soulprout 服务</span>
+            <button type="button" class="conn-toggle" id="btn-conn-toggle" onclick="toggleConnCustom()">自定义地址</button>
+          </div>
+          <div id="conn-default-view">
+            <label class="conn-option">
+              <input type="radio" name="conn-mode" value="cloud" checked onchange="onConnModeChange()" />
+              <span>Soulprout 云服务（默认）</span>
+            </label>
+            <p class="conn-current">当前：<code id="login-cloud-url">https://www.mengya.chat</code></p>
+          </div>
+          <div id="conn-custom-view" style="display:none">
+            <label class="conn-option">
+              <input type="radio" name="conn-mode" value="cloud" onchange="onConnModeChange()" />
+              <span>Soulprout 云服务</span>
+            </label>
+            <label class="conn-option">
+              <input type="radio" name="conn-mode" value="self" onchange="onConnModeChange()" />
+              <span>自部署服务器</span>
+            </label>
+            <input id="login-agent-url" class="input-field conn-custom" type="text"
+                   placeholder="http://localhost:8080" />
+          </div>
+        </div>
+
         <input id="login-email" class="input-field" type="email"
                placeholder="邮箱地址" autocomplete="email" />
 
@@ -537,24 +625,21 @@
       <p class="dash-sub" id="dash-desc">配置 Agent 服务地址，并管理各平台接入状态。</p>
     </div>
 
-    <!-- Agent URL card -->
+    <!-- Agent connection (read-only) -->
     <div class="section-card">
-      <p class="section-label">Agent 服务地址</p>
+      <p class="section-label">Agent 服务</p>
 
-      <div class="input-row">
-        <input id="dash-url" class="input-field" type="text" placeholder="http://localhost:8080" />
-        <button class="btn-sm" onclick="saveUrl()">保存</button>
-        <button class="btn-sm" onclick="testConn()">测试</button>
-      </div>
-
-      <p class="url-hint">
-        自部署：<code>http://localhost:8080</code>（默认）&emsp;
-        官方托管：<code>https://www.mengya.chat</code>
-      </p>
+      <div id="dash-url-display" class="url-readonly">—</div>
 
       <div class="mode-row">
         <span class="mode-label">当前模式</span>
         <span id="badge-mode" class="badge badge-gray">检测中…</span>
+      </div>
+
+      <p class="url-hint">如需更换服务地址，请退出登录后在登录页重新选择。</p>
+
+      <div class="input-row">
+        <button class="btn-sm" onclick="testConn()">测试连接</button>
       </div>
 
       <div id="url-msg" class="save-msg"></div>
@@ -635,10 +720,72 @@ function setMsg(id, text, type) {
   el.className = base + (type ? ' ' + type : '');
 }
 
+/* ─── Connection config ─── */
+const LOCAL_AGENT_URL = 'http://localhost:8080';
+let DEFAULT_AGENT_URL = 'https://www.mengya.chat';
+let _connCustomOpen = false;
+
+function isLocalAgentUrl(url) {
+  const v = (url || '').toLowerCase().trim();
+  return !v || v.startsWith('http://localhost') || v.startsWith('http://127.') || v.startsWith('http://0.0.0.0');
+}
+
+function toggleConnCustom(forceOpen) {
+  _connCustomOpen = typeof forceOpen === 'boolean' ? forceOpen : !_connCustomOpen;
+  document.getElementById('conn-default-view').style.display = _connCustomOpen ? 'none' : '';
+  document.getElementById('conn-custom-view').style.display = _connCustomOpen ? '' : 'none';
+  document.getElementById('btn-conn-toggle').textContent = _connCustomOpen ? '使用默认' : '自定义地址';
+  if (_connCustomOpen) {
+    const checked = document.querySelector('#conn-default-view input[name="conn-mode"]:checked');
+    const mode = checked?.value || 'cloud';
+    document.querySelectorAll('#conn-custom-view input[name="conn-mode"]').forEach(r => {
+      r.checked = r.value === mode;
+    });
+  }
+  onConnModeChange();
+}
+
+function onConnModeChange() {
+  const mode = document.querySelector('input[name="conn-mode"]:checked')?.value || 'cloud';
+  const customInput = document.getElementById('login-agent-url');
+  if (customInput) customInput.style.display = mode === 'self' ? '' : 'none';
+}
+
+function getLoginAgentUrl() {
+  if (!_connCustomOpen) return DEFAULT_AGENT_URL;
+  const mode = document.querySelector('input[name="conn-mode"]:checked')?.value || 'cloud';
+  if (mode === 'cloud') return DEFAULT_AGENT_URL;
+  return document.getElementById('login-agent-url').value.trim() || LOCAL_AGENT_URL;
+}
+
+function applyLoginConnSettings(d) {
+  const url = d?.agent_url || DEFAULT_AGENT_URL;
+  document.getElementById('login-cloud-url').textContent = DEFAULT_AGENT_URL;
+
+  if (isLocalAgentUrl(url)) {
+    toggleConnCustom(true);
+    const radios = document.querySelectorAll('input[name="conn-mode"]');
+    radios.forEach(r => { r.checked = r.value === 'self'; });
+    document.getElementById('login-agent-url').value = url || LOCAL_AGENT_URL;
+  } else if (url && url !== DEFAULT_AGENT_URL) {
+    toggleConnCustom(true);
+    const radios = document.querySelectorAll('input[name="conn-mode"]');
+    radios.forEach(r => { r.checked = r.value === 'cloud'; });
+    document.getElementById('login-agent-url').value = url;
+  } else {
+    toggleConnCustom(false);
+    const cloudRadio = document.querySelector('input[name="conn-mode"][value="cloud"]');
+    if (cloudRadio) cloudRadio.checked = true;
+  }
+  onConnModeChange();
+}
+
 /* ─── Init ─── */
 async function init() {
   try {
     const d = await api('/api/settings');
+    if (d.default_agent_url) DEFAULT_AGENT_URL = d.default_agent_url;
+    applyLoginConnSettings(d);
     if (d.has_token && d.agent_user_id) {
       showDash(d);
     } else {
@@ -665,9 +812,9 @@ function showDash(d) {
   document.getElementById('header-email').textContent = label;
   document.getElementById('user-avatar-char').textContent = (label[0] || 'U').toUpperCase();
   document.getElementById('dash-desc').textContent =
-    `当前账号：${label}。配置 Agent 服务地址并管理接入平台。`;
+    `当前账号：${label}。管理各平台接入状态。`;
 
-  document.getElementById('dash-url').value = d.agent_url || '';
+  document.getElementById('dash-url-display').textContent = d.agent_url || DEFAULT_AGENT_URL;
   updateModeUI(d.is_local);
   loadWeixinStatus();
   loadFeishuStatus();
@@ -708,7 +855,7 @@ async function sendCode() {
     const d = await api('/api/auth/email/send-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, agent_url: getLoginAgentUrl() }),
     });
     if (d.success) { setMsg('login-msg', '验证码已发送，请查收邮箱', 'ok'); startCD(60); }
     else { setMsg('login-msg', d.message || '发送失败', 'err'); }
@@ -729,7 +876,12 @@ async function doLogin() {
     const d = await api('/api/auth/email/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code, username: username || null }),
+      body: JSON.stringify({
+        email,
+        code,
+        username: username || null,
+        agent_url: getLoginAgentUrl(),
+      }),
     });
     if (d.success) {
       const settings = await api('/api/settings');
@@ -745,23 +897,15 @@ async function doLogin() {
 async function doLogout() {
   if (!confirm('确定要退出登录吗？')) return;
   await api('/api/settings/logout', { method: 'POST' });
+  try {
+    const d = await api('/api/settings');
+    if (d.default_agent_url) DEFAULT_AGENT_URL = d.default_agent_url;
+    applyLoginConnSettings(d);
+  } catch (e) {}
   showLogin();
 }
 
 /* ─── Dashboard ─── */
-async function saveUrl() {
-  const url = document.getElementById('dash-url').value.trim();
-  try {
-    const d = await api('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_url: url }),
-    });
-    updateModeUI(d.is_local);
-    setMsg('url-msg', '✓ 地址已保存', 'ok');
-  } catch(e) { setMsg('url-msg', '保存失败：' + e.message, 'err'); }
-}
-
 async function testConn() {
   setMsg('url-msg', '测试连接中…', '');
   try {
@@ -838,17 +982,6 @@ async function loadXiaoaiStatus() {
     }
   } catch(e) {}
 }
-
-/* ─── URL live mode update ─── */
-document.addEventListener('DOMContentLoaded', () => {
-  const ui = document.getElementById('dash-url');
-  if (ui) {
-    ui.addEventListener('input', function() {
-      const v = this.value.toLowerCase().trim();
-      updateModeUI(v === '' || v.startsWith('http://localhost') || v.startsWith('http://127.'));
-    });
-  }
-});
 
 init();
 </script>

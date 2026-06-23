@@ -26,7 +26,7 @@ async def mcp_list_tools():
         result.append(
             {
                 "type": "local",
-                "class_zh": "系统工具",
+                "class_zh": "System Tools",
                 "name": func.get("name"),
                 "description": func.get("description"),
                 "inputSchema": func.get("parameters"),

@@ -5,10 +5,10 @@
       <div class="tools-option-header">
         <div class="header-title-group">
           <p class="header-eyebrow">TOOLS</p>
-          <h2>工具库</h2>
+          <h2>{{ t('toolsOption.title') }}</h2>
         </div>
 
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" @click="$emit('close')" :aria-label="t('common.close')">
           <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
             <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
@@ -59,7 +59,7 @@
             <div class="class-zh-header" @click="toggleClassZh(classZh)">
               <div class="class-zh-header-text">
                 <h3 class="class-zh-name">{{ classZh }}</h3>
-                <span class="class-zh-count">{{ tools.length }} 个工具</span>
+                <span class="class-zh-count">{{ t('toolsOption.toolCount', { n: tools.length }) }}</span>
               </div>
               <div class="class-zh-toggle">
                 <svg 
@@ -133,7 +133,7 @@
                       </div>
                     </div>
 
-                    <div v-else class="empty-parameters">暂无参数</div>
+                    <div v-else class="empty-parameters">{{ t('toolsOption.noParams') }}</div>
                   </div>
                 </div>
               </div>
@@ -142,7 +142,7 @@
 
           <!-- 空状态 -->
           <div v-if="Object.keys(groupedTools).length === 0" class="empty-state">
-            <p>暂未找到{{ activeTab }}工具</p>
+            <p>{{ t('toolsOption.empty', { type: activeTabLabel }) }}</p>
           </div>
         </div>
       </div>
@@ -152,7 +152,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+
+const { t } = useI18n()
 
 // 定义接口类型
 interface PropertyInfo {
@@ -192,12 +195,15 @@ const expandedTools = ref<string[]>([])
 const expandedClassZh = ref<string[]>([])
 
 // 标签配置
-const tabs = [
-  { type: 'local' as const, label: '系统工具' },
-  { type: 'project' as const, label: '定制工具' },
-  // { type: 'sse' as const, label: 'SSE工具' },
-  // { type: 'http' as const, label: 'HTTP工具' },
-]
+const tabs = computed(() => [
+  { type: 'local' as const, label: t('toolsOption.systemTools') },
+  { type: 'project' as const, label: t('toolsOption.customTools') },
+])
+
+const activeTabLabel = computed(() => {
+  const tab = tabs.value.find(item => item.type === activeTab.value)
+  return tab?.label ?? activeTab.value
+})
 
 // 计算属性：根据当前标签过滤工具并按 class_zh 分组
 const groupedTools = computed(() => {
@@ -205,7 +211,7 @@ const groupedTools = computed(() => {
   const groups: Record<string, ToolsInfo[]> = {}
   
   filtered.forEach(tool => {
-    const classZh = tool.class_zh || '未分类'
+    const classZh = tool.class_zh || t('common.uncategorized')
     if (!groups[classZh]) {
       groups[classZh] = []
     }
@@ -222,7 +228,7 @@ function getToolsCountByType(type: string): number {
 
 // 当前 tab 的索引，用于驱动 segmented control 的滑动指示器
 const activeTabIndex = computed(() =>
-  Math.max(0, tabs.findIndex(t => t.type === activeTab.value))
+  Math.max(0, tabs.value.findIndex(tab => tab.type === activeTab.value))
 )
 
 // 切换工具详情展开/收起

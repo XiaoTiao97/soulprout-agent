@@ -6,15 +6,16 @@
         <a href="/" class="logo-link">
           <img src="@/assets/images/logo.png" alt="Soulprout" class="header-logo" />
         </a>
+        <LocaleSwitcher />
       </div>
     </header>
 
     <!-- Main -->
     <main class="register-main">
       <div class="register-card">
-        <h1 class="register-title">登录 / 注册 Soulprout</h1>
+        <h1 class="register-title">{{ t('register.title') }}</h1>
         <p class="register-desc">
-          输入邮箱即可登录，新邮箱将自动为你创建账号。
+          {{ t('register.desc') }}
         </p>
 
         <form class="register-form" @submit.prevent="submitForm">
@@ -22,7 +23,7 @@
             class="input-field"
             type="email"
             v-model="email"
-            placeholder="邮箱地址"
+            :placeholder="t('register.emailPlaceholder')"
             autocomplete="email"
             required
           />
@@ -32,7 +33,7 @@
               class="input-field code-input"
               type="text"
               v-model="code"
-              placeholder="6 位邮箱验证码"
+              :placeholder="t('register.codePlaceholder')"
               inputmode="numeric"
               maxlength="6"
               required
@@ -43,7 +44,7 @@
               :disabled="codeBtnDisabled"
               @click="sendCode"
             >
-              {{ countdown > 0 ? `${countdown}s 后重发` : (sending ? '发送中…' : '获取验证码') }}
+              {{ codeBtnLabel }}
             </button>
           </div>
 
@@ -51,14 +52,14 @@
             class="input-field"
             type="text"
             v-model="username"
-            placeholder="昵称（可选，首次登录用）"
+            :placeholder="t('register.usernamePlaceholder')"
             maxlength="32"
           />
 
           <span class="error-text" :class="{ ok: messageOk }">{{ message }}</span>
 
           <button class="submit-btn" type="submit" :disabled="submitting">
-            <span>{{ submitting ? '登录中…' : '登录 / 注册' }}</span>
+            <span>{{ submitting ? t('register.submitting') : t('register.submit') }}</span>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
@@ -66,7 +67,7 @@
         </form>
 
         <p class="hint-text">
-          首次使用？直接输入邮箱获取验证码即可自动注册。
+          {{ t('register.hint') }}
         </p>
       </div>
     </main>
@@ -82,8 +83,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 const email = ref('')
 const code = ref('')
 const username = ref('')
@@ -98,6 +102,12 @@ let countdownTimer = null
 const codeBtnDisabled = computed(
   () => sending.value || countdown.value > 0 || !email.value.trim(),
 )
+
+const codeBtnLabel = computed(() => {
+  if (countdown.value > 0) return t('register.resendIn', { n: countdown.value })
+  if (sending.value) return t('register.sending')
+  return t('register.getCode')
+})
 
 onMounted(async () => {
   try {
@@ -138,7 +148,7 @@ function showMessage(text, ok = false) {
 
 async function sendCode() {
   if (!isValidEmail(email.value)) {
-    showMessage('请填写正确的邮箱地址')
+    showMessage(t('register.invalidEmail'))
     return
   }
   sending.value = true
@@ -151,13 +161,13 @@ async function sendCode() {
     })
     const data = await res.json()
     if (data.success) {
-      showMessage('验证码已发送，请查收邮箱', true)
+      showMessage(t('register.codeSent'), true)
       startCountdown(60)
     } else {
-      showMessage(data.message || '发送失败，请稍后重试')
+      showMessage(data.message || t('register.sendFailed'))
     }
   } catch (err) {
-    showMessage('网络错误：' + err.message)
+    showMessage(t('register.networkError', { msg: err.message }))
   } finally {
     sending.value = false
   }
@@ -165,11 +175,11 @@ async function sendCode() {
 
 async function submitForm() {
   if (!isValidEmail(email.value)) {
-    showMessage('请填写正确的邮箱地址')
+    showMessage(t('register.invalidEmail'))
     return
   }
   if (!/^\d{4,8}$/.test(code.value.trim())) {
-    showMessage('请填写正确的验证码')
+    showMessage(t('register.invalidCode'))
     return
   }
   submitting.value = true
@@ -188,10 +198,10 @@ async function submitForm() {
     if (data.success) {
       window.location.href = '/chat'
     } else {
-      showMessage(data.message || '登录失败，请重试')
+      showMessage(data.message || t('register.loginFailed'))
     }
   } catch (err) {
-    showMessage('网络错误：' + err.message)
+    showMessage(t('register.networkError', { msg: err.message }))
   } finally {
     submitting.value = false
   }
@@ -226,6 +236,7 @@ async function submitForm() {
   padding: 1rem 2rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
 .logo-link { display: inline-flex; align-items: center; text-decoration: none; }

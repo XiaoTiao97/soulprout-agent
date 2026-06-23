@@ -5,10 +5,10 @@
       <div class="kb-option-header">
         <div class="header-title-group">
           <p class="header-eyebrow">KNOWLEDGE</p>
-          <h2>知识库</h2>
+          <h2>{{ t('kbOption.title') }}</h2>
         </div>
 
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" @click="$emit('close')" :aria-label="t('common.close')">
           <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
             <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
@@ -18,19 +18,19 @@
       <!-- 知识库内容 -->
       <div class="kb-content">
         <div class="kb-sidebar">
-          <div class="create-kb" @click="startCreate" title="创建知识库">
+          <div class="create-kb" @click="startCreate" :title="t('kbOption.createKB')">
             <div class="plus-box">
                 <img src="@/assets/images/add_icon.svg" width="18" height="18" />
             </div>
           </div>
           <div v-if="loading" class="loading-state">
             <div class="loading-spinner"></div>
-            <p>Loading knowledge bases...</p>
+            <p>{{ t('kbOption.loadingList') }}</p>
           </div>
 
           <div v-else-if="error" class="error-state">
             <p>{{ error }}</p>
-            <button @click="fetchKBList" class="retry-btn">Retry</button>
+            <button @click="fetchKBList" class="retry-btn">{{ t('common.retry') }}</button>
           </div>
 
           <div v-else class="kb-list">
@@ -45,14 +45,14 @@
 
             <!-- 空状态 -->
             <div v-if="kbList.length === 0" class="empty-state">
-              <p>暂无知识库</p>
+              <p>{{ t('kbOption.noKB') }}</p>
             </div>
           </div>
         </div>
 
         <div class="kb-main">
           <div v-if="!selectedKB" class="no-selection">
-            <p>请选择一个知识库查看文件</p>
+            <p>{{ t('kbOption.selectKBHint') }}</p>
           </div>
 
           <div v-else>
@@ -60,28 +60,28 @@
                 <div class="kb-info-header">
                   <div class="name-wrapper">
                     <h3 v-if="!isEditing">{{ selectedKB.name }}<div v-if="isCreating && selectedKB.kb_id.startsWith('temp_') && !isEditing" class="loading-spinner small inline"></div></h3>
-                    <input v-else v-model="editedName" class="edit-input" placeholder="知识库名称">
-                    <button v-if="!isEditing" class="action-btn edit-kb" @click="startEdit">
+                    <input v-else v-model="editedName" class="edit-input" :placeholder="t('kbOption.kbNamePlaceholder')">
+                    <button v-if="!isEditing" class="action-btn edit-kb" :data-tooltip="t('common.edit')" @click="startEdit">
                       <img src="@/assets/images/edit_icon.svg" width="18" height="18" />
                     </button>
                   </div>
                   <div class="kb-actions">
-                    <button v-if="!isEditing" class="action-btn add-file" @click="addFilesToKB(selectedKB.kb_id)">添加文件</button>
-                    <button v-if="!isEditing" class="action-btn delete-kb" @click="deleteKB(selectedKB.kb_id)">
+                    <button v-if="!isEditing" class="action-btn add-file" @click="addFilesToKB(selectedKB.kb_id)">{{ t('kbOption.addFile') }}</button>
+                    <button v-if="!isEditing" class="action-btn delete-kb" :data-tooltip="t('common.delete')" @click="deleteKB(selectedKB.kb_id)">
                     <img src="@/assets/images/delete.svg" width="18" height="18" />
                     </button>
                     <template v-if="isEditing">
-                      <button class="action-btn save-edit" @click="saveEdit">保存</button>
-                      <button class="action-btn cancel-edit" @click="cancelEdit">取消</button>
+                      <button class="action-btn save-edit" @click="saveEdit">{{ t('common.save') }}</button>
+                      <button class="action-btn cancel-edit" @click="cancelEdit">{{ t('common.cancel') }}</button>
                     </template>
                   </div>
                 </div>
                 <div class="kb-info-content">
                   <p v-if="!isEditing">{{ selectedKB.description }}<div v-if="isCreating && selectedKB.kb_id.startsWith('temp_') && !isEditing" class="loading-spinner small inline"></div></p>
-                  <textarea v-else v-model="editedDescription" class="edit-textarea" placeholder="知识库描述"></textarea>
+                  <textarea v-else v-model="editedDescription" class="edit-textarea" :placeholder="t('kbOption.kbDescPlaceholder')"></textarea>
                 </div>
             </div>
-            <div v-if="selectedKB.loadingDocs" class="loading-docs">加载文档...</div>
+            <div v-if="selectedKB.loadingDocs" class="loading-docs">{{ t('kbOption.loadingDocs') }}</div>
             <div v-else-if="selectedKB.docsError" class="error-docs">{{ selectedKB.docsError }}</div>
             <div v-else class="docs-list">
               <div
@@ -91,32 +91,32 @@
                 @click="fetchFileContent(doc.name)"
               >
                 <span class="doc-name">{{ doc.name }}</span>
-                <button class="delete-doc" @click="deleteDoc(selectedKB.kb_id, doc.doc_id)">
+                <button class="delete-doc" :data-tooltip="t('common.delete')" @click="deleteDoc(selectedKB.kb_id, doc.doc_id)">
                   <img src="@/assets/images/delete.svg" width="18" height="18" />
                 </button>
               </div>
-              <div v-if="selectedKB.docs.length === 0" class="empty-docs">暂无文档</div>
+              <div v-if="selectedKB.docs.length === 0" class="empty-docs">{{ t('kbOption.noDocs') }}</div>
             </div>
             <!-- 待上传文件区域 -->
             <div v-if="pendingFiles.length > 0" class="pending-area">
-              <h4>待上传文件</h4>
+              <h4>{{ t('kbOption.pendingUpload') }}</h4>
               <div class="pending-list">
                 <div v-for="(file, index) in pendingFiles" :key="index" class="pending-item">
                   {{ file.name }}
-                  <button class="remove-btn" @click="removePending(index)">移除</button>
+                  <button class="remove-btn" @click="removePending(index)">{{ t('kbOption.remove') }}</button>
                 </div>
               </div>
               <div class="upload-buttons">
-                <button class="upload-btn" @click="startUpload">上传</button>
-                <button class="cancel-btn" @click="clearPending">取消</button>
+                <button class="upload-btn" @click="startUpload">{{ t('kbOption.upload') }}</button>
+                <button class="cancel-btn" @click="clearPending">{{ t('common.cancel') }}</button>
               </div>
             </div>
             <!-- 新增进度显示区域 -->
             <div v-if="uploadProgress.length > 0" class="progress-area">
-              <h4>文件处理进度</h4>
+              <h4>{{ t('kbOption.uploadProgress') }}</h4>
               <div class="progress-list">
                 <div v-for="(prog, index) in uploadProgress" :key="index" class="progress-item" :class="getStatusClass(prog)">
-                  {{ prog }}<div v-if="prog.endsWith(': 处理中')" class="loading-spinner small inline"></div>
+                  {{ prog }}<div v-if="isProgressProcessing(prog)" class="loading-spinner small inline"></div>
                 </div>
               </div>
             </div>
@@ -126,14 +126,14 @@
         <!-- 文件预览区域 -->
         <div class="file-preview-panel">
           <div class="preview-header">
-            <h4>{{ selectedFile || '文件预览' }}</h4>
+            <h4>{{ selectedFile || t('kbOption.filePreview') }}</h4>
             <div class="header-actions" v-if="selectedFile">
-              <img :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadFile(selectedFile)" />
+              <img :src="DownloadIcon" :alt="t('kbOption.download')" class="icon-button" @click="downloadFile(selectedFile)" />
             </div>
           </div>
           <div class="preview-content">
             <div v-if="!selectedFile" class="no-selection">
-              <p>请选择一个文件进行预览</p>
+              <p>{{ t('kbOption.selectFilePreview') }}</p>
             </div>
             <div v-else-if="previewError" class="error">{{ previewError }}</div>
             <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
@@ -152,11 +152,11 @@
       <!-- 删除确认模态保留，因为删除需要确认 -->
       <div v-if="showConfirmModal" class="confirm-modal">
         <div class="confirm-content">
-          <h3>确认删除</h3>
+          <h3>{{ t('kbOption.confirmDelete') }}</h3>
           <p>{{ confirmMessage }}</p>
           <div class="confirm-buttons">
-            <button class="confirm-btn" @click="confirmDelete">确认</button>
-            <button class="cancel-btn" @click="cancelConfirm">取消</button>
+            <button class="confirm-btn" @click="confirmDelete">{{ t('common.confirm') }}</button>
+            <button class="cancel-btn" @click="cancelConfirm">{{ t('common.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -166,7 +166,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+
+const { t } = useI18n()
+
+function isProgressProcessing(prog: string) {
+  return prog.endsWith(t('kbOption.processingSuffix'))
+}
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -378,8 +385,8 @@ function startCreate() {
   // 创建临时KB
   const tempKB: KB = {
     kb_id: 'temp_' + Date.now(),
-    name: '智能生成中...',
-    description: '智能生成中...',
+    name: t('kbOption.generating'),
+    description: t('kbOption.generating'),
     fileCount: 0,
     docs: [],
     loadingDocs: false,
@@ -439,7 +446,7 @@ function startUpload() {
 async function uploadFiles() {
   uploadProgress.value = []
   currentFiles.value.forEach(file => {
-    uploadProgress.value.push(`${file.name}: 处理中`)
+    uploadProgress.value.push(`${file.name}${t('kbOption.processingSuffix')}`)
   })
 
   try {
@@ -508,7 +515,7 @@ async function uploadFiles() {
       uploadProgress.value = []
     }, 2000)
   } catch (err) {
-    uploadProgress.value.push('上传失败: ' + (err as Error).message)
+    uploadProgress.value.push(t('kbOption.uploadFailedWith', { msg: (err as Error).message }))
   } finally {
     currentFiles.value = []
   }
@@ -519,14 +526,17 @@ function processLine(line: string) {
     const res = JSON.parse(line)
     if (res.success) {
       for (let i = 0; i < uploadProgress.value.length; i++) {
-        if (uploadProgress.value[i].endsWith(': 处理中')) {
-          uploadProgress.value[i] = uploadProgress.value[i].replace(': 处理中', ': 解析完成')
+        if (isProgressProcessing(uploadProgress.value[i])) {
+          uploadProgress.value[i] = uploadProgress.value[i].replace(
+            t('kbOption.processingSuffix'),
+            t('kbOption.parseCompleteSuffix'),
+          )
           uploadProgress.value = [...uploadProgress.value] // trigger reactivity
           break
         }
       }
     } else {
-      uploadProgress.value.push(`失败: ${res.message || '未知错误'}`)
+      uploadProgress.value.push(t('kbOption.failedWith', { msg: res.message || t('kbOption.unknownError') }))
     }
   } catch (e) {
     uploadProgress.value.push(line)
@@ -535,14 +545,14 @@ function processLine(line: string) {
 
 async function deleteKB(kbId: string) {
   confirmType.value = 'kb'
-  confirmMessage.value = '确认删除此知识库吗？'
+  confirmMessage.value = t('kbOption.confirmDeleteKB')
   currentKBIdForDelete.value = kbId
   showConfirmModal.value = true
 }
 
 async function deleteDoc(kbId: string, docId: string) {
   confirmType.value = 'doc'
-  confirmMessage.value = '确认删除此文档吗？'
+  confirmMessage.value = t('kbOption.confirmDeleteDoc')
   currentKBIdForDelete.value = kbId
   currentDocIdForDelete.value = docId
   showConfirmModal.value = true
@@ -564,7 +574,7 @@ async function confirmDelete() {
       }
     }
   } catch (err) {
-    alert('删除失败')
+    alert(t('kbOption.deleteFailed'))
   }
 }
 
@@ -605,10 +615,10 @@ async function saveEdit() {
       }
       isEditing.value = false
     } else {
-      alert('更新失败')
+      alert(t('kbOption.updateFailed'))
     }
   } catch (err) {
-    alert('更新失败: ' + (err as Error).message)
+    alert(t('kbOption.updateFailed') + ': ' + (err as Error).message)
   }
 }
 
@@ -623,9 +633,9 @@ function handleOverlayClick() {
 }
 
 function getStatusClass(prog: string) {
-  if (prog.endsWith(': 处理中')) return 'processing'
-  if (prog.endsWith(': 解析完成')) return 'completed'
-  if (prog.includes('失败')) return 'error'
+  if (prog.endsWith(t('kbOption.processingSuffix'))) return 'processing'
+  if (prog.endsWith(t('kbOption.parseCompleteSuffix'))) return 'completed'
+  if (prog.includes(t('kbOption.failed')) || prog.includes(t('kbOption.uploadFailed'))) return 'error'
   return ''
 }
 
@@ -685,15 +695,15 @@ const fetchFileContent = async (filename: string) => {
             const result = await mammoth.convertToHtml({ arrayBuffer });
             fileContent.value = result.value;
           } catch (err) {
-            previewError.value = '无法转换该 DOCX 文件';
+            previewError.value = t('kbOption.cannotConvertDocx');
             console.error('DOCX conversion error:', err);
           }
         } else {
-          previewError.value = '无法读取 DOCX 文件';
+          previewError.value = t('kbOption.cannotReadDocx');
         }
       };
       reader.onerror = () => {
-        previewError.value = '读取 DOCX 文件失败';
+        previewError.value = t('kbOption.readDocxFailed');
       };
       reader.readAsArrayBuffer(blob);
     } else if (isTextFile.value) {
@@ -701,7 +711,7 @@ const fetchFileContent = async (filename: string) => {
         fileContent.value = text
       }).catch(err => {
         console.error('Failed to read text:', err)
-        previewError.value = '无法读取文件内容'
+        previewError.value = t('kbOption.cannotReadContent')
       })
     } else {
       fileContent.value = ''
@@ -740,7 +750,7 @@ const fetchFileContent = async (filename: string) => {
     })
   } catch (error) {
     console.error('获取文件内容失败:', error)
-    previewError.value = '无法显示该文件类型'
+    previewError.value = t('kbOption.cannotPreviewType')
     fileUrl.value = ''
     fileContent.value = ''
   }
@@ -1088,7 +1098,7 @@ onUnmounted(() => {
 
 .delete-kb::after,
 .delete-doc::after {
-  content: "删除";
+  content: attr(data-tooltip);
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -1527,7 +1537,7 @@ onUnmounted(() => {
 }
 
 .edit-kb::after {
-  content: "编辑";
+  content: attr(data-tooltip);
   position: absolute;
   bottom: 100%;
   left: 50%;

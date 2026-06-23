@@ -401,16 +401,57 @@ class SoulproutToolFunction:
         except Exception as e:
             return f"错误：关闭技能检索结果失败，失败原因：{e}"
 
+    @staticmethod
+    def _ddgs_websearch(query, count=10):
+        from ddgs import DDGS
+
+        backends = ("duckduckgo", "brave", "mojeek", "startpage")
+        last_error = None
+
+        with DDGS() as ddgs:
+            for backend in backends:
+                try:
+                    raw = ddgs.text(query, max_results=count, backend=backend)
+                    if raw:
+                        return [
+                            {
+                                "title": item.get("title") or "",
+                                "link": item.get("href") or item.get("link") or "",
+                                "content": item.get("body") or item.get("snippet") or "",
+                                "media": item.get("source") or "",
+                                "publish_date": item.get("date") or "",
+                            }
+                            for item in raw
+                        ]
+                except Exception as exc:
+                    last_error = exc
+                    continue
+
+        if last_error:
+            raise RuntimeError(f"所有搜索后端均无结果或失败: {last_error}")
+        return []
+
     async def web_search(self, query, count=10, conversation_id=None):
-        def search():
-            client = ZhipuAiClient(api_key=os.environ.get("ZAI_KEY"))
-            response = client.web_search.web_search(search_engine="search_pro", search_query=query, count=count, search_recency_filter="noLimit", content_size="high")
+        zai_key = (os.environ.get("ZAI_KEY") or "").strip()
+
+        def zhipu_search():
+            client = ZhipuAiClient(api_key=zai_key)
+            response = client.web_search.web_search(
+                search_engine="search_pro",
+                search_query=query,
+                count=count,
+                search_recency_filter="noLimit",
+                content_size="high",
+            )
             return response.search_result
 
         try:
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, search)
-            return str([{"title": i.title, "link": i.link, "content": i.content, "media": i.media, "publish_date": i.publish_date} for i in result])
+            if zai_key:
+                result = await loop.run_in_executor(None, zhipu_search)
+                return str([{"title": i.title, "link": i.link, "content": i.content, "media": i.media, "publish_date": i.publish_date} for i in result])
+            result = await loop.run_in_executor(None, lambda: self._ddgs_websearch(query, count=count))
+            return str(result)
         except Exception as e:
             return f"搜索出错: {e}"
 

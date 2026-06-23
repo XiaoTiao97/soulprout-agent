@@ -54,12 +54,12 @@
       <template v-for="(item, idx) in calls" :key="'panel-' + item.toolCallId">
         <section v-if="expanded.has(item.toolCallId)" class="tc-detail-section">
           <header v-if="calls.length > 1" class="tc-detail-head">
-            <span class="tc-detail-head-label">调用 {{ idx + 1 }}</span>
+            <span class="tc-detail-head-label">{{ t('blocks.toolCall', { n: idx + 1 }) }}</span>
             <span class="tc-detail-head-query">{{ getLabel(item) }}</span>
           </header>
 
           <div v-if="hasArguments(item)" class="tc-detail-block">
-            <div class="tc-detail-block-title">参数</div>
+            <div class="tc-detail-block-title">{{ t('blocks.params') }}</div>
             <div class="tc-args-list">
               <div v-for="(value, key) in item.arguments" :key="String(key)" class="tc-arg-row">
                 <span class="tc-arg-key">{{ key }}</span>
@@ -69,7 +69,7 @@
           </div>
 
           <div v-if="showResults" class="tc-detail-block">
-            <div class="tc-detail-block-title">返回结果</div>
+            <div class="tc-detail-block-title">{{ t('blocks.result') }}</div>
             <div v-if="getRawResult(item.toolCallId)" class="tc-result-wrap">
               <div
                 class="tc-result-content"
@@ -79,13 +79,13 @@
                 class="tc-result-resize-handle"
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="拖拽调整结果区域高度"
+                :aria-label="t('blocks.resizeResult')"
                 @mousedown.prevent="startResultResize($event, item.toolCallId)"
               >
                 <span class="tc-result-resize-grip" aria-hidden="true" />
               </div>
             </div>
-            <p v-else class="tc-detail-empty">等待工具返回…</p>
+            <p v-else class="tc-detail-empty">{{ t('blocks.waitingResult') }}</p>
           </div>
         </section>
       </template>
@@ -95,7 +95,10 @@
 
 <script lang="ts" setup>
 import { computed, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { AgentMessage } from '../types/interface'
+
+const { t } = useI18n()
 import {
   type ToolCallItem,
   formatToolArgumentValue,

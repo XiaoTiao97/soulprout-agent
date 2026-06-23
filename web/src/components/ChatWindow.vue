@@ -34,14 +34,14 @@
                             />
                           </div>
                           <div class="user-edit-actions">
-                            <button type="button" class="user-edit-btn-cancel" @click="cancelEditUser">取消</button>
+                            <button type="button" class="user-edit-btn-cancel" @click="cancelEditUser">{{ t('chatWindow.cancel') }}</button>
                             <button
                               type="button"
                               class="user-edit-btn-send"
                               :disabled="isConfirmEditPending"
                               @click="confirmEditUser"
                             >
-                              发送
+                              {{ t('chatWindow.send') }}
                             </button>
                           </div>
                         </div>
@@ -58,7 +58,7 @@
                         v-if="message.id && editingUserMessageId !== message.id"
                         type="button"
                         class="message-action-btn"
-                        title="编辑"
+                        :title="t('chatWindow.edit')"
                         @click="startEditUserMessage(message)"
                       >
                         <img :src="EditIcon" alt="" class="message-action-btn-icon" />
@@ -66,7 +66,7 @@
                       <button
                         type="button"
                         class="message-action-btn"
-                        :title="copiedStates.has(message.created_at) ? '已复制' : '复制'"
+                        :title="copyTitle(message.created_at)"
                         @click="copyToClipboard(message.content, message.created_at)"
                       >
                         <img
@@ -160,7 +160,7 @@
                       <button
                         type="button"
                         class="message-action-btn"
-                        :title="copiedStates.has(message.created_at) ? '已复制' : '复制'"
+                        :title="copyTitle(message.created_at)"
                         @click="copyToClipboard(message.content, message.created_at)"
                       >
                         <img
@@ -246,7 +246,7 @@
                     <button
                       type="button"
                       class="message-action-btn"
-                      :title="copiedStates.has(block.created_at) ? '已复制' : '复制'"
+                      :title="copyTitle(block.created_at)"
                       @click="copyToClipboard(block.content, block.created_at)"
                     >
                       <img
@@ -276,11 +276,11 @@
             class="no-history-container no-history-container--soul"
           >
             <div class="no-history-title-row">
-              <p :class="['no-history-content1', { active: showContent1 }]">越用越懂你的AI伙伴</p>
+              <p :class="['no-history-content1', { active: showContent1 }]">{{ t('chatWindow.soulWelcome') }}</p>
             </div>
             <div :class="['soul-channel-desc', { active: showContent2 }]">
               <div class="soul-channel-line">
-                <span class="soul-channel-desc-label">下载应用，体验多渠道接入：</span>
+                <span class="soul-channel-desc-label">{{ t('chatWindow.channelDownload') }}</span>
                 <div class="soul-channel-list">
                   <div
                     v-for="channel in soulChannels"
@@ -324,23 +324,23 @@
             @mouseenter="showSuggestions = true"
           >
             <div class="no-history-title-row" @mouseenter="showViewHint = false">
-              <p :class="['no-history-content1', { active: showContent1 }]">你好{{ username }}，需要我做些什么？🌱</p>
-              <span v-if="showViewHint" :class="['view-hint', { active: showHintActive }]">👈 查看这里</span>
+              <p :class="['no-history-content1', { active: showContent1 }]">{{ t('chatWindow.taskWelcome', { username }) }}</p>
+              <span v-if="showViewHint" :class="['view-hint', { active: showHintActive }]">{{ t('chatWindow.viewHint') }}</span>
             </div>
             <div class="suggestion-buttons" v-if="showSuggestions">
               <div class="suggestion-cards suggestion-cards-two">
                 <div class="suggestion-card suggestion-card-general">
-                  <h3 class="card-title">通用模式</h3>
+                  <h3 class="card-title">{{ t('chatWindow.generalMode') }}</h3>
                   <ul class="example-list">
-                    <li @click="prefillInput('对AI行业进行深度市场调研，包括最新趋势和竞争分析，整合成一份详细的调研报告')">深度调研：对AI行业进行深度市场调研</li>
-                    <li @click="prefillInput('本周我的工作内容有：xxx，帮我写一份x页的周报PPT，风格为简洁商务风')">生成PPT：帮我写一份周报PPT</li>
-                    <li @click="prefillInput('比较最新款iPhone17和小米17手机的性能、价格和用户评价')">商品对比：iPhone17和小米17对比</li>
-                    <li @click="prefillInput('帮我规划一次为期7天的新疆旅行，包括景点、住宿、交通等')">旅游规划：规划一次7天的新疆旅行</li>
+                    <li @click="prefillInput(t('chatWindow.examples.researchPrefill'))">{{ t('chatWindow.examples.research') }}</li>
+                    <li @click="prefillInput(t('chatWindow.examples.pptPrefill'))">{{ t('chatWindow.examples.ppt') }}</li>
+                    <li @click="prefillInput(t('chatWindow.examples.comparePrefill'))">{{ t('chatWindow.examples.compare') }}</li>
+                    <li @click="prefillInput(t('chatWindow.examples.travelPrefill'))">{{ t('chatWindow.examples.travel') }}</li>
                   </ul>
                 </div>
                 <div class="suggestion-card suggestion-card-agent" @click="handleCreateAgentClick">
-                  <h3 class="card-title">专家模式</h3>
-                  <p class="card-desc"><span class="card-desc-main"><span class="card-desc-highlight">5分钟</span><span class="card-desc-sub">定制你的Agent专家/团队</span></span><span class="card-desc-slogan">完成后自动保存至&nbsp&nbsp&nbsp<strong>"专家库 "</strong></span></p>
+                  <h3 class="card-title">{{ t('chatWindow.expertMode') }}</h3>
+                  <p class="card-desc"><span class="card-desc-main"><span class="card-desc-highlight">{{ t('chatWindow.expertModeDesc') }}</span><span class="card-desc-sub">{{ t('chatWindow.expertModeDescSub') }}</span></span><span class="card-desc-slogan">{{ t('chatWindow.expertModeSlogan') }}&nbsp&nbsp&nbsp<strong>"{{ t('chatWindow.expertLibrary') }}"</strong></span></p>
                 </div>
               </div>
             </div>
@@ -377,6 +377,7 @@
 
 <script lang="ts" setup>
 import { ref, nextTick, computed, watch, onMounted, onUnmounted, onUpdated } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MessageInput from '../components/MessageInput.vue'
 import ToolCallsBlock from './ToolCallsBlock.vue'
 import BlueprintBlock from './BlueprintBlock.vue'
@@ -411,6 +412,8 @@ import SearchImg from '@/assets/images/deep_search_show.png'
 import ToolsImg from '@/assets/images/ppt_show.png'
 // @ts-ignore
 import BuyImg from '@/assets/images/buy.png'
+
+const { t } = useI18n()
 
 interface Props {
   agent_message_list: AgentMessage[];
@@ -608,13 +611,17 @@ const showSuggestions = ref(false)
 const showViewHint = ref(true)
 const showHintActive = ref(false)
 
-const soulChannels = [
-  { name: '微信', supported: true },
-  { name: '飞书', supported: true },
-  { name: '企业微信', supported: true },
-  { name: '小爱音箱', supported: true },
-  { name: 'Rokid AI 眼镜', supported: false },
-] as const
+const soulChannels = computed(() => [
+  { name: t('chatWindow.channels.wechat'), supported: true },
+  { name: t('chatWindow.channels.feishu'), supported: true },
+  { name: t('chatWindow.channels.wework'), supported: true },
+  { name: t('chatWindow.channels.xiaoai'), supported: true },
+  { name: t('chatWindow.channels.rokid'), supported: false },
+])
+
+function copyTitle(createdAt: number) {
+  return copiedStates.value.has(createdAt) ? t('chatWindow.copied') : t('chatWindow.copy')
+}
 
 const editingUserMessageId = ref<string | null>(null)
 const editingUserDraft = ref('')
@@ -821,7 +828,7 @@ function handleStopGeneration() {
     if (typeof agent_id === 'string') {
       // 特殊智能体：soulprout_create_agent 显示中文名称
       if (agent_id === 'soulprout_create_agent') {
-        props.chat_request.agent_name = '创建Agent专家/团队';
+        props.chat_request.agent_name = t('chatWindow.createAgent');
       } else {
         const agent = agent_card_list.value.find(a => (a.agent_id || a.name) === agent_id);
         props.chat_request.agent_name = (agent?.name_zh || agent?.name) ?? agent_id;

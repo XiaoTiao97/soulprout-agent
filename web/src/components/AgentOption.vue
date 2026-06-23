@@ -6,12 +6,12 @@
         <div class="header-title-group">
           <p class="header-eyebrow">EXPERTS</p>
           <div class="header-title-wrap">
-            <h2>专家库</h2>
-            <span class="header-hint">专家即单个智能体 | 专家团队即主/子智能体协作</span>
+            <h2>{{ t('agentOption.title') }}</h2>
+            <span class="header-hint">{{ t('agentOption.headerHint') }}</span>
           </div>
         </div>
 
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" @click="$emit('close')" :aria-label="t('common.close')">
           <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
             <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
@@ -21,7 +21,7 @@
       <!-- 智能体内容 -->
       <div class="agent-content">
         <div class="agent-sidebar">
-          <div class="create-agent" @click="startCreate" title="创建智能体">
+          <div class="create-agent" @click="startCreate" :title="t('agentOption.createAgent')">
             <div class="plus-box">
                 <img src="@/assets/images/add_icon.svg" width="18" height="18" />
             </div>
@@ -40,13 +40,13 @@
             <!-- 我的创建（为空时也显示） -->
             <div class="agent-block">
               <div class="agent-block-header" @click="toggleBlock('myCreated')">
-                <span class="agent-block-title">我的创建</span>
+                <span class="agent-block-title">{{ t('messageInput.myCreated') }}</span>
                 <svg class="block-toggle-icon" :class="{ expanded: expandedBlocks.myCreated }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                   <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                 </svg>
               </div>
               <div v-show="expandedBlocks.myCreated" class="agent-block-items">
-                <div v-if="myCreatedAgents.length === 0" class="empty-block-hint">暂无创建</div>
+                <div v-if="myCreatedAgents.length === 0" class="empty-block-hint">{{ t('agentOption.noCreated') }}</div>
                 <div 
                   v-for="agent in myCreatedAgents" 
                   :key="agent.agent_id"
@@ -60,7 +60,7 @@
             <!-- 我的订阅（为空时也显示） -->
             <div class="agent-block">
               <div class="agent-block-header" @click="toggleBlock('mySubscribed')">
-                <span class="agent-block-title">我的订阅</span>
+                <span class="agent-block-title">{{ t('messageInput.mySubscribed') }}</span>
                 <svg class="block-toggle-icon" :class="{ expanded: expandedBlocks.mySubscribed }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                   <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                 </svg>
@@ -68,9 +68,9 @@
               <div v-show="expandedBlocks.mySubscribed" class="agent-block-items">
                 <button class="agent-market-btn" @click="openAgentMarket">
                   <img src="@/assets/images/agent_market.svg" alt="" class="agent-market-icon" width="18" height="18" />
-                  <span>专家订阅</span>
+                  <span>{{ t('agentOption.expertSubscribe') }}</span>
                 </button>
-                <div v-if="mySubscribedAgents.length === 0" class="empty-block-hint">暂无订阅</div>
+                <div v-if="mySubscribedAgents.length === 0" class="empty-block-hint">{{ t('messageInput.noSubscription') }}</div>
                 <div 
                   v-for="agent in mySubscribedAgents" 
                   :key="agent.agent_id"
@@ -84,7 +84,7 @@
             <!-- 系统预设 -->
             <div class="agent-block" v-if="systemPresetAgents.length > 0">
               <div class="agent-block-header" @click="toggleBlock('systemPreset')">
-                <span class="agent-block-title">系统预设</span>
+                <span class="agent-block-title">{{ t('messageInput.systemPreset') }}</span>
                 <svg class="block-toggle-icon" :class="{ expanded: expandedBlocks.systemPreset }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                   <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                 </svg>
@@ -103,7 +103,7 @@
 
             <!-- 空状态 -->
             <div v-if="filteredAgentList.length === 0" class="empty-state">
-              <p>暂无专家</p>
+              <p>{{ t('agentOption.noExperts') }}</p>
             </div>
           </div>
         </div>
@@ -113,16 +113,16 @@
             <div class="agent-info" :class="{ 'is-readonly': !isEditing && !isCreating, 'is-editing': isEditing || isCreating }">
               <div class="agent-info-header">
                 <div class="name-wrapper">
-                  <h3>创建智能体</h3>
+                  <h3>{{ t('agentOption.createAgentTitle') }}</h3>
                 </div>
                 <div class="agent-actions">
-                  <button class="action-btn save-edit" @click="confirmCreate">创建</button>
-                  <button class="action-btn cancel-edit" @click="cancelCreate">取消</button>
+                  <button class="action-btn save-edit" @click="confirmCreate">{{ t('agentOption.create') }}</button>
+                  <button class="action-btn cancel-edit" @click="cancelCreate">{{ t('common.cancel') }}</button>
                 </div>
               </div>
               <div class="agent-info-content">
                 <div class="field-group">
-                  <label>模型<span class="required">*</span></label>
+                  <label>{{ t('agentOption.model') }}<span class="required">*</span></label>
                   <div class="model-selector" ref="newModelSelectorRef">
                     <button class="model-select-btn" type="button" @click="toggleNewModelSelector">
                       <span>{{ newSelectedModelDisplay }}</span>
@@ -148,54 +148,54 @@
                   </div>
                 </div>
                 <div class="field-group">
-                  <label>名称<span class="required">*</span></label>
-                  <input v-model="newName" class="edit-input-agent" placeholder="请使用英文和下划线(_)组合命名，例如：example_agent">
+                  <label>{{ t('agentOption.name') }}<span class="required">*</span></label>
+                  <input v-model="newName" class="edit-input-agent" :placeholder="t('agentOption.namePlaceholder')">
                 </div>
                 <div class="field-group">
-                  <label>中文名称</label>
-                  <input v-model="newNameZh" class="edit-input-agent" placeholder="请输入智能体的中文名称">
+                  <label>{{ t('agentOption.nameZh') }}</label>
+                  <input v-model="newNameZh" class="edit-input-agent" :placeholder="t('agentOption.nameZhPlaceholder')">
                 </div>
                 <div class="field-group">
-                  <label>描述<span class="required">*</span></label>
-                  <textarea v-model="newDescription" class="edit-textarea" placeholder="请描述智能体的用途，或者你在什么情况/场景下会使用该智能体"></textarea>
+                  <label>{{ t('agentOption.description') }}<span class="required">*</span></label>
+                  <textarea v-model="newDescription" class="edit-textarea" :placeholder="t('agentOption.descriptionPlaceholder')"></textarea>
                 </div>
                 <div class="field-group">
-                  <label>系统提示词</label>
-                  <textarea v-model="newSystemPrompt" class="edit-textarea" placeholder="请为智能体配置系统提示词，写明你希望智能体完成什么任务，任务的逻辑顺序，以及使用什么工具或知识库"></textarea>
+                  <label>{{ t('agentOption.systemPrompt') }}</label>
+                  <textarea v-model="newSystemPrompt" class="edit-textarea" :placeholder="t('agentOption.systemPromptPlaceholder')"></textarea>
                 </div>
                 <div class="field-group">
-                  <label>历史消息继承</label>
+                  <label>{{ t('agentOption.historyInherit') }}</label>
                   <div class="history-toggle">
                     <div class="toggle-wrapper">
-                      <label>主智能体历史</label>
+                      <label>{{ t('agentOption.mainAgentHistory') }}</label>
                       <div class="toggle" :class="{ active: newSupervisorHistory }" @click="newSupervisorHistory = !newSupervisorHistory">
                         <div class="toggle-circle"></div>
                       </div>
-                      <span class="toggle-comment">是否能够看到主智能体的对话记录</span>
+                      <span class="toggle-comment">{{ t('agentOption.historyInheritHint') }}</span>
                     </div>
                   </div>
                 </div>
                 <div class="field-group">
-                  <label>文件库</label>
+                  <label>{{ t('agentOption.fileLibrary') }}</label>
                   <div class="file-library-wrapper">
                     <div class="list-selection agent-file-list">
-                      <button class="upload-file-btn-inline" type="button" @click="triggerNewFileUpload" title="添加文件">
+                      <button class="upload-file-btn-inline" type="button" @click="triggerNewFileUpload" :title="t('agentOption.addFile')">
                         <img src="@/assets/images/file_upload.svg" width="18" height="18" />
-                        <span>添加文件</span>
+                        <span>{{ t('agentOption.addFile') }}</span>
                       </button>
                       <div class="file-item" v-for="(file, idx) in newAgentFiles" :key="getNewFileKey(file, idx)">
                         <span class="file-name">{{ file.name }}</span>
-                        <button class="remove-file-btn-inline" type="button" @click.stop="removeNewFile(idx)" title="删除">
-                          <img :src="DeleteFileIconUrl" alt="删除" />
+                        <button class="remove-file-btn-inline" type="button" @click.stop="removeNewFile(idx)" :title="t('common.delete')">
+                          <img :src="DeleteFileIconUrl" :alt="t('common.delete')" />
                         </button>
                       </div>
-                      <div v-if="newAgentFiles.length === 0" class="empty-docs">暂无文件</div>
+                      <div v-if="newAgentFiles.length === 0" class="empty-docs">{{ t('agentOption.noFiles') }}</div>
                     </div>
                   </div>
                 </div>
                 <!-- 公告暂时隐藏 -->
                 <div class="field-group">
-                  <label>工具</label>
+                  <label>{{ t('agentOption.tools') }}</label>
                   <div class="list-selection">
                     <div 
                       v-for="(tools, classZh) in groupedTools" 
@@ -206,9 +206,9 @@
                       <div class="tool-group-header" @click="toggleToolGroup(classZh)">
                         <div class="tool-group-header-text">
                           <span class="tool-group-name">{{ classZh }}</span>
-                          <span class="tool-group-count">{{ tools.length }} 个工具</span>
+                          <span class="tool-group-count">{{ t('agentOption.toolCount', { n: tools.length }) }}</span>
                           <span v-if="getSelectedCountInGroup(classZh) > 0" class="tool-group-selected">
-                            已选择 {{ getSelectedCountInGroup(classZh) }} 个
+                            {{ t('agentOption.selectedCount', { n: getSelectedCountInGroup(classZh) }) }}
                           </span>
                         </div>
                         <div class="tool-group-toggle">
@@ -237,11 +237,11 @@
                   </div>
                 </div>
                 <div class="field-group">
-                  <label>技能</label>
+                  <label>{{ t('agentOption.skills') }}</label>
                   <div class="skill-agent-section">
                     <div class="skill-agent-subsection">
-                      <div class="skill-agent-subtitle">系统技能</div>
-                      <div v-if="systemSkillsList.length === 0" class="empty-state">暂无系统技能</div>
+                      <div class="skill-agent-subtitle">{{ t('agentOption.systemSkills') }}</div>
+                      <div v-if="systemSkillsList.length === 0" class="empty-state">{{ t('agentOption.noSystemSkills') }}</div>
                       <div v-else class="list-selection">
                         <label v-for="skill in systemSkillsList" :key="'new-sys-' + skill.name" class="list-item">
                           <div class="list-item-header">
@@ -253,8 +253,8 @@
                       </div>
                     </div>
                     <div class="skill-agent-subsection">
-                      <div class="skill-agent-subtitle">个人技能</div>
-                      <div v-if="userSkillsList.length === 0" class="empty-state">暂无个人技能</div>
+                      <div class="skill-agent-subtitle">{{ t('agentOption.personalSkills') }}</div>
+                      <div v-if="userSkillsList.length === 0" class="empty-state">{{ t('agentOption.noPersonalSkills') }}</div>
                       <div v-else class="list-selection">
                         <label v-for="skill in userSkillsList" :key="'new-user-' + skill.name" class="list-item">
                           <div class="list-item-header">
@@ -268,8 +268,8 @@
                   </div>
                 </div>
                 <div class="field-group">
-                  <label>子智能体</label>
-                  <div v-if="filteredSubAgents.length === 0" class="empty-state">没有可用子智能体</div>
+                  <label>{{ t('agentOption.subAgents') }}</label>
+                  <div v-if="filteredSubAgents.length === 0" class="empty-state">{{ t('agentOption.noSubAgents') }}</div>
                   <div v-else class="list-selection">
                     <label v-for="agent in filteredSubAgents" :key="agent.agent_id" class="list-item">
                       <div class="list-item-header">
@@ -281,7 +281,7 @@
                   </div>
                 </div>
                 <div class="field-group">
-                  <label>知识库</label>
+                  <label>{{ t('agentOption.knowledgeBase') }}</label>
                   <div class="list-selection">
                     <label v-for="kb in allKbs" :key="kb.kb_id" class="list-item">
                       <div class="list-item-header">
@@ -301,7 +301,7 @@
             @view-detail="onMarketViewDetail"
           />
           <div v-else-if="!selectedAgent && !selectedMarketAgent" class="no-selection">
-            <p>请选择一个智能体查看详情</p>
+            <p>{{ t('agentOption.selectAgentHint') }}</p>
           </div>
 
           <div v-else>
@@ -309,7 +309,7 @@
                 <div class="agent-info-header">
                   <div class="name-wrapper">
                     <h3 v-if="!isEditing">{{ displayAgent?.name }}</h3>
-                    <h3 v-else>编辑智能体</h3>
+                    <h3 v-else>{{ t('agentOption.editAgent') }}</h3>
                     <!-- 发布状态（仅我的创建）：私有 / 已发布 -->
                     <div v-if="!isEditing &amp;&amp; canEditSelectedAgent" class="publish-status-wrapper">
                       <span
@@ -319,7 +319,7 @@
                           'status-published': displayAgent?.public
                         }"
                       >
-                        {{ displayAgent?.public ? '已发布' : '私有' }}
+                        {{ displayAgent?.public ? t('agentOption.published') : t('agentOption.private') }}
                       </span>
                     </div>
                     <button
@@ -328,7 +328,7 @@
                       :disabled="subscribeLoading"
                       @click="handleSubscribe"
                     >
-                      {{ subscribeLoading ? '订阅中...' : '订阅' }}
+                      {{ subscribeLoading ? t('agentOption.subscribing') : t('agentOption.subscribe') }}
                     </button>
                     <button
                       v-if="!isEditing &amp;&amp; canShowSubscribeBtn &amp;&amp; isDisplayAgentSubscribed"
@@ -336,7 +336,7 @@
                       :disabled="subscribeLoading"
                       @click="handleUnsubscribe"
                     >
-                      {{ subscribeLoading ? '取消中...' : '取消订阅' }}
+                      {{ subscribeLoading ? t('agentOption.unsubscribing') : t('agentOption.unsubscribe') }}
                     </button>
                   </div>
                   <div class="agent-actions">
@@ -345,7 +345,7 @@
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                           <path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        返回专家订阅
+                        {{ t('agentOption.backToSubscribe') }}
                       </button>
                     </template>
                     <template v-else-if="!isEditing &amp;&amp; canEditSelectedAgent">
@@ -354,38 +354,38 @@
                           class="agent-option-btn"
                           type="button"
                           @click.stop="toggleAgentOptionMenu"
-                          title="智能体选项"
+                          :title="t('agentOption.agentOptions')"
                         >
                           <img src="@/assets/images/option_conversation.svg" width="18" height="18" alt="options" />
                         </button>
                         <div v-if="showAgentOptionMenu" class="agent-option-menu" :style="agentOptionMenuStyle">
                           <button class="agent-option-item" @click.stop="startEditFromMenu">
                             <img src="@/assets/images/edit_icon.svg" width="16" height="16" alt="edit" />
-                            <span>编辑</span>
+                            <span>{{ t('conversation.edit') }}</span>
                           </button>
                           <button
                             class="agent-option-item"
                             @click.stop="handlePublishFromMenu"
                           >
                           <img src="@/assets/images/lock.svg" width="16" height="16" alt="lock" />
-                            <span>{{ selectedAgent?.public ? '停止发布' : '发布到市场' }}</span>
+                            <span>{{ selectedAgent?.public ? t('agentOption.stopPublish') : t('agentOption.publishToMarket') }}</span>
                           </button>
                           <button v-if="!selectedAgent?.public" class="agent-option-item agent-option-delete" @click.stop="handleDeleteFromMenu">
                             <img src="@/assets/images/delete.svg" width="16" height="16" alt="delete" />
-                            <span>删除</span>
+                            <span>{{ t('common.delete') }}</span>
                           </button>
                         </div>
                       </div>
                     </template>
                     <template v-if="isEditing">
-                      <button class="action-btn save-edit" @click="saveEdit">保存</button>
-                      <button class="action-btn cancel-edit" @click="cancelEdit">取消</button>
+                      <button class="action-btn save-edit" @click="saveEdit">{{ t('common.save') }}</button>
+                      <button class="action-btn cancel-edit" @click="cancelEdit">{{ t('common.cancel') }}</button>
                     </template>
                   </div>
                 </div>
                 <div class="agent-info-content">
                   <div class="field-group" v-if="isEditing">
-                    <label>模型<span class="required">*</span></label>
+                    <label>{{ t('agentOption.model') }}<span class="required">*</span></label>
                     <div class="model-selector" ref="editModelSelectorRef">
                       <button class="model-select-btn" type="button" @click="toggleEditModelSelector">
                         <span>{{ editedSelectedModelDisplay }}</span>
@@ -412,71 +412,71 @@
                   </div>
                   <div class="inline-fields" v-if="!isEditing">
                     <div class="field-group compact">
-                      <label>模型</label>
+                      <label>{{ t('agentOption.model') }}</label>
                       <p>{{ displayAgent?.model_source || '-' }}: {{ displayAgent?.model || '-' }}</p>
                     </div>
                   </div>
                   <div class="field-group" v-if="isEditing">
-                    <label>名称<span class="required">*</span></label>
-                    <input v-model="editedName" class="edit-input-agent" placeholder="请使用英文和下划线(_)组合命名，例如：example_agent">
+                    <label>{{ t('agentOption.name') }}<span class="required">*</span></label>
+                    <input v-model="editedName" class="edit-input-agent" :placeholder="t('agentOption.namePlaceholder')">
                   </div>
                   <div class="field-group" v-if="isEditing">
-                    <label>中文名称</label>
-                    <input v-model="editedNameZh" class="edit-input-agent" placeholder="请输入智能体的中文名称">
+                    <label>{{ t('agentOption.nameZh') }}</label>
+                    <input v-model="editedNameZh" class="edit-input-agent" :placeholder="t('agentOption.nameZhPlaceholder')">
                   </div>
                   <div class="field-group" v-if="!isEditing">
-                    <label>中文名称</label>
-                    <p>{{ displayAgent?.name_zh || '无' }}</p>
+                    <label>{{ t('agentOption.nameZh') }}</label>
+                    <p>{{ displayAgent?.name_zh || t('messageInput.none') }}</p>
                   </div>
                   <div class="field-group">
-                    <label>描述<span class="required" v-if="isEditing">*</span></label>
+                    <label>{{ t('agentOption.description') }}<span class="required" v-if="isEditing">*</span></label>
                     <p v-if="!isEditing">{{ displayAgent?.description }}</p>
-                    <textarea v-else v-model="editedDescription" class="edit-textarea" placeholder="智能体描述"></textarea>
+                    <textarea v-else v-model="editedDescription" class="edit-textarea" :placeholder="t('agentOption.descriptionEditPlaceholder')"></textarea>
                   </div>
                   <div class="field-group">
-                    <label>系统提示词<span class="required" v-if="isEditing">*</span></label>
+                    <label>{{ t('agentOption.systemPrompt') }}<span class="required" v-if="isEditing">*</span></label>
                     <p v-if="!isEditing">{{ displayAgent?.system_prompt }}</p>
-                    <textarea v-else v-model="editedSystemPrompt" class="edit-textarea" placeholder="系统提示词"></textarea>
+                    <textarea v-else v-model="editedSystemPrompt" class="edit-textarea" :placeholder="t('agentOption.systemPromptEditPlaceholder')"></textarea>
                   </div>
                   <div class="field-group" v-if="isEditing">
-                    <label>历史消息继承</label>
+                    <label>{{ t('agentOption.historyInherit') }}</label>
                     <div class="history-toggle">
                       <div class="toggle-wrapper">
-                        <label>主智能体历史</label>
+                        <label>{{ t('agentOption.mainAgentHistory') }}</label>
                         <div class="toggle" :class="{ active: editedSupervisorHistory }" @click="editedSupervisorHistory = !editedSupervisorHistory">
                           <div class="toggle-circle"></div>
                         </div>
-                        <span class="toggle-comment">是否能够看到主智能体的对话记录</span>
+                        <span class="toggle-comment">{{ t('agentOption.historyInheritHint') }}</span>
                       </div>
                     </div>
                   </div>
                 <!-- 公告暂时隐藏 -->
                   <div class="field-group" v-if="isEditing">
-                    <label>文件库</label>
+                    <label>{{ t('agentOption.fileLibrary') }}</label>
                     <div class="file-library-wrapper file-library-edit">
                       <div class="list-selection agent-file-list">
-                        <button class="upload-file-btn-inline" type="button" @click="triggerEditFileUpload" title="添加文件">
+                        <button class="upload-file-btn-inline" type="button" @click="triggerEditFileUpload" :title="t('agentOption.addFile')">
                           <img src="@/assets/images/file_upload.svg" width="18" height="18" />
-                          <span>添加文件</span>
+                          <span>{{ t('agentOption.addFile') }}</span>
                         </button>
                         <div class="file-item" v-for="(item) in editedAgentExistingFilesWithInfo" :key="'existing-' + item.file_id">
                           <span class="file-name">{{ item.name }}</span>
-                          <button class="remove-file-btn-inline" type="button" @click.stop="removeExistingFile(item.file_id)" title="删除">
-                            <img :src="DeleteFileIconUrl" alt="删除" />
+                          <button class="remove-file-btn-inline" type="button" @click.stop="removeExistingFile(item.file_id)" :title="t('common.delete')">
+                            <img :src="DeleteFileIconUrl" :alt="t('common.delete')" />
                           </button>
                         </div>
                         <div class="file-item" v-for="(file, idx) in editedAgentNewFiles" :key="'new-' + getEditFileKey(file, idx)">
                           <span class="file-name">{{ file.name }}</span>
-                          <button class="remove-file-btn-inline" type="button" @click.stop="removeEditNewFile(idx)" title="删除">
-                            <img :src="DeleteFileIconUrl" alt="删除" />
+                          <button class="remove-file-btn-inline" type="button" @click.stop="removeEditNewFile(idx)" :title="t('common.delete')">
+                            <img :src="DeleteFileIconUrl" :alt="t('common.delete')" />
                           </button>
                         </div>
-                        <div v-if="editedAgentExistingFilesWithInfo.length === 0 && editedAgentNewFiles.length === 0" class="empty-docs">暂无文件</div>
+                        <div v-if="editedAgentExistingFilesWithInfo.length === 0 && editedAgentNewFiles.length === 0" class="empty-docs">{{ t('agentOption.noFiles') }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="field-group file-library-row" v-if="!isEditing && selectedAgentFilesDetail.length > 0">
-                    <label>文件库</label>
+                    <label>{{ t('agentOption.fileLibrary') }}</label>
                     <div class="file-library-wrapper">
                       <div class="list-selection agent-file-list">
                         <div
@@ -491,14 +491,14 @@
                       </div>
                       <div class="file-preview-panel">
                         <div class="preview-header">
-                          <h4>{{ selectedPreviewFile || '文件预览' }}</h4>
+                          <h4>{{ selectedPreviewFile || t('agentOption.filePreview') }}</h4>
                           <div class="header-actions" v-if="selectedPreviewFile">
-                            <img :src="DownloadIcon" alt="下载" class="icon-button" @click="downloadAgentFile(selectedPreviewFile)" />
+                            <img :src="DownloadIcon" :alt="t('kbOption.download')" class="icon-button" @click="downloadAgentFile(selectedPreviewFile)" />
                           </div>
                         </div>
                         <div class="preview-content">
                           <div v-if="!selectedPreviewFile" class="no-selection">
-                            <p>请选择一个文件进行预览</p>
+                            <p>{{ t('agentOption.selectFilePreview') }}</p>
                           </div>
                           <div v-else-if="previewError" class="error">{{ previewError }}</div>
                           <img v-else-if="isPreviewImage" :src="previewFileUrl" alt="Image Preview" class="preview-image" />
@@ -513,20 +513,20 @@
                   </div>
                   <div class="inline-fields" v-if="!isEditing">
                     <div class="field-group compact">
-                      <label>工具</label>
+                      <label>{{ t('agentOption.tools') }}</label>
                       <ul v-if="selectedAgentToolsDetail.length" class="pill-list">
                         <li v-for="tool in selectedAgentToolsDetail" :key="tool.name" class="pill-item">
                           <span class="pill-title">{{ tool.name }}</span>
                           <span v-if="tool.description" class="pill-desc">{{ tool.description }}</span>
                         </li>
                       </ul>
-                      <p v-else class="empty-text">无</p>
+                      <p v-else class="empty-text">{{ t('messageInput.none') }}</p>
                     </div>
                     <div class="field-group compact">
-                      <label>技能</label>
+                      <label>{{ t('agentOption.skills') }}</label>
                       <div v-if="selectedAgentSkillsDetail.system.length || selectedAgentSkillsDetail.user.length" class="skill-readonly-wrap">
                         <div v-if="selectedAgentSkillsDetail.system.length" class="skill-readonly-block">
-                          <span class="skill-readonly-type-label">系统技能</span>
+                          <span class="skill-readonly-type-label">{{ t('agentOption.systemSkills') }}</span>
                           <ul class="pill-list">
                             <li v-for="row in selectedAgentSkillsDetail.system" :key="'ro-sys-' + row.name" class="pill-item">
                               <span class="pill-title">{{ row.name }}</span>
@@ -535,7 +535,7 @@
                           </ul>
                         </div>
                         <div v-if="selectedAgentSkillsDetail.user.length" class="skill-readonly-block">
-                          <span class="skill-readonly-type-label">个人技能</span>
+                          <span class="skill-readonly-type-label">{{ t('agentOption.personalSkills') }}</span>
                           <ul class="pill-list">
                             <li v-for="row in selectedAgentSkillsDetail.user" :key="'ro-user-' + row.name" class="pill-item">
                               <span class="pill-title">{{ row.name }}</span>
@@ -544,31 +544,31 @@
                           </ul>
                         </div>
                       </div>
-                      <p v-else class="empty-text">无</p>
+                      <p v-else class="empty-text">{{ t('messageInput.none') }}</p>
                     </div>
                     <div class="field-group compact">
-                      <label>知识库</label>
+                      <label>{{ t('agentOption.knowledgeBase') }}</label>
                       <ul v-if="selectedAgentKbsDetail.length" class="pill-list">
                         <li v-for="kb in selectedAgentKbsDetail" :key="kb.name" class="pill-item">
                           <span class="pill-title">{{ kb.name }}</span>
                           <span v-if="kb.description" class="pill-desc">{{ kb.description }}</span>
                         </li>
                       </ul>
-                      <p v-else class="empty-text">无</p>
+                      <p v-else class="empty-text">{{ t('messageInput.none') }}</p>
                     </div>
                     <div class="field-group compact">
-                      <label>子智能体</label>
+                      <label>{{ t('agentOption.subAgents') }}</label>
                       <ul v-if="selectedAgentSubAgentsDetail.length" class="pill-list">
                         <li v-for="agent in selectedAgentSubAgentsDetail" :key="agent.agent_id || agent.name" class="pill-item">
                           <span class="pill-title">{{ agent.name }}</span>
                           <span v-if="agent.description" class="pill-desc">{{ agent.description }}</span>
                         </li>
                       </ul>
-                      <p v-else class="empty-text">无</p>
+                      <p v-else class="empty-text">{{ t('messageInput.none') }}</p>
                     </div>
                   </div>
                   <div class="field-group" v-else>
-                    <label>工具</label>
+                    <label>{{ t('agentOption.tools') }}</label>
                     <div class="list-selection">
                       <div 
                         v-for="(tools, classZh) in groupedTools" 
@@ -579,9 +579,9 @@
                         <div class="tool-group-header" @click="toggleEditToolGroup(classZh)">
                           <div class="tool-group-header-text">
                             <span class="tool-group-name">{{ classZh }}</span>
-                            <span class="tool-group-count">{{ tools.length }} 个工具</span>
+                            <span class="tool-group-count">{{ t('agentOption.toolCount', { n: tools.length }) }}</span>
                             <span v-if="getSelectedCountInEditGroup(classZh) > 0" class="tool-group-selected">
-                              已选择 {{ getSelectedCountInEditGroup(classZh) }} 个
+                              {{ t('agentOption.selectedCount', { n: getSelectedCountInEditGroup(classZh) }) }}
                             </span>
                           </div>
                           <div class="tool-group-toggle">
@@ -610,11 +610,11 @@
                     </div>
                   </div>
                   <div class="field-group" v-if="isEditing">
-                    <label>技能</label>
+                    <label>{{ t('agentOption.skills') }}</label>
                     <div class="skill-agent-section">
                       <div class="skill-agent-subsection">
-                        <div class="skill-agent-subtitle">系统技能</div>
-                        <div v-if="systemSkillsList.length === 0" class="empty-state">暂无系统技能</div>
+                        <div class="skill-agent-subtitle">{{ t('agentOption.systemSkills') }}</div>
+                        <div v-if="systemSkillsList.length === 0" class="empty-state">{{ t('agentOption.noSystemSkills') }}</div>
                         <div v-else class="list-selection">
                           <label v-for="skill in systemSkillsList" :key="'edit-sys-' + skill.name" class="list-item">
                             <div class="list-item-header">
@@ -626,8 +626,8 @@
                         </div>
                       </div>
                       <div class="skill-agent-subsection">
-                        <div class="skill-agent-subtitle">个人技能</div>
-                        <div v-if="userSkillsList.length === 0" class="empty-state">暂无个人技能</div>
+                        <div class="skill-agent-subtitle">{{ t('agentOption.personalSkills') }}</div>
+                        <div v-if="userSkillsList.length === 0" class="empty-state">{{ t('agentOption.noPersonalSkills') }}</div>
                         <div v-else class="list-selection">
                           <label v-for="skill in userSkillsList" :key="'edit-user-' + skill.name" class="list-item">
                             <div class="list-item-header">
@@ -641,8 +641,8 @@
                     </div>
                   </div>
                   <div class="field-group" v-if="isEditing">
-                    <label>子智能体</label>
-                    <div v-if="filteredSubAgents.length === 0" class="empty-state">没有可用子智能体</div>
+                    <label>{{ t('agentOption.subAgents') }}</label>
+                    <div v-if="filteredSubAgents.length === 0" class="empty-state">{{ t('agentOption.noSubAgents') }}</div>
                     <div v-else class="list-selection">
                       <label v-for="agent in filteredSubAgents" :key="agent.agent_id" class="list-item">
                         <div class="list-item-header">
@@ -654,7 +654,7 @@
                     </div>
                   </div>
                   <div class="field-group" v-if="isEditing">
-                    <label>知识库</label>
+                    <label>{{ t('agentOption.knowledgeBase') }}</label>
                     <div class="list-selection">
                       <label v-for="kb in allKbs" :key="kb.kb_id" class="list-item">
                         <div class="list-item-header">
@@ -677,11 +677,11 @@
       <!-- 取消发布确认模态 -->
       <div v-if="showUnpublishConfirmModal" class="confirm-modal">
         <div class="confirm-content">
-          <h3>确认取消发布</h3>
-          <p>如果取消发布，则该专家会从其他用户的订阅中删除，确定要取消发布吗？</p>
+          <h3>{{ t('agentOption.confirmUnpublishTitle') }}</h3>
+          <p>{{ t('agentOption.confirmUnpublishMessage') }}</p>
           <div class="confirm-buttons">
-            <button class="confirm-btn" @click="confirmUnpublish">确定</button>
-            <button class="cancel-btn" @click="showUnpublishConfirmModal = false">取消</button>
+            <button class="confirm-btn" @click="confirmUnpublish">{{ t('common.confirm') }}</button>
+            <button class="cancel-btn" @click="showUnpublishConfirmModal = false">{{ t('common.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -689,11 +689,11 @@
       <!-- 删除确认模态 -->
       <div v-if="showConfirmModal" class="confirm-modal">
         <div class="confirm-content">
-          <h3>确认删除</h3>
+          <h3>{{ t('kbOption.confirmDelete') }}</h3>
           <p>{{ confirmMessage }}</p>
           <div class="confirm-buttons">
-            <button class="confirm-btn" @click="confirmDelete">确认</button>
-            <button class="cancel-btn" @click="cancelConfirm">取消</button>
+            <button class="confirm-btn" @click="confirmDelete">{{ t('common.confirm') }}</button>
+            <button class="cancel-btn" @click="cancelConfirm">{{ t('common.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -701,10 +701,10 @@
       <!-- 错误模态 -->
       <div v-if="showErrorModal" class="error-modal">
         <div class="error-content">
-          <h3><img src="@/assets/images/error_icon.svg" width="18" height="18" alt="错误" /> 错误</h3>
+          <h3><img src="@/assets/images/error_icon.svg" width="18" height="18" :alt="t('agentOption.errorTitle')" /> {{ t('agentOption.errorTitle') }}</h3>
           <p>{{ errorMessage }}</p>
           <div class="confirm-buttons">
-            <button class="ok-btn" @click="showErrorModal = false">确定</button>
+            <button class="ok-btn" @click="showErrorModal = false">{{ t('agentOption.ok') }}</button>
           </div>
         </div>
       </div>
@@ -714,7 +714,7 @@
         <div class="error-content publish-result-content">
           <p>{{ publishResultMessage }}</p>
           <div class="confirm-buttons">
-            <button class="ok-btn" @click="showPublishResultModal = false">确定</button>
+            <button class="ok-btn" @click="showPublishResultModal = false">{{ t('agentOption.ok') }}</button>
           </div>
         </div>
       </div>
@@ -724,7 +724,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+
+const { t } = useI18n()
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -1091,7 +1094,7 @@ const filteredSubAgents = computed(() => {
 const groupedTools = computed(() => {
   const groups: Record<string, ToolItem[]> = {}
   allTools.value.forEach(tool => {
-    const classZh = tool.class_zh || '未分类'
+    const classZh = tool.class_zh || t('common.uncategorized')
     if (!groups[classZh]) {
       groups[classZh] = []
     }
@@ -1167,7 +1170,7 @@ async function fetchTools() {
     allTools.value = response.data.map((tool: any) => ({
       name: tool.name,
       description: tool.description || '',
-      class_zh: tool.class_zh || '未分类'
+      class_zh: tool.class_zh || t('common.uncategorized')
     }))
   } catch (err) {
     console.error('Failed to fetch tools:', err)
@@ -1292,11 +1295,11 @@ async function handleSubscribe() {
     if (res.data?.success) {
       await fetchAgentList()
     } else {
-      errorMessage.value = res.data?.message || '订阅失败'
+      errorMessage.value = res.data?.message || t('agentOption.subscribeFailed')
       showErrorModal.value = true
     }
   } catch (err) {
-    errorMessage.value = '订阅失败: ' + (err as Error).message
+    errorMessage.value = t('agentOption.subscribeFailed') + ': ' + (err as Error).message
     showErrorModal.value = true
   } finally {
     subscribeLoading.value = false
@@ -1321,11 +1324,11 @@ async function handleUnsubscribe() {
         selectedAgent.value = null
       }
     } else {
-      errorMessage.value = res.data?.message || '取消订阅失败'
+      errorMessage.value = res.data?.message || t('agentOption.unsubscribeFailed')
       showErrorModal.value = true
     }
   } catch (err) {
-    errorMessage.value = '取消订阅失败: ' + (err as Error).message
+    errorMessage.value = t('agentOption.unsubscribeFailed') + ': ' + (err as Error).message
     showErrorModal.value = true
   } finally {
     subscribeLoading.value = false
@@ -1355,17 +1358,17 @@ function startCreate() {
 
 async function confirmCreate() {
   if (!newName.value.trim()) {
-    errorMessage.value = '名称不能为空'
+    errorMessage.value = t('agentOption.nameRequired')
     showErrorModal.value = true
     return
   }
   if (!newDescription.value.trim()) {
-    errorMessage.value = '描述不能为空'
+    errorMessage.value = t('agentOption.descriptionRequired')
     showErrorModal.value = true
     return
   }
   if (!newModel.value) {
-    errorMessage.value = '模型不能为空'
+    errorMessage.value = t('agentOption.modelRequired')
     showErrorModal.value = true
     return
   }
@@ -1406,11 +1409,11 @@ async function confirmCreate() {
       const createdAgent = agentList.value.find(a => a.name === newName.value)
       if (createdAgent) selectAgent(createdAgent)
     } else {
-      errorMessage.value = response.data.message || '创建失败'
+      errorMessage.value = response.data.message || t('agentOption.createFailed')
       showErrorModal.value = true
     }
   } catch (err) {
-    errorMessage.value = '创建失败: ' + (err as Error).message
+    errorMessage.value = t('agentOption.createFailed') + ': ' + (err as Error).message
     showErrorModal.value = true
   }
 }
@@ -1423,7 +1426,7 @@ function cancelCreate() {
 }
 
 async function deleteAgent(agentId: string) {
-  confirmMessage.value = '确认删除此智能体吗？'
+  confirmMessage.value = t('agentOption.confirmDeleteAgent')
   currentAgentIdForDelete.value = agentId
   showConfirmModal.value = true
 }
@@ -1437,7 +1440,7 @@ async function confirmDelete() {
       selectedAgent.value = null
     }
   } catch (err) {
-    errorMessage.value = '删除失败: ' + (err as Error).message
+    errorMessage.value = t('agentOption.deleteFailed') + ': ' + (err as Error).message
     showErrorModal.value = true
   }
 }
@@ -1450,7 +1453,7 @@ async function handlePublishClick(publicVal: boolean) {
   if (!selectedAgent.value) return
   publishLoading.value = true
   showPublishResultModal.value = true
-  publishResultMessage.value = '正在审核，请不要离开当前界面'
+  publishResultMessage.value = t('agentOption.reviewing')
   try {
     const response = await axios.post(
       `/api/agent_card/${selectedAgent.value.agent_id}/public`,
@@ -1460,18 +1463,18 @@ async function handlePublishClick(publicVal: boolean) {
     const data = response.data
     if (data && typeof data.success === 'boolean') {
       if (data.success) {
-        publishResultMessage.value = '成功!'
+        publishResultMessage.value = t('agentOption.success')
         if (selectedAgent.value) selectedAgent.value.public = publicVal
         const index = agentList.value.findIndex(a => a.agent_id === selectedAgent.value!.agent_id)
         if (index !== -1) agentList.value[index] = { ...agentList.value[index], public: publicVal }
       } else {
-        publishResultMessage.value = data.content || '操作失败'
+        publishResultMessage.value = data.content || t('agentOption.operationFailed')
       }
     } else {
-      publishResultMessage.value = '正在审核，请不要离开当前界面'
+      publishResultMessage.value = t('agentOption.reviewing')
     }
   } catch {
-    publishResultMessage.value = '请求失败，请稍后重试'
+    publishResultMessage.value = t('agentOption.requestFailed')
   } finally {
     publishLoading.value = false
   }
@@ -1559,17 +1562,17 @@ function startEdit() {
 async function saveEdit() {
   if (!selectedAgent.value) return
   if (!editedName.value.trim()) {
-    errorMessage.value = '名称不能为空'
+    errorMessage.value = t('agentOption.nameRequired')
     showErrorModal.value = true
     return
   }
   if (!editedDescription.value.trim()) {
-    errorMessage.value = '描述不能为空'
+    errorMessage.value = t('agentOption.descriptionRequired')
     showErrorModal.value = true
     return
   }
   if (!editedModel.value) {
-    errorMessage.value = '模型不能为空'
+    errorMessage.value = t('agentOption.modelRequired')
     showErrorModal.value = true
     return
   }
@@ -1619,11 +1622,11 @@ async function saveEdit() {
       isEditing.value = false
       await fetchAgentList()
     } else {
-      errorMessage.value = response.data.message || '更新失败'
+      errorMessage.value = response.data.message || t('agentOption.updateFailed')
       showErrorModal.value = true
     }
   } catch (err) {
-    errorMessage.value = '更新失败: ' + (err as Error).message
+    errorMessage.value = t('agentOption.updateFailed') + ': ' + (err as Error).message
     showErrorModal.value = true
   }
 }
@@ -1692,12 +1695,12 @@ const newModelSource = ref('')
 const newModel = ref('')
 
 const newSelectedModelDisplay = computed(() => {
-  if (!newModel.value) return '选择模型'
+  if (!newModel.value) return t('agentOption.selectModel')
   for (const provider of modelProviders.value) {
     const model = provider.models.find(m => m.id === newModel.value)
     if (model) return model.name
   }
-  return '选择模型'
+  return t('agentOption.selectModel')
 })
 
 function toggleNewModelSelector() {
@@ -1723,12 +1726,12 @@ const editedModelSource = ref('')
 const editedModel = ref('')
 
 const editedSelectedModelDisplay = computed(() => {
-  if (!editedModel.value) return '选择模型'
+  if (!editedModel.value) return t('agentOption.selectModel')
   for (const provider of modelProviders.value) {
     const model = provider.models.find(m => m.id === editedModel.value)
     if (model) return model.name
   }
-  return '选择模型'
+  return t('agentOption.selectModel')
 })
 
 function toggleEditModelSelector() {
@@ -1921,7 +1924,7 @@ async function fetchAgentFileContent(filename: string) {
             const result = await mammoth.convertToHtml({ arrayBuffer })
             previewFileContent.value = result.value
           } catch {
-            previewError.value = '无法转换该 DOCX 文件'
+            previewError.value = t('agentOption.cannotConvertDocx')
           }
         }
       }
@@ -1930,13 +1933,13 @@ async function fetchAgentFileContent(filename: string) {
       blob.text().then(text => {
         previewFileContent.value = text
       }).catch(() => {
-        previewError.value = '无法读取文件内容'
+        previewError.value = t('agentOption.cannotReadContent')
       })
     } else {
       previewFileContent.value = ''
     }
   } catch {
-    previewError.value = '无法显示该文件类型'
+    previewError.value = t('agentOption.cannotPreviewType')
     previewFileUrl.value = ''
     previewFileContent.value = ''
   }

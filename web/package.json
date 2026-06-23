@@ -23,6 +23,7 @@
     "postprocessing": "^6.39.1",
     "three": "^0.184.0",
     "vue": "^3.5.13",
+    "vue-i18n": "^9.14.4",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {

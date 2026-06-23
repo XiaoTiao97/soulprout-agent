@@ -4,18 +4,18 @@
     <div class="market-content">
       <div class="market-header">
         <img src="@/assets/images/agent_market.svg" alt="" class="market-icon" width="24" height="24" />
-        <h3 class="market-title">智能体市场</h3>
+        <h3 class="market-title">{{ t('agentMarket.title') }}</h3>
       </div>
       <div v-if="marketLoading" class="market-loading">
         <div class="loading-spinner"></div>
-        <p>加载中...</p>
+        <p>{{ t('common.loading') }}</p>
       </div>
       <div v-else-if="marketError" class="market-error">
         <p>{{ marketError }}</p>
-        <button class="retry-btn" @click="fetchMarketAgents">重试</button>
+        <button class="retry-btn" @click="fetchMarketAgents">{{ t('common.retry') }}</button>
       </div>
       <div v-else-if="marketAgents.length === 0" class="market-empty">
-        <p>暂无公开智能体</p>
+        <p>{{ t('agentMarket.empty') }}</p>
       </div>
       <div v-else class="market-grid">
         <div
@@ -25,8 +25,8 @@
           @click="emit('viewDetail', agent, [...marketAgents])"
         >
           <div class="market-card-name">{{ agent.name_zh || agent.name }}</div>
-          <div class="market-card-desc">{{ agent.description || '暂无描述' }}</div>
-          <div class="market-card-by">By  {{ agent.user_name || '未知' }}</div>
+          <div class="market-card-desc">{{ agent.description || t('common.noDescription') }}</div>
+          <div class="market-card-by">{{ t('agentMarket.by') }}  {{ agent.user_name || t('common.unknown') }}</div>
         </div>
       </div>
     </div>
@@ -35,7 +35,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ close: []; viewDetail: [agent: AgentCard, marketAgents: AgentCard[]] }>()
 
@@ -72,13 +75,13 @@ async function fetchMarketAgents() {
         agents: item.agents || null
       }))
     } else if (res.data?.success === false) {
-      marketError.value = res.data?.message || '获取智能体市场失败'
+      marketError.value = res.data?.message || t('agentMarket.fetchFailed')
       marketAgents.value = []
     } else {
       marketAgents.value = []
     }
   } catch (err: any) {
-    marketError.value = err?.response?.data?.message || '加载失败'
+    marketError.value = err?.response?.data?.message || t('agentMarket.loadFailed')
     marketAgents.value = []
   } finally {
     marketLoading.value = false

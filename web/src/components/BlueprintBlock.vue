@@ -5,7 +5,7 @@
         type="button"
         class="bp-summary-pill bp-summary-pill--active bp-summary-pill--pending"
         :aria-expanded="expanded"
-        aria-label="正在生成蓝图，点击展开或折叠"
+        :aria-label="t('blocks.generatingBlueprint')"
         @click="expanded = !expanded"
       >
         <span class="bp-pill-icon" aria-hidden="true">
@@ -16,7 +16,7 @@
             <path d="M8 17h5" />
           </svg>
         </span>
-        <span class="bp-pill-text">正在生成蓝图</span>
+        <span class="bp-pill-text">{{ t('blocks.generatingBlueprint') }}</span>
         <span class="bp-pill-chevron">{{ expanded ? '▴' : '▾' }}</span>
       </button>
     </div>
@@ -24,7 +24,7 @@
     <div v-if="expanded" class="bp-detail-panel">
       <section class="bp-detail-section">
         <div class="bp-detail-block">
-          <div class="bp-detail-block-title">蓝图内容</div>
+          <div class="bp-detail-block-title">{{ t('blocks.blueprintContent') }}</div>
           <div class="bp-result-wrap">
             <div class="bp-result-content">{{ content }}</div>
           </div>
@@ -36,6 +36,9 @@
 
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{

@@ -4,10 +4,10 @@
       <div class="skills-option-header">
         <div class="header-title-group">
           <p class="header-eyebrow">SKILLS</p>
-          <h2>技能库</h2>
+          <h2>{{ t('skillsOption.title') }}</h2>
         </div>
 
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" @click="$emit('close')" :aria-label="t('common.close')">
           <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
             <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
@@ -46,7 +46,7 @@
             @change="onFolderFilesChange"
           />
           <div class="personal-toolbar-inner">
-            <p class="toolbar-upload-label">从本地上传 skill 文件夹到个人技能库</p>
+            <p class="toolbar-upload-label">{{ t('skillsOption.uploadHint') }}</p>
             <button
               type="button"
               class="upload-folder-btn"
@@ -72,7 +72,7 @@
                   stroke-linejoin="round"
                 />
               </svg>
-              <span>{{ uploading ? '上传中…' : '上传 skill' }}</span>
+              <span>{{ uploading ? t('skillsOption.uploading') : t('skillsOption.upload') }}</span>
             </button>
           </div>
           <p v-if="uploadHint" class="upload-hint" :data-tone="uploadHintTone">{{ uploadHint }}</p>
@@ -130,14 +130,14 @@
                   :disabled="deletingFolder === skillFolderForDelete(skill) || !userId"
                   @click.stop="deletePersonalSkill(skill)"
                 >
-                  {{ deletingFolder === skillFolderForDelete(skill) ? '删除中…' : '删除' }}
+                  {{ deletingFolder === skillFolderForDelete(skill) ? t('skillsOption.deleting') : t('common.delete') }}
                 </button>
               </div>
             </div>
           </div>
 
           <div v-if="filteredSkills.length === 0" class="empty-state">
-            <p>暂未找到{{ activeTab === 'system' ? '系统' : '个人' }}技能</p>
+            <p>{{ t('skillsOption.empty', { type: activeTab === 'system' ? t('skillsOption.system') : t('skillsOption.personal') }) }}</p>
           </div>
         </div>
       </div>
@@ -147,7 +147,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+
+const { t } = useI18n()
 
 interface SkillInfo {
   name: string
@@ -171,6 +174,7 @@ defineEmits<{ close: [] }>()
 const folderInputRef = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const uploadHint = ref('')
+const uploadHintKind = ref<'success' | 'error' | 'neutral'>('neutral')
 const deletingFolder = ref<string | null>(null)
 
 const skillsInfoList = ref<SkillInfo[]>([])
@@ -179,24 +183,18 @@ const error = ref('')
 const activeTab = ref<'system' | 'personal'>('system')
 const expandedSkills = ref<string[]>([])
 
-const tabs = [
-  { type: 'system' as const, label: '系统技能' },
-  { type: 'personal' as const, label: '个人技能' }
-]
+const tabs = computed(() => [
+  { type: 'system' as const, label: t('skillsOption.systemSkills') },
+  { type: 'personal' as const, label: t('skillsOption.personalSkills') },
+])
 
 const filteredSkills = computed(() => skillsInfoList.value.filter(skill => skill.type === activeTab.value))
 
 const activeTabIndex = computed(() =>
-  Math.max(0, tabs.findIndex(t => t.type === activeTab.value))
+  Math.max(0, tabs.value.findIndex(tab => tab.type === activeTab.value))
 )
 
-const uploadHintTone = computed<'success' | 'error' | 'neutral'>(() => {
-  const t = uploadHint.value
-  if (!t) return 'neutral'
-  if (t.includes('成功')) return 'success'
-  if (t.includes('失败') || t.includes('不是标准的skill')) return 'error'
-  return 'neutral'
-})
+const uploadHintTone = computed(() => uploadHintKind.value)
 
 const SKILL_MD = 'SKILL.md'
 
@@ -215,14 +213,14 @@ function validateSkillFolderUpload(files: FileList): { ok: true } | { ok: false;
     pathsByRoot.get(root)!.add(rel)
   }
   if (pathsByRoot.size === 0) {
-    return { ok: false, message: '不是标准的skill文件：未检测到有效文件路径' }
+    return { ok: false, message: t('skillsOption.invalidSkillNoPath') }
   }
   for (const [root, paths] of pathsByRoot) {
     const required = `${root}/${SKILL_MD}`
     if (!paths.has(required)) {
       return {
         ok: false,
-        message: `不是标准的skill文件：「${root}」根目录下必须包含 ${SKILL_MD}`
+        message: t('skillsOption.invalidSkillNoMd', { root, file: SKILL_MD }),
       }
     }
   }
@@ -261,18 +259,21 @@ async function deletePersonalSkill(skill: SkillInfo) {
   if (!props.userId) return
   const folder = skillFolderForDelete(skill)
   if (!folder) return
-  if (!confirm(`确定删除个人技能「${skill.name}」？此操作不可恢复。`)) return
+  if (!confirm(t('skillsOption.deleteConfirm', { name: skill.name }))) return
   deletingFolder.value = folder
   uploadHint.value = ''
+  uploadHintKind.value = 'neutral'
   try {
     await axios.delete('/api/user_skills', {
       params: { user_id: props.userId, folder }
     })
-    uploadHint.value = '删除成功'
+    uploadHint.value = t('skillsOption.deleteSuccess')
+    uploadHintKind.value = 'success'
     await fetchSkillsInfo()
   } catch (err) {
     console.error('删除个人技能失败:', err)
-    uploadHint.value = '删除失败，请稍后重试'
+    uploadHint.value = t('skillsOption.deleteFailed')
+    uploadHintKind.value = 'error'
   } finally {
     deletingFolder.value = null
   }
@@ -280,8 +281,10 @@ async function deletePersonalSkill(skill: SkillInfo) {
 
 function triggerFolderUpload() {
   uploadHint.value = ''
+  uploadHintKind.value = 'neutral'
   if (!props.userId) {
-    uploadHint.value = '请先登录后再上传个人技能'
+    uploadHint.value = t('skillsOption.loginRequired')
+    uploadHintKind.value = 'error'
     return
   }
   folderInputRef.value?.click()
@@ -298,6 +301,7 @@ async function onFolderFilesChange(ev: Event) {
   const localCheck = validateSkillFolderUpload(files)
   if (!localCheck.ok) {
     uploadHint.value = localCheck.message
+    uploadHintKind.value = 'error'
     input.value = ''
     return
   }
@@ -316,16 +320,18 @@ async function onFolderFilesChange(ev: Event) {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000
     })
-    uploadHint.value = '上传成功'
+    uploadHint.value = t('skillsOption.uploadSuccess')
+    uploadHintKind.value = 'success'
     await fetchSkillsInfo()
   } catch (err: unknown) {
     console.error('上传个人技能失败:', err)
-    let msg = '上传失败，请稍后重试'
+    let msg = t('skillsOption.uploadFailed')
     if (axios.isAxiosError(err) && err.response?.status === 400) {
       const d = err.response.data as { detail?: unknown }
       if (typeof d?.detail === 'string') msg = d.detail
     }
     uploadHint.value = msg
+    uploadHintKind.value = 'error'
   } finally {
     uploading.value = false
     input.value = ''

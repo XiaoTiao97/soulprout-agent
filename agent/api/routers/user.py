@@ -13,6 +13,8 @@ from agent.services.auth import (
 )
 from agent.services.email_service import EmailSendError, is_valid_email, request_email_code
 from agent.utils.jwt_utils import create_access_token
+from agent.database.models.user import UserInfo
+from beanie.operators import Eq
 
 router = APIRouter()
 
@@ -149,10 +151,40 @@ async def logout(response: Response):
 
 
 # ---------------------------------------------------------------------------
+# 应用配置（供前端读取部署模式）
+# ---------------------------------------------------------------------------
+
+@router.get("/app-config")
+async def app_config():
+    """返回当前部署模式，前端据此决定走邮箱登录还是私有本地账号流程。"""
+    mode = os.getenv("DEPLOYMENT_MODE", "saas").strip().lower()
+    return JSONResponse({"deployment_mode": mode})
+
+
+@router.get("/user/private-user")
+async def get_private_user():
+    """Private 模式专用：检查固定 user_id="private" 的账号是否已创建。
+
+    Private 部署永远只有一个用户，user_id 固定为 "private"。
+    前端据此判断是首次使用（需填写昵称）还是直接 SSO 登录。
+    """
+    if os.getenv("DEPLOYMENT_MODE", "saas").strip().lower() != "private":
+        return JSONResponse({"success": False, "message": "非私有部署模式"}, status_code=403)
+
+    user = await UserInfo.find_one(Eq(UserInfo.user_id, "private"))
+    if not user:
+        return JSONResponse({"success": False, "user_id": None, "username": None})
+
+    return JSONResponse({"success": True, "user_id": user.user_id, "username": user.username})
+
+
+# ---------------------------------------------------------------------------
 # 企业 SSO 入口
 # ---------------------------------------------------------------------------
 
 def _is_sso_enabled() -> bool:
+    if os.getenv("DEPLOYMENT_MODE", "saas").strip().lower() == "private":
+        return True
     return (os.getenv("ENABLE_SSO_LOGIN", "") or "").strip().lower() == "true"
 
 
@@ -212,7 +244,7 @@ async def sso_token(data: SsoTokenRequest):
     user, is_new_user = result
     token = create_access_token({"user_id": user.user_id})
 
-    return JSONResponse(status_code=200, content={
+    response = JSONResponse(status_code=200, content={
         "success": True,
         "message": "SSO 登录成功",
         "is_new_user": is_new_user,
@@ -220,3 +252,10 @@ async def sso_token(data: SsoTokenRequest):
         "username": user.username,
         "token": token,
     })
+    response.set_cookie(
+        key="token",
+        value=token,
+        httponly=True,
+        max_age=60 * 60 * 24 * 30,
+    )
+    return response

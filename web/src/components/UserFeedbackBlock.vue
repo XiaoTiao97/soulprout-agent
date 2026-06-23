@@ -1,10 +1,10 @@
 <template>
   <div class="ufb-card" :class="{ 'ufb-card--disabled': disabled }">
     <div class="ufb-header">
-      <span class="ufb-badge">待你确认</span>
-      <p class="ufb-desc">{{ payload.description || '请完成以下问题' }}</p>
+      <span class="ufb-badge">{{ t('blocks.pendingConfirm') }}</span>
+      <p class="ufb-desc">{{ payload.description || t('blocks.defaultQuestion') }}</p>
       <p v-if="normalizedQuestions.length > 1" class="ufb-meta">
-        共 {{ normalizedQuestions.length }} 项，填写完成后统一提交
+        {{ t('blocks.questionCount', { n: normalizedQuestions.length }) }}
       </p>
     </div>
 
@@ -21,7 +21,7 @@
 
         <div v-if="question.interaction_type === 'choice'" class="ufb-question-body">
           <p class="ufb-hint">
-            {{ question.choice_mode === 'multiple' ? '可多选' : '单选' }}
+            {{ question.choice_mode === 'multiple' ? t('blocks.multipleChoice') : t('blocks.singleChoice') }}
           </p>
 
           <div class="ufb-options">
@@ -40,11 +40,11 @@
           </div>
 
           <div v-if="question.allow_custom_input" class="ufb-custom">
-            <label class="ufb-custom-label">或自行填写</label>
+            <label class="ufb-custom-label">{{ t('blocks.customInput') }}</label>
             <textarea
               :value="getCustomInput(question.id)"
               class="ufb-input"
-              :placeholder="question.custom_input_placeholder || '其他（请说明）'"
+              :placeholder="question.custom_input_placeholder || t('blocks.otherPlaceholder')"
               :disabled="disabled"
               rows="2"
               @input="setCustomInput(question.id, ($event.target as HTMLTextAreaElement).value)"
@@ -56,7 +56,7 @@
           <textarea
             :value="getTextInput(question.id)"
             class="ufb-input ufb-input--main"
-            :placeholder="question.placeholder || '请输入…'"
+            :placeholder="question.placeholder || t('blocks.inputPlaceholder')"
             :disabled="disabled"
             rows="3"
             @input="setTextInput(question.id, ($event.target as HTMLTextAreaElement).value)"
@@ -67,7 +67,7 @@
 
     <div class="ufb-footer">
       <span v-if="disabled" class="ufb-submitted">
-        已提交
+        {{ t('blocks.submitted') }}
       </span>
       <button
         type="button"
@@ -75,7 +75,7 @@
         :disabled="disabled || !canSubmit"
         @click="handleSubmit"
       >
-        {{ disabled ? '已确认' : '确认提交' }}
+        {{ disabled ? t('blocks.confirmed') : t('blocks.submitConfirm') }}
       </button>
     </div>
   </div>
@@ -83,6 +83,9 @@
 
 <script lang="ts" setup>
 import { computed, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 export interface FeedbackQuestion {
   id: string

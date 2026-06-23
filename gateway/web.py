@@ -551,10 +551,11 @@ async def api_xiaoai_reload():
 @app.get("/api/settings")
 async def api_get_settings():
     """返回当前网关配置（敏感字段会做脱敏处理）。"""
-    from gateway.config_store import is_local_agent, load_settings
+    from gateway.config_store import get_default_agent_url, is_local_agent, load_settings
     cfg = load_settings()
     return JSONResponse({
         "agent_url": cfg.get("agent_url", ""),
+        "default_agent_url": get_default_agent_url(),
         "agent_user_id": cfg.get("agent_user_id", ""),
         "agent_email": cfg.get("agent_email", ""),
         "agent_login_mode": cfg.get("agent_login_mode", "email"),
@@ -678,6 +679,18 @@ async def api_test_connection():
 # Agent 邮箱验证码登录（代理）
 # ---------------------------------------------------------------------------
 
+def _resolve_agent_url(body: Dict[str, Any]) -> str:
+    """从请求体读取 agent_url 并持久化；未传则使用已保存或默认地址。"""
+    from gateway.config_store import get_agent_url, normalize_agent_url, update_settings
+
+    raw = (body.get("agent_url") or "").strip()
+    if raw:
+        url = normalize_agent_url(raw)
+        update_settings(agent_url=url)
+        return url
+    return get_agent_url()
+
+
 @app.post("/api/auth/email/send-code")
 async def api_email_send_code(request: Request):
     from gateway.config_store import get_agent_url
@@ -690,7 +703,7 @@ async def api_email_send_code(request: Request):
     if not email:
         return JSONResponse({"success": False, "message": "请填写邮箱"})
 
-    agent_url = get_agent_url()
+    agent_url = _resolve_agent_url(body)
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
@@ -700,15 +713,20 @@ async def api_email_send_code(request: Request):
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 data = await resp.json()
+                data["agent_url"] = agent_url
                 return JSONResponse(data)
     except Exception as exc:
-        return JSONResponse({"success": False, "message": f"调用 Agent 失败：{exc}"})
+        return JSONResponse({
+            "success": False,
+            "message": f"调用 Agent 失败：{exc}",
+            "agent_url": agent_url,
+        })
 
 
 @app.post("/api/auth/email/login")
 async def api_email_login(request: Request):
     """提交邮箱+验证码到 Agent，登录成功后将 token / user_id / email 写入本地配置。"""
-    from gateway.config_store import get_agent_url, update_settings
+    from gateway.config_store import update_settings
     try:
         body: Dict[str, Any] = await request.json()
     except Exception:
@@ -720,7 +738,7 @@ async def api_email_login(request: Request):
     if not email or not code:
         return JSONResponse({"success": False, "message": "邮箱与验证码不能为空"})
 
-    agent_url = get_agent_url()
+    agent_url = _resolve_agent_url(body)
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
@@ -731,16 +749,22 @@ async def api_email_login(request: Request):
             ) as resp:
                 data = await resp.json()
     except Exception as exc:
-        return JSONResponse({"success": False, "message": f"调用 Agent 失败：{exc}"})
+        return JSONResponse({
+            "success": False,
+            "message": f"调用 Agent 失败：{exc}",
+            "agent_url": agent_url,
+        })
 
     if data.get("success") and data.get("token"):
         update_settings(
+            agent_url=agent_url,
             agent_token=data["token"],
             agent_user_id=str(data.get("user_id", "")),
             agent_email=email,
             agent_login_mode="email",
         )
 
+    data["agent_url"] = agent_url
     return JSONResponse(data)
 
 
@@ -754,7 +778,7 @@ async def api_sso_login(request: Request):
 
     需要 Agent 端开启 ``ENABLE_SSO_LOGIN=true``，否则返回错误。
     """
-    from gateway.config_store import get_agent_url, update_settings
+    from gateway.config_store import update_settings
     try:
         body: Dict[str, Any] = await request.json()
     except Exception:
@@ -765,7 +789,7 @@ async def api_sso_login(request: Request):
     if not user_id:
         return JSONResponse({"success": False, "message": "请填写 user_id"})
 
-    agent_url = get_agent_url()
+    agent_url = _resolve_agent_url(body)
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
@@ -776,16 +800,22 @@ async def api_sso_login(request: Request):
             ) as resp:
                 data = await resp.json()
     except Exception as exc:
-        return JSONResponse({"success": False, "message": f"调用 Agent 失败：{exc}"})
+        return JSONResponse({
+            "success": False,
+            "message": f"调用 Agent 失败：{exc}",
+            "agent_url": agent_url,
+        })
 
     if data.get("success") and data.get("token"):
         update_settings(
+            agent_url=agent_url,
             agent_token=data["token"],
             agent_user_id=str(data.get("user_id", user_id)),
             agent_email="",
             agent_login_mode="sso",
         )
 
+    data["agent_url"] = agent_url
     return JSONResponse(data)
 
 

@@ -85,7 +85,7 @@ COLLECTION_TYPE_CONFIGS: dict[str, dict] = {
 
 def get_schema(
     collection_type: str,
-    embedding_dim: int = 1536,
+    embedding_dim: int = 1024,
 ) -> tuple[CollectionSchema, str, list[str]]:
     """
     根据 collection_type 构建 Milvus CollectionSchema。

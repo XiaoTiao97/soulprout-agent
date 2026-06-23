@@ -64,7 +64,7 @@ soulprout-agent/
 
 | 步骤 | 内容 |
 |------|------|
-| Step 1 | `pip install -r gateway/requirements_gateway.txt` 安装依赖 |
+| Step 1 | `pip install -r gateway/requirements.txt` 安装依赖 |
 | Step 2 | `pyinstaller gateway/gateway.spec` 打包 Python 为 gateway.exe |
 | Step 3 | 复制 gateway.exe → `src-tauri/binaries/gateway-<target>.exe` |
 | Step 4 | `npm install` 安装 Tauri CLI |
@@ -95,7 +95,7 @@ Tauri dev 模式会自动用 `python gateway/main.py` 启动后端：
 
 ```bash
 # 1. 先安装 Python 依赖
-pip install -r gateway/requirements_gateway.txt
+pip install -r gateway/requirements.txt
 
 # 2. 安装 Node 依赖
 cd gateway-app

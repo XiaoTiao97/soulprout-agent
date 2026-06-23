@@ -3,8 +3,8 @@
     <form class="query-form" @submit.prevent="submitMessage">
       <div class="selected-files" v-if="selectedFiles.length > 0">
         <div class="selected-file-item" v-for="(file, idx) in selectedFiles" :key="getFileKey(file)">
-          <button class="remove-file-btn" type="button" @click="removeFile(idx)" title="删除">
-            <img :src="DeleteFileIconUrl" alt="删除" />
+          <button class="remove-file-btn" type="button" @click="removeFile(idx)" :title="t('messageInput.removeFile')">
+            <img :src="DeleteFileIconUrl" :alt="t('messageInput.removeFile')" />
           </button>
           <template v-if="isImageFile(file)">
             <img class="selected-file-thumb" :src="getImagePreviewUrl(file)" :alt="file.name" />
@@ -23,21 +23,21 @@
           @keydown.enter.exact.prevent="submitMessage"
           @input="adjustHeight"
           @paste="handleInputPaste"
-          placeholder="提问，发现新世界"
+          :placeholder="t('messageInput.placeholder')"
           rows="1"
         />
       </div>
       <div class="input-options">
         <div class="input-options-left">
           <!-- 1. 上传文件（第一位） -->
-          <button class="upload-option" type="button" @click="triggerFileUpload" title="上传文件">
+          <button class="upload-option" type="button" @click="triggerFileUpload" :title="t('messageInput.uploadFile')">
             <img src="@/assets/images/file_upload.svg" width="18" height="18" />
           </button>
 
           <!-- 2. 设置对话 - 多选智能体或无专家时显示，子智能体/主智能体时隐藏；Soulprout 模式下不展示 -->
           <div v-if="!isSoulproutMode && (!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent')" class="settings-selector" ref="settingsSelectorRef">
             <button class="settings-select-btn" :class="{ 'settings-active': showSettingsPanel }" type="button" @click="toggleSettingsPanel">
-              <span>⚙️ 设置</span>
+              <span>{{ t('messageInput.settings') }}</span>
               <svg class="dropdown-icon" :class="{ 'rotate': showSettingsPanel }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                 <path d="M6 8L2 4h8l-4 4z"/>
               </svg>
@@ -47,7 +47,7 @@
             <div class="settings-panel" v-show="showSettingsPanel">
               <!-- 模型 - 从右侧展开 -->
               <div v-if="!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent'" class="settings-panel-row" ref="modelSelectorRef">
-                <span class="settings-row-label">模型</span>
+                <span class="settings-row-label">{{ t('messageInput.model') }}</span>
                 <button class="settings-row-trigger" type="button" @click="toggleModelSelector">
                   <span class="settings-row-value">{{ selectedModelDisplay }}</span>
                   <svg class="dropdown-icon dropdown-icon-right" :class="{ 'rotate': showModelSelector }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -58,23 +58,23 @@
 
               <!-- 工具 -->
               <div v-if="!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent'" class="settings-panel-row">
-                <span class="settings-row-label">工具</span>
+                <span class="settings-row-label">{{ t('messageInput.tools') }}</span>
                 <button class="settings-row-trigger settings-row-trigger-tools" :class="{ 'kb-active': chat_request.tools_use ?? false }" type="button" @click="$emit('changeToolsUse')">
-                  <span class="settings-row-value">{{ (chat_request.tools_use ?? false) ? '已启用' : '未启用' }}</span>
+                  <span class="settings-row-value">{{ (chat_request.tools_use ?? false) ? t('messageInput.enabled') : t('messageInput.disabled') }}</span>
                 </button>
               </div>
 
               <!-- 技能 -->
               <div v-if="!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent'" class="settings-panel-row">
-                <span class="settings-row-label">技能</span>
+                <span class="settings-row-label">{{ t('messageInput.skills') }}</span>
                 <button class="settings-row-trigger settings-row-trigger-tools" :class="{ 'kb-active': chat_request.skills_use ?? false }" type="button" @click="$emit('changeSkillsUse')">
-                  <span class="settings-row-value">{{ (chat_request.skills_use ?? false) ? '已启用' : '未启用' }}</span>
+                  <span class="settings-row-value">{{ (chat_request.skills_use ?? false) ? t('messageInput.enabled') : t('messageInput.disabled') }}</span>
                 </button>
               </div>
 
               <!-- 知识库 - 从右侧展开 -->
               <div v-if="!props.chat_request.agent_use || props.chat_request.agent_use === 'select-agent'" class="settings-panel-row" ref="kbSelectorRef">
-                <span class="settings-row-label">知识库</span>
+                <span class="settings-row-label">{{ t('messageInput.knowledgeBase') }}</span>
                 <button class="settings-row-trigger" :class="{ 'kb-active': (props.chat_request.kb_use?.length || 0) > 0 }" type="button" @click="toggleKBSelector">
                   <span class="settings-row-value">{{ selectedKBDisplay }}</span>
                   <svg class="dropdown-icon dropdown-icon-right" :class="{ 'rotate': showKBSelector }" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -114,7 +114,7 @@
                       <input type="checkbox" v-model="selectedKBs" :value="kb.id" />
                       {{ kb.name }}
                     </label>
-                    <button class="confirm-btn" type="button" @click="confirmKBSelect">确认</button>
+                    <button class="confirm-btn" type="button" @click="confirmKBSelect">{{ t('messageInput.confirm') }}</button>
                   </div>
                 </div>
               </div>
@@ -141,7 +141,7 @@
                     type="button"
                     @click="selectNone"
                   >
-                    无
+                    {{ t('messageInput.none') }}
                   </button>
                   <div class="mode-selector">
                     <div class="mode-column">
@@ -150,14 +150,14 @@
                         @mouseenter="currentMode = 'expert'"
                         :class="{ 'active': props.chat_request.agent_use === 'expert-agent' }"
                       >
-                        智能体
+                        {{ t('messageInput.agent') }}
                       </div>
                       <div 
                         class="mode-item" 
                         @mouseenter="currentMode = 'select'"
                         :class="{ 'active': props.chat_request.agent_use === 'select-agent' }"
                       >
-                        多选智能体
+                        {{ t('messageInput.multiAgent') }}
                       </div>
                     </div>
                   </div>
@@ -171,13 +171,13 @@
                       <template v-if="currentMode === 'expert'">
                         <div v-for="(agents, blockKey) in singleGrouped" :key="blockKey" class="agent-dropdown-block" v-show="blockKey === 'mySubscribed' || agents.length > 0">
                           <div class="agent-dropdown-block-header" @click="toggleAgentBlock('expert_' + blockKey)">
-                            <span class="agent-dropdown-block-title">{{ blockKey === 'myCreated' ? '我的创建' : blockKey === 'mySubscribed' ? '我的订阅' : '系统预设' }}</span>
+                            <span class="agent-dropdown-block-title">{{ agentBlockTitle(blockKey) }}</span>
                             <svg class="agent-block-toggle" :class="{ expanded: agentDropdownExpanded['expert_' + blockKey] }" width="10" height="10" viewBox="0 0 12 12">
                               <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                             </svg>
                           </div>
                           <div v-show="agentDropdownExpanded['expert_' + blockKey]" class="agent-dropdown-block-items">
-                            <div v-if="agents.length === 0" class="agent-dropdown-empty-hint">暂无订阅</div>
+                            <div v-if="agents.length === 0" class="agent-dropdown-empty-hint">{{ t('messageInput.noSubscription') }}</div>
                             <button 
                               v-for="agent in agents" 
                               :key="agent.agent_id || agent.name"
@@ -195,13 +195,13 @@
                       <template v-if="currentMode === 'select'">
                         <div v-for="(agents, blockKey) in singleGrouped" :key="blockKey" class="agent-dropdown-block" v-show="blockKey === 'mySubscribed' || agents.length > 0">
                           <div class="agent-dropdown-block-header" @click="toggleAgentBlock('select_' + blockKey)">
-                            <span class="agent-dropdown-block-title">{{ blockKey === 'myCreated' ? '我的创建' : blockKey === 'mySubscribed' ? '我的订阅' : '系统预设' }}</span>
+                            <span class="agent-dropdown-block-title">{{ agentBlockTitle(blockKey) }}</span>
                             <svg class="agent-block-toggle" :class="{ expanded: agentDropdownExpanded['select_' + blockKey] }" width="10" height="10" viewBox="0 0 12 12">
                               <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                             </svg>
                           </div>
                           <div v-show="agentDropdownExpanded['select_' + blockKey]" class="agent-dropdown-block-items">
-                            <div v-if="agents.length === 0" class="agent-dropdown-empty-hint">暂无订阅</div>
+                            <div v-if="agents.length === 0" class="agent-dropdown-empty-hint">{{ t('messageInput.noSubscription') }}</div>
                             <div v-else class="agent-checkbox-list">
                               <label 
                                 v-for="agent in agents" 
@@ -231,7 +231,7 @@
                     </div>
                     <!-- 多选智能体时，确定按钮固定在底部 -->
                     <div class="confirm-btn-wrapper" v-if="currentMode === 'select'">
-                      <button class="confirm-btn" type="button" @click="confirmSelect" :disabled="filteredSelectedSelect.length === 0">确认</button>
+                      <button class="confirm-btn" type="button" @click="confirmSelect" :disabled="filteredSelectedSelect.length === 0">{{ t('messageInput.confirm') }}</button>
                     </div>
                   </div>
                 </div>
@@ -271,7 +271,7 @@
             <img v-else :src="InputIconUrl" width="18" height="18" />
           </button>
           <div v-if="showGenerationPrompt" class="generation-prompt">
-            停止生成
+            {{ t('messageInput.stopGeneration') }}
           </div>
         </div>
       </div>
@@ -283,7 +283,10 @@
 
 <script lang="ts" setup>
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { AgentCard } from '../types/interface'
+
+const { t } = useI18n()
 
 const StopIconUrl = new URL('@/assets/images/stop_icon.svg', import.meta.url).href
 const InputIconUrl = new URL('@/assets/images/mengya_input.svg', import.meta.url).href
@@ -362,10 +365,16 @@ const recordingCountdown = computed(() =>
 )
 
 const voiceButtonTitle = computed(() => {
-  if (isTranscribing.value) return '正在识别…'
-  if (isRecording.value) return `录音中，点击结束（剩余 ${recordingCountdown.value} 秒）`
-  return '语音输入'
+  if (isTranscribing.value) return t('messageInput.transcribing')
+  if (isRecording.value) return t('messageInput.recording', { n: recordingCountdown.value })
+  return t('messageInput.voiceInput')
 })
+
+function agentBlockTitle(blockKey: string) {
+  if (blockKey === 'myCreated') return t('messageInput.myCreated')
+  if (blockKey === 'mySubscribed') return t('messageInput.mySubscribed')
+  return t('messageInput.systemPreset')
+}
 
 // 默认开启的智能体，不计入选择数量且不可取消
 const DEFAULT_ENABLED_AGENTS = ['mengya_deepsearch', 'mengya_pptx']
@@ -447,13 +456,13 @@ const modelProviders = computed(() => {
 
 // 显示的模型名称
 const selectedModelDisplay = computed(() => {
-  if (!props.chat_request.model) return '选择模型'
+  if (!props.chat_request.model) return t('messageInput.selectModel')
   
   for (const provider of modelProviders.value) {
     const model = provider.models.find(m => m.id === props.chat_request.model)
     if (model) return model.name
   }
-  return '选择模型'
+  return t('messageInput.selectModel')
 })
 
 // 根据 agent_id 从 agent_card_list 获取显示名称（优先 name_zh，否则 name）
@@ -464,13 +473,13 @@ const getAgentNameById = (agentId: string) => {
 
 // 显示时优先使用 agent_name，发送时仍使用 agent_id
 const selectedAgentDisplay = computed(() => {
-  if (!props.chat_request.agent_use) return '专家模式'
+  if (!props.chat_request.agent_use) return t('messageInput.expertMode')
   const agentId = props.chat_request.agent_id
   const agentName = props.chat_request.agent_name
   if (props.chat_request.agent_use === 'expert-agent') {
     if (typeof agentName === 'string' && agentName) return agentName
     if (typeof agentId === 'string') return getAgentNameById(agentId) || agentId
-    return '智能体'
+    return t('messageInput.agent')
   }
   if (props.chat_request.agent_use === 'select-agent') {
     const agentIds = Array.isArray(agentId) ? agentId : []
@@ -478,9 +487,9 @@ const selectedAgentDisplay = computed(() => {
       const agent = singleAgents.value.find(a => (a.agent_id || a.name) === id)
       return agent && !isDefaultEnabledAgent(agent.name)
     }).length
-    return filteredCount > 0 ? `已选择${filteredCount}个专家` : '多选专家'
+    return filteredCount > 0 ? t('messageInput.multiExpertSelected', { n: filteredCount }) : t('messageInput.multiExpert')
   }
-  return '专家模式'
+  return t('messageInput.expertMode')
 })
 
 function handleButtonClick() {
@@ -651,9 +660,9 @@ const selectedKBs = ref<string[]>([])
 const selectedKBDisplay = computed(() => {
   const len = props.chat_request.kb_use?.length || 0;
   if (len > 0) {
-    return `已选 ${len} 个知识库`;
+    return t('messageInput.kbSelected', { n: len });
   }
-  return '未选择';
+  return t('messageInput.kbNone');
 })
 
 // Add functions
@@ -852,14 +861,14 @@ async function onRecordStopped() {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
       const detail = data.detail
-      throw new Error(typeof detail === 'string' ? detail : '语音识别失败')
+      throw new Error(typeof detail === 'string' ? detail : t('messageInput.speechFailed'))
     }
     const text = (data.text || '').trim()
-    if (!text) throw new Error('未识别到内容')
+    if (!text) throw new Error(t('messageInput.noSpeechDetected'))
     input.value = input.value ? `${input.value}${text}` : text
     adjustHeight()
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '语音识别失败'
+    const msg = e instanceof Error ? e.message : t('messageInput.speechFailed')
     alert(msg)
   } finally {
     isTranscribing.value = false
@@ -882,7 +891,7 @@ async function toggleVoiceRecord() {
   try {
     recordStream = await navigator.mediaDevices.getUserMedia({ audio: true })
   } catch {
-    alert('无法访问麦克风，请检查浏览器权限')
+    alert(t('messageInput.micDenied'))
     return
   }
   recordChunks = []

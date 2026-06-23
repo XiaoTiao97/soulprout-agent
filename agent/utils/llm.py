@@ -70,20 +70,6 @@ class LLM:
         )
         return completion.choices[0].message.parsed
 
-    async def dashscope(self, messages, model_config):
-        client = AsyncOpenAI(api_key=self.config.qwen_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
-        tools = model_config.tools
-
-        completion = await client.chat.completions.create(
-            model=model_config.model,
-            messages=messages,
-            stream=True,
-            temperature=1,
-            **({"tools": tools} if len(tools) > 0 else {}),
-        )
-        async for chunk in completion:
-            yield chunk.choices[0].delta
-
     async def minimax(self, messages, model_config):
         client = AsyncOpenAI(api_key=self.config.minimax_key, base_url="https://api.minimaxi.com/v1")
         tools = model_config.tools

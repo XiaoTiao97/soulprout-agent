@@ -21,9 +21,9 @@
         </span>
         <span class="ws-pill-text">
           <template v-if="getCount(item.toolCallId) > 0">
-            已阅读 {{ getCount(item.toolCallId) }} 个网页
+            {{ t('blocks.pagesRead', { n: getCount(item.toolCallId) }) }}
           </template>
-          <template v-else>正在搜索网页…</template>
+          <template v-else>{{ t('blocks.searching') }}</template>
         </span>
         <span v-if="calls.length > 1" class="ws-pill-index">{{ idx + 1 }}</span>
         <span class="ws-pill-chevron">{{ expanded.has(item.toolCallId) ? '▴' : '▾' }}</span>
@@ -35,9 +35,9 @@
       <template v-for="(item, idx) in calls" :key="'panel-' + item.toolCallId">
         <section v-if="expanded.has(item.toolCallId)" class="ws-detail-section">
           <header v-if="calls.length > 1" class="ws-detail-head">
-            <span class="ws-detail-head-label">检索 {{ idx + 1 }}</span>
+            <span class="ws-detail-head-label">{{ t('blocks.search', { n: idx + 1 }) }}</span>
             <span v-if="item.query" class="ws-detail-head-query">{{ item.query }}</span>
-            <span class="ws-detail-head-count">{{ getCount(item.toolCallId) }} 条</span>
+            <span class="ws-detail-head-count">{{ t('blocks.resultCount', { n: getCount(item.toolCallId) }) }}</span>
           </header>
           <ul v-if="getResults(item.toolCallId).length" class="ws-source-list">
             <li v-for="(row, ri) in getResults(item.toolCallId)" :key="ri" class="ws-source-item-wrap">
@@ -52,11 +52,11 @@
                   <span v-if="row.media" class="ws-source-media">{{ row.media }}</span>
                   <span v-if="row.publish_date" class="ws-source-date">{{ row.publish_date }}</span>
                 </span>
-                <span class="ws-source-title">{{ row.title || row.link || '无标题' }}</span>
+                <span class="ws-source-title">{{ row.title || row.link || t('blocks.noTitle') }}</span>
               </a>
             </li>
           </ul>
-          <p v-else class="ws-detail-empty">暂无检索结果</p>
+          <p v-else class="ws-detail-empty">{{ t('blocks.noSearchResults') }}</p>
         </section>
       </template>
     </div>
@@ -65,7 +65,10 @@
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { AgentMessage } from '../types/interface'
+
+const { t } = useI18n()
 import { parseWebSearchResultContent } from '../utils/parseWebSearchResult'
 
 export type WebSearchCallItem = {

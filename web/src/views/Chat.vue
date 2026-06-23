@@ -120,8 +120,10 @@ import type { ConversationBase, ChatRequest, AgentMessage } from '../types/inter
 import { AgentCard } from '../types/interface.ts'
 import { shouldAutoExpandExtraPanel } from '../utils/toolCallDisplay'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
+const { t } = useI18n()
 
 // ✅ 定义响应式变量并加类型
 const conversation_list = ref<ConversationBase[]>([])
@@ -754,7 +756,7 @@ async function handleSendMessage(
     if (timeoutId) clearTimeout(timeoutId)
     timeoutId = setTimeout(() => {
       isLoading.value = false
-      timeoutError.value = '请求超时，请刷新重试 ⏰'
+      timeoutError.value = t('chat.timeout')
       console.error('请求超时')
       // 中止请求
       if (abortController.value) {
@@ -935,10 +937,10 @@ async function handleSendMessage(
   }
    catch (error) {
     if (error.name === 'AbortError') {
-      timeoutError.value = '生成已停止'
+      timeoutError.value = t('chat.stopped')
     } else {
       console.error('流式消息失败:', error)
-      timeoutError.value = '请求失败，请重试'
+      timeoutError.value = t('chat.requestFailed')
     }
     isLoading.value = false
     currentStreamingMessage.value = null
@@ -959,7 +961,7 @@ function stopGeneration() {
   }
   isLoading.value = false
   currentStreamingMessage.value = null
-  timeoutError.value = '生成已停止'
+  timeoutError.value = t('chat.stopped')
   isGenerating.value = false
   delete chat_request.value.input_message_id
   delete chat_request.value.user_feedback

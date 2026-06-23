@@ -30,23 +30,23 @@
 
           <h1 class="sp-hero-title">
             <span class="sp-reveal-wrap" ref="heroTitleRef">
-              <span class="sp-reveal-text">思想种下，自有森林</span>
+              <span class="sp-reveal-text">{{ t('init.heroTitle') }}</span>
             </span>
           </h1>
 
           <p class="sp-hero-sub">
-            Soulprout —— 打造想你所想，真正做事的 AI 智能体平台
+            {{ t('init.heroSub') }}
           </p>
 
           <div class="sp-hero-actions">
-            <router-link to="/register" class="sp-cta-btn">
-              <span>立即体验</span>
+            <button class="sp-cta-btn" @click="handleStart">
+              <span>{{ t('nav.start') }}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </router-link>
+            </button>
             <button class="sp-explore-btn" @click="scrollTo('capabilities')">
-              探索更多 ↓
+              {{ t('init.exploreMore') }}
             </button>
           </div>
         </div>
@@ -62,10 +62,10 @@
         <div class="sp-caps-inner">
           <!-- header -->
           <div class="sp-section-header">
-            <p class="sp-section-eyebrow">Core Capabilities</p>
+            <p class="sp-section-eyebrow">{{ t('init.capsEyebrow') }}</p>
             <h2 class="sp-section-title">
               <span class="sp-reveal-wrap" ref="capTitleRef">
-                <span class="sp-reveal-text">能力矩阵</span>
+                <span class="sp-reveal-text">{{ t('init.capsTitle') }}</span>
               </span>
             </h2>
           </div>
@@ -104,7 +104,7 @@
 
           <div class="sp-caps-label-row">
             <span class="sp-caps-label-dash" />
-            <span class="sp-caps-label-text">Six Pillars</span>
+            <span class="sp-caps-label-text">{{ t('init.capsLabel') }}</span>
             <span class="sp-caps-label-dash" />
           </div>
         </div>
@@ -115,17 +115,16 @@
         <div class="sp-oss-bg-radial" />
 
         <div class="sp-oss-inner">
-          <p class="sp-section-eyebrow">Open Source</p>
+          <p class="sp-section-eyebrow">{{ t('init.ossEyebrow') }}</p>
 
           <h2 class="sp-section-title sp-oss-title">
             <span class="sp-reveal-wrap" ref="openTitleRef">
-              <span class="sp-reveal-text">全面开源</span>
+              <span class="sp-reveal-text">{{ t('init.ossTitle') }}</span>
             </span>
           </h2>
 
           <p class="sp-oss-desc">
-            Soulprout 的核心代码开源，相信透明与协作是推动 AI 智能体生态进化的最佳方式。
-            欢迎开发者参与共建，一起打造更强大的智能体平台。
+            {{ t('init.ossDesc') }}
           </p>
 
           <a
@@ -138,7 +137,7 @@
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
             </svg>
             <div class="sp-github-info">
-              <span class="sp-github-label">GitHub Repository</span>
+              <span class="sp-github-label">{{ t('init.githubLabel') }}</span>
               <span class="sp-github-repo">XiaoTiao97 / soulprout-agent</span>
             </div>
             <svg class="sp-github-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -149,17 +148,17 @@
           <div class="sp-stats-row">
             <div class="sp-stat">
               <span class="sp-stat-num">0</span>
-              <span class="sp-stat-label">Stars</span>
+              <span class="sp-stat-label">{{ t('init.statStars') }}</span>
             </div>
             <div class="sp-stat-divider" />
             <div class="sp-stat">
               <span class="sp-stat-num">MIT</span>
-              <span class="sp-stat-label">License</span>
+              <span class="sp-stat-label">{{ t('init.statLicense') }}</span>
             </div>
             <div class="sp-stat-divider" />
             <div class="sp-stat">
               <span class="sp-stat-num">Zero</span>
-              <span class="sp-stat-label">Code Needed</span>
+              <span class="sp-stat-label">{{ t('init.statCodeNeeded') }}</span>
             </div>
           </div>
         </div>
@@ -171,20 +170,20 @@
         <div class="sp-footer-inner">
           <div class="sp-footer-main">
             <img src="@/assets/images/logo.png" alt="Soulprout" class="sp-footer-logo" />
-            <p class="sp-footer-tagline">想你所想，真正做事</p>
-            <router-link to="/register" class="sp-cta-btn">
-              <span>立即体验</span>
+            <p class="sp-footer-tagline">{{ t('init.footerTagline') }}</p>
+            <button class="sp-cta-btn" @click="handleStart">
+              <span>{{ t('nav.start') }}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </router-link>
+            </button>
           </div>
           <div class="sp-footer-bottom">
             <p class="sp-footer-copy">&copy; 2025 Soulprout. All rights reserved.</p>
             <div class="sp-footer-links">
               <a href="https://github.com/XiaoTiao97/soulprout-agent" target="_blank" rel="noopener noreferrer" class="sp-footer-link">GitHub</a>
-              <a href="#" class="sp-footer-link">联系我们</a>
-              <span class="sp-footer-beian">苏ICP备2025216370号-1</span>
+              <a href="#" class="sp-footer-link">{{ t('init.footerContact') }}</a>
+              <!-- <span class="sp-footer-beian">苏ICP备2025216370号-1</span> -->
             </div>
           </div>
         </div>
@@ -195,10 +194,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { startExperience } from '@/utils/startExperience.js'
 import InitNavigation from '@/components/InitNavigation.vue'
 import OrbScene from '@/components/OrbScene.vue'
 import GrowingParticles from '@/components/GrowingParticles.vue'
+
+const router = useRouter()
+const { t, tm } = useI18n()
 
 const loaded = ref(false)
 const heroTitleRef = ref(null)
@@ -206,14 +211,15 @@ const capTitleRef = ref(null)
 const openTitleRef = ref(null)
 const loadingChars = 'LOADING_SOULPROUT...'.split('')
 
-const features = [
-  { num: '01', title: '交互式规划', desc: '设身处地为你着想，智能拆解复杂任务为清晰步骤，动态调整策略。' },
-  { num: '02', title: '人机协作办公', desc: '人与 AI 高度协同，随时手动微调，告别低效重复操作。' },
-  { num: '03', title: '专家模式', desc: '零代码将工作流转换成 Agent 专家团队，自动并行执行任务。' },
-  { num: '04', title: 'AI 知识库检索', desc: 'RAG 与生成式 AI 双保险，快速召回信息，遇阻自动升级深度检索。' },
-  { num: '05', title: '灵活部署', desc: '一键云端体验或本地私有化部署，零配置开箱即用，数据隔离安全。' },
-  { num: '06', title: '流程全透明', desc: '每一步操作清晰可见，工具使用全程留痕，避免模型幻觉误判。' },
-]
+const featureNums = ['01', '02', '03', '04', '05', '06']
+const features = computed(() => {
+  const items = tm('init.features')
+  return featureNums.map((num, i) => ({
+    num,
+    title: items[i]?.title ?? '',
+    desc: items[i]?.desc ?? '',
+  }))
+})
 
 onMounted(() => {
   setTimeout(() => { loaded.value = true }, 2000)
@@ -246,6 +252,10 @@ onMounted(() => {
   )
   document.querySelectorAll('.sp-cap-card').forEach(el => cardObs.observe(el))
 })
+
+function handleStart() {
+  startExperience(router)
+}
 
 const scrollTo = (id) => {
   const el = document.getElementById(id)

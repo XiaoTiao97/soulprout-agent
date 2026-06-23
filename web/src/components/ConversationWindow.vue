@@ -9,53 +9,53 @@
                         src="@/assets/images/logo.png"
                         alt="Soulprout"
                     />
-                    <button class="close-sidebar hover-hint" data-tip="扩展/关闭" @click="$emit('SidebarChange')" aria-label="关闭边栏" data-testid="close-sidebar-button">
+                    <button class="close-sidebar hover-hint" :data-tip="t('conversation.toggleSidebar')" @click="$emit('SidebarChange')" :aria-label="t('conversation.closeSidebar')" data-testid="close-sidebar-button">
                         <img class="icon-xl-heavy max-md:hidden" width="20" height="20" src="@/assets/images/aspect_ratio.svg" alt="" />
                     </button>
                 </div>
             </div>
             <div class="agent-option-main">
                 <div class="agent-option" :class="{ 'hidden-text': isExpanded }">
-                    <button class="tool-option-btn" @click="$emit('openToolOption')" title="查看工具库">
+                    <button class="tool-option-btn" @click="$emit('openToolOption')" :title="t('conversation.viewTools')">
                         <img class="tools_box" width="24" height="24" src="@/assets/images/tools_box.svg" alt="toolsbox-logo" />
-                        <span>工具</span>
+                        <span>{{ t('conversation.tools') }}</span>
                     </button>
                 </div>
                 <div class="agent-option" :class="{ 'hidden-text': isExpanded }">
-                    <button class="tool-option-btn" @click="$emit('openSkillOption')" title="查看技能库">
+                    <button class="tool-option-btn" @click="$emit('openSkillOption')" :title="t('conversation.viewSkills')">
                         <img class="tools_box" width="24" height="24" src="@/assets/images/skill_icon.svg" alt="skill-logo" />
-                        <span>技能</span>
+                        <span>{{ t('conversation.skills') }}</span>
                     </button>
                 </div>
                 <div class="agent-option" :class="{ 'hidden-text': isExpanded }">
-                    <button class="tool-option-btn" @click="$emit('openKBOption')" title="查看知识库">
+                    <button class="tool-option-btn" @click="$emit('openKBOption')" :title="t('conversation.viewKB')">
                         <img class="tools_box" width="24" height="24" src="@/assets/images/kb_icon.svg" alt="knowledgebase-logo" />
-                        <span>知识</span>
+                        <span>{{ t('conversation.knowledge') }}</span>
                     </button>
                 </div>
                 <div class="agent-option" :class="{ 'hidden-text': isExpanded }">
-                    <button class="tool-option-btn" @click="$emit('openAgentOption')" title="查看专家库">
+                    <button class="tool-option-btn" @click="$emit('openAgentOption')" :title="t('conversation.viewAgents')">
                         <img class="tools_box" width="24" height="24" src="@/assets/images/agent_icon.svg" alt="agent-logo" />
-                        <span>专家</span>
+                        <span>{{ t('conversation.agents') }}</span>
                     </button>
                 </div>
             </div>
         </div>
-        <div class="conversation-select" :class="{ 'disabled-select': isGenerating }" :title="isGenerating ? '正在生成中，无法操作' : ''">
+        <div class="conversation-select" :class="{ 'disabled-select': isGenerating }" :title="isGenerating ? t('conversation.generatingDisabled') : ''">
             <div
               class="chat-mode-section"
               :class="{ 'chat-mode-section--collapsed': isExpanded }"
             >
               <div class="chat-mode-header">
-                <span class="chat-mode-header-title">对话模式</span>
+                <span class="chat-mode-header-title">{{ t('conversation.chatMode') }}</span>
                 <span class="chat-mode-header-hint">
-                  {{ chatMode === 'soulprout' ? '越用越懂你' : '专业打工人' }}
+                  {{ chatMode === 'soulprout' ? t('conversation.soulHint') : t('conversation.taskHint') }}
                 </span>
               </div>
               <div
                 class="chat-mode-switch"
                 role="tablist"
-                aria-label="对话模式切换"
+                :aria-label="t('conversation.switchMode')"
                 :data-active="chatMode"
               >
                 <span class="chat-mode-switch-thumb" aria-hidden="true"></span>
@@ -66,7 +66,7 @@
                   :class="{ 'chat-mode-option--active': chatMode === 'soulprout' }"
                   :aria-selected="chatMode === 'soulprout'"
                   :tabindex="chatMode === 'soulprout' ? 0 : -1"
-                  data-tip="Soul 模式：越用越懂你的AI伙伴"
+                  :data-tip="t('conversation.soulTip')"
                   @click="handleSwitchMode('soulprout')"
                 >
                   <svg class="chat-mode-option-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -83,7 +83,7 @@
                   :class="{ 'chat-mode-option--active': chatMode === 'task' }"
                   :aria-selected="chatMode === 'task'"
                   :tabindex="chatMode === 'task' ? 0 : -1"
-                  data-tip="任务模式：专心做好一件事"
+                  :data-tip="t('conversation.taskTip')"
                   @click="handleSwitchMode('task')"
                 >
                   <svg class="chat-mode-option-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -104,7 +104,7 @@
                     <div class="create-conversation-logo">
                         <img class="shrink-0 group-hover:scale-105 transition" width="20" height="20" src="@/assets/images/create_conversation.svg" alt="" />
                     </div>
-                    <div v-show="!isExpanded" class="create-conversation-text">新任务</div>
+                    <div v-show="!isExpanded" class="create-conversation-text">{{ t('conversation.newTask') }}</div>
                 </button>
             </div>
 
@@ -136,16 +136,16 @@
                       v-else
                       class="conversation_abstract"
                       :key="item.conversation_id"
-                      :title="item.abstract || '未命名对话'"
+                      :title="item.abstract || t('conversation.unnamedConversation')"
                     >
-                      {{ item.abstract || '未命名对话' }}
+                      {{ item.abstract || t('conversation.unnamedConversation') }}
                     </p>
                 </div>
                 <div class="conversation-option-wrapper">
                     <button
                       class="conversation_option"
                       @click.stop="toggleOptionMenu(item, $event)"
-                      title="对话选项"
+                      :title="t('conversation.conversationOptions')"
                     >
                       <img src="@/assets/images/option_conversation.svg" width="18" height="18" />
                     </button>
@@ -160,11 +160,11 @@
                     >
                       <button class="conversation-option-item" @click.stop="startEdit(item)">
                         <img src="@/assets/images/edit_icon.svg" width="16" height="16" />
-                        <span>编辑</span>
+                        <span>{{ t('conversation.edit') }}</span>
                       </button>
                       <button class="conversation-option-item conversation-delete" @click.stop="handleDelete(item.conversation_id, $event)">
                         <img src="@/assets/images/delete.svg" width="16" height="16" />
-                        <span>删除</span>
+                        <span>{{ t('conversation.delete') }}</span>
                       </button>
                     </div>
                 </div>
@@ -178,12 +178,12 @@
           ref="confirmRef"
         >
           <div class="confirm-content">
-            <div class="confirm-main">您确定要删除对话吗？</div>
-            <div class="confirm-sub">已删除的对话不可恢复。</div>
+            <div class="confirm-main">{{ t('conversation.confirmDeleteTitle') }}</div>
+            <div class="confirm-sub">{{ t('conversation.confirmDeleteSub') }}</div>
           </div>
           <div class="confirm-actions">
-            <button class="confirm-cancel" @click="cancelDelete">取消</button>
-            <button class="confirm-ok" @click="confirmDelete">确定</button>
+            <button class="confirm-cancel" @click="cancelDelete">{{ t('conversation.cancel') }}</button>
+            <button class="confirm-ok" @click="confirmDelete">{{ t('conversation.confirm') }}</button>
           </div>
         </div>
         <div class="user-option" :class="{ 'user-option--collapsed': isExpanded }">
@@ -194,14 +194,14 @@
               :class="{ 'user-button--collapsed': isExpanded, 'user-button--open': showMenu }"
               :aria-expanded="showMenu"
               @click.stop="toggleMenu"
-              title="用户菜单"
+              :title="t('conversation.userMenu')"
             >
               <img class="user-icon" width="22" height="22" src="@/assets/images/user_icon.svg" alt="" />
               <span
                 v-if="!isExpanded"
                 class="user-display-name"
                 :title="username"
-              >{{ username || '用户' }}</span>
+              >{{ username || t('conversation.defaultUser') }}</span>
               <svg
                 v-if="!isExpanded"
                 class="user-chevron"
@@ -219,16 +219,19 @@
             <div v-if="showMenu" class="user-menu" ref="menuRef">
               <button type="button" class="user-menu-item" @click="goHome">
                 <img width="14" height="14" src="@/assets/images/home_icon.svg" alt="" />
-                <span>主页</span>
+                <span>{{ t('conversation.home') }}</span>
               </button>
               <button type="button" class="user-menu-item" @click="goDocs">
                 <img width="14" height="14" src="@/assets/images/product_file.svg" alt="" />
-                <span>产品文档</span>
+                <span>{{ t('conversation.docs') }}</span>
+              </button>
+              <button type="button" class="user-menu-item" @click="toggleLocale">
+                <span>{{ t('nav.langSwitch') }}</span>
               </button>
               <div class="user-menu-divider" aria-hidden="true"></div>
               <button type="button" class="user-menu-item user-menu-item--danger" @click="logout">
                 <img width="14" height="14" src="@/assets/images/logout_icon.svg" alt="" />
-                <span>注销</span>
+                <span>{{ t('conversation.logout') }}</span>
               </button>
             </div>
           </div>
@@ -239,7 +242,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, toRefs, type ComponentPublicInstance } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { setLocale } from '@/i18n';
 import type { ConversationBase, ChatRequest } from '../types/interface';
+
+const { t, locale } = useI18n();
 
 const emit = defineEmits([
   'createConversation',
@@ -328,6 +335,11 @@ const goHome = () => {
 const goDocs = () => {
   showMenu.value = false;
   window.open('/docs', '_blank', 'noopener,noreferrer');
+};
+
+const toggleLocale = () => {
+  showMenu.value = false;
+  setLocale(locale.value === 'zh-CN' ? 'en' : 'zh-CN');
 };
 
 const logout = async () => {
