@@ -50,6 +50,10 @@ class Config:
         self.soulprout_model = os.getenv("SOULPROUT_MODEL")
         self.local_file_path = "/home/soulprout_data/"
         self.deployment_mode = os.getenv("DEPLOYMENT_MODE")
+        self.nls_app_key = os.getenv("NLS_APP_KEY")
+        self.nls_token = os.getenv("NLS_TOKEN")
+        self.aliyun_access_key_id = os.getenv("ALIYUN_ACCESS_KEY_ID")
+        self.aliyun_access_key_secret = os.getenv("ALIYUN_ACCESS_KEY_SECRET")
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
         self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"

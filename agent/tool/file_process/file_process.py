@@ -9,12 +9,17 @@ import re
 import aiofiles
 from concurrent.futures import ThreadPoolExecutor
 from .pptx_process import extract_ppt_complete_info
-from alibabacloud_docmind_api20220711.client import Client as docmind_api20220711Client
-from alibabacloud_tea_openapi import models as open_api_models
-from alibabacloud_docmind_api20220711 import models as docmind_api20220711_models
-from alibabacloud_tea_util.client import Client as UtilClient
-from alibabacloud_tea_util import models as util_models
 import os
+
+try:
+    from alibabacloud_docmind_api20220711.client import Client as docmind_api20220711Client
+    from alibabacloud_tea_openapi import models as open_api_models
+    from alibabacloud_docmind_api20220711 import models as docmind_api20220711_models
+    from alibabacloud_tea_util.client import Client as UtilClient
+    from alibabacloud_tea_util import models as util_models
+    _ALIYUN_AVAILABLE = True
+except ImportError:
+    _ALIYUN_AVAILABLE = False
 
 
 class AsyncFileProcess:
@@ -144,10 +149,11 @@ class AsyncFileProcess:
 
     async def file_parse(self, file_name, file_bytes):
         text = ""
+        use_aliyun = _ALIYUN_AVAILABLE and bool(os.getenv("ALIYUN_ACCESS_KEY_ID")) and bool(os.getenv("ALIYUN_ACCESS_KEY_SECRET"))
         if file_name.endswith('.pdf'):
-            text = await self.aliyun_file_parse_async(file_bytes)
+            text = await self.aliyun_file_parse_async(file_bytes) if use_aliyun else await self.pdf_parse(file_bytes)
         elif file_name.endswith('.docx') or file_name.endswith('.doc'):
-            text = await self.aliyun_file_parse_async(file_bytes)
+            text = await self.aliyun_file_parse_async(file_bytes) if use_aliyun else await self.docx_parse(file_bytes)
         elif file_name.endswith('.xlsx'):
             text = await self.xlsx_parse(file_bytes)
         elif file_name.endswith('.txt'):

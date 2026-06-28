@@ -8,11 +8,18 @@ from concurrent.futures import ThreadPoolExecutor
 import aiofiles
 import json
 import openpyxl
-from alibabacloud_docmind_api20220711 import models as docmind_api20220711_models
-from alibabacloud_docmind_api20220711.client import Client as docmind_api20220711Client
-from alibabacloud_tea_openapi import models as open_api_models
-from alibabacloud_tea_util import models as util_models
-from alibabacloud_tea_util.client import Client as UtilClient
+from pdfminer.high_level import extract_text
+from docx import Document
+
+try:
+    from alibabacloud_docmind_api20220711 import models as docmind_api20220711_models
+    from alibabacloud_docmind_api20220711.client import Client as docmind_api20220711Client
+    from alibabacloud_tea_openapi import models as open_api_models
+    from alibabacloud_tea_util import models as util_models
+    from alibabacloud_tea_util.client import Client as UtilClient
+    _ALIYUN_AVAILABLE = True
+except ImportError:
+    _ALIYUN_AVAILABLE = False
 
 
 class AsyncFileProcess:
@@ -46,6 +53,30 @@ class AsyncFileProcess:
     async def aliyun_file_parse_async(self, file, file_extension):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(self.executor, self.aliyun_file_parse, file, file_extension)
+
+    async def pdf_parse(self, file):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, extract_text, file)
+
+    async def docx_parse(self, file):
+        def _parse(f):
+            doc = Document(f)
+            return "\n".join(para.text for para in doc.paragraphs)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, _parse, file)
+
+    async def pptx_parse(self, file):
+        def _parse(f):
+            from pptx import Presentation
+            prs = Presentation(f)
+            text = ""
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text += shape.text + "\n"
+            return text
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, _parse, file)
 
     async def xlsx_parse(self, file):
         def _parse_xlsx(file_obj):
@@ -84,8 +115,15 @@ class AsyncFileProcess:
     async def file_parse(self, file):
         file_extension = file.file_extension
         file_bytes = file.file_bytes
+        use_aliyun = _ALIYUN_AVAILABLE and bool(os.getenv("ALIYUN_ACCESS_KEY_ID")) and bool(os.getenv("ALIYUN_ACCESS_KEY_SECRET"))
         if file_extension in [".pdf", ".docx", ".doc", ".pptx", ".ppt"]:
-            return await self.aliyun_file_parse_async(file_bytes, file_extension)
+            if use_aliyun:
+                return await self.aliyun_file_parse_async(file_bytes, file_extension)
+            if file_extension == ".pdf":
+                return await self.pdf_parse(file_bytes)
+            if file_extension in [".docx", ".doc"]:
+                return await self.docx_parse(file_bytes)
+            return await self.pptx_parse(file_bytes)
         if file_extension == ".xlsx":
             return await self.xlsx_parse(file_bytes)
         if file_extension == ".json":
