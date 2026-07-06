@@ -19,9 +19,9 @@
     <div v-show="loaded">
 
       <!-- ── Hero ── -->
-      <section class="sp-hero">
-        <OrbScene />
-        <GrowingParticles />
+      <section class="sp-hero" ref="heroSectionRef">
+        <OrbScene v-if="heroInView" />
+        <GrowingParticles v-if="heroInView" />
 
         <div class="sp-hero-inner">
           <div class="sp-hero-logo">
@@ -127,7 +127,6 @@
           <p class="sp-connect-desc">{{ t('init.connectDesc') }}</p>
 
           <div class="sp-connect-panel">
-            <div class="sp-connect-panel-border" />
             <div class="sp-connect-panel-inner">
               <div class="sp-connect-top-line" />
               <div class="sp-connect-list">
@@ -158,7 +157,7 @@
                       />
                     </svg>
                   </span>
-                  <span class="sp-connect-name">{{ platform.name }}</span>
+                  <span class="sp-connect-name">{{ connectPlatformNames[platform.key] }}</span>
                   <span v-if="platform.status === 'dev'" class="sp-connect-dev-tag">
                     {{ t('init.connectStatusDev') }}
                   </span>
@@ -267,7 +266,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { startExperience } from '@/utils/startExperience.js'
@@ -280,6 +279,8 @@ const router = useRouter()
 const { t, tm } = useI18n()
 
 const loaded = ref(false)
+const heroInView = ref(true)
+const heroSectionRef = ref(null)
 const heroTitleRef = ref(null)
 const capTitleRef = ref(null)
 const connectTitleRef = ref(null)
@@ -296,17 +297,40 @@ const features = computed(() => {
   }))
 })
 
-const connectPlatforms = computed(() => {
-  const items = tm('init.connectPlatforms')
-  return Array.isArray(items) ? items : []
-})
+const connectPlatforms = [
+  { key: 'wechat', status: 'live' },
+  { key: 'feishu', status: 'live' },
+  { key: 'wework', status: 'live' },
+  { key: 'xiaoai', status: 'live' },
+  { key: 'rokid', status: 'dev' },
+]
+
+const connectPlatformNames = computed(() => ({
+  wechat: t('chatWindow.channels.wechat'),
+  feishu: t('chatWindow.channels.feishu'),
+  wework: t('chatWindow.channels.wework'),
+  xiaoai: t('chatWindow.channels.xiaoai'),
+  rokid: t('chatWindow.channels.rokid'),
+}))
 
 function handleGatewayDownload() {
   downloadGatewayClient()
 }
 
+let heroObserver = null
+
 onMounted(() => {
   setTimeout(() => { loaded.value = true }, 2000)
+
+  if (heroSectionRef.value) {
+    heroObserver = new IntersectionObserver(
+      ([entry]) => {
+        heroInView.value = entry.isIntersecting
+      },
+      { rootMargin: '100px 0px' },
+    )
+    heroObserver.observe(heroSectionRef.value)
+  }
 
   const revealObs = new IntersectionObserver(
     (entries) => {
@@ -335,6 +359,10 @@ onMounted(() => {
     { threshold: 0.05, rootMargin: '0px 0px -60px 0px' }
   )
   document.querySelectorAll('.sp-cap-card').forEach(el => cardObs.observe(el))
+})
+
+onUnmounted(() => {
+  heroObserver?.disconnect()
 })
 
 function handleStart() {
@@ -717,13 +745,15 @@ const scrollTo = (id) => {
   position: relative;
   padding: 9rem 1.5rem;
   overflow: hidden;
-  background: #ffffff;
+  background: #f8f8f8;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
 }
 .sp-connect-bg-radial {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 80% 60% at 50% 50%, #f0f7f7 0%, #ffffff 70%);
+  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(30,180,140,0.03) 0%, transparent 70%);
 }
 .sp-connect-inner {
   position: relative;
@@ -741,27 +771,13 @@ const scrollTo = (id) => {
   margin: -2rem auto 3rem;
 }
 .sp-connect-panel {
-  position: relative;
   margin-bottom: 2.5rem;
 }
-.sp-connect-panel-border {
-  position: absolute;
-  inset: -1px;
-  border-radius: 1.5rem;
-  pointer-events: none;
-  background: linear-gradient(135deg,
-    rgba(30,180,140,0.08) 0%,
-    rgba(30,180,140,0.02) 50%,
-    rgba(30,180,140,0.06) 100%);
-}
 .sp-connect-panel-inner {
-  position: relative;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(24px);
+  background: #ffffff;
   border: 1px solid rgba(15, 15, 15, 0.06);
-  border-radius: 1.5rem;
+  border-radius: 1rem;
   overflow: hidden;
-  box-shadow: 0 0 80px rgba(30, 180, 140, 0.04);
 }
 .sp-connect-top-line,
 .sp-connect-bottom-line {

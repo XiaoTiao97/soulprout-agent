@@ -30,18 +30,8 @@ require_cmd curl
 require_cmd git
 
 # Python
-PY_BIN=""
-for py in python3.12 python3.11 python3.10 python3 python; do
-    if command -v "$py" &>/dev/null; then
-        PY_VER=$("$py" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-        IFS='.' read -r MAJ MIN <<< "$PY_VER"
-        if [[ $MAJ -eq 3 && $MIN -ge 10 ]]; then
-            PY_BIN="$py"; break
-        fi
-    fi
-done
-[[ -z "$PY_BIN" ]] && die "未找到 Python 3.10+，请先安装：https://python.org"
-ok "Python: $($PY_BIN --version)"
+resolve_python
+ok "Python: $($PYTHON --version)"
 
 # Node
 if ! command -v node &>/dev/null; then
@@ -83,36 +73,27 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────
-# Step 3  Python 虚拟环境 & 依赖
+# Step 3  Python 依赖
 # ────────────────────────────────────────────────────────────────
 section "Step 3 · Python 依赖"
 
 if $SKIP_PYTHON; then
     warn "跳过 Python 安装（--skip-python）"
 else
-    # 创建 / 复用 venv
-    if [[ ! -d "$VENV_DIR" ]]; then
-        info "创建虚拟环境 (.venv)..."
-        "$PY_BIN" -m venv "$VENV_DIR"
-        ok "虚拟环境已创建：$VENV_DIR"
-    else
-        ok "复用已有虚拟环境：$VENV_DIR"
-    fi
-
-    source "$VENV_DIR/bin/activate"
-    pip install --upgrade pip -q
+    resolve_python
+    "$PYTHON" -m pip install --upgrade pip -q
 
     info "安装 agent 依赖..."
-    pip install -r "$PROJECT_ROOT/agent/requirements.txt" -q
+    "$PYTHON" -m pip install -r "$PROJECT_ROOT/agent/requirements.txt" -q
     ok "agent 依赖安装完成"
 
     info "安装 vdb 依赖..."
-    pip install -r "$PROJECT_ROOT/vdb/requirements.txt" -q
+    "$PYTHON" -m pip install -r "$PROJECT_ROOT/vdb/requirements.txt" -q
     ok "vdb 依赖安装完成"
 
     if [[ -f "$PROJECT_ROOT/gateway/requirements.txt" ]]; then
         info "安装 gateway 依赖..."
-        pip install -r "$PROJECT_ROOT/gateway/requirements.txt" -q
+        "$PYTHON" -m pip install -r "$PROJECT_ROOT/gateway/requirements.txt" -q
         ok "gateway 依赖安装完成"
     fi
 fi

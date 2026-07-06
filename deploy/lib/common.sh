@@ -48,24 +48,23 @@ check_docker() {
     docker info &>/dev/null || die "Docker daemon 未运行，请先启动 Docker。"
 }
 
-# ── Python / venv ────────────────────────────────────────────────
-VENV_DIR="$PROJECT_ROOT/.venv"
+# ── Python ───────────────────────────────────────────────────────
+PYTHON=""
 
-activate_venv() {
-    if [[ -f "$VENV_DIR/bin/activate" ]]; then
-        # shellcheck disable=SC1090
-        source "$VENV_DIR/bin/activate"
-    else
-        die "虚拟环境不存在（$VENV_DIR），请先运行 install.sh"
-    fi
-}
-
-python_cmd() {
-    if [[ -f "$VENV_DIR/bin/python" ]]; then
-        "$VENV_DIR/bin/python" "$@"
-    else
-        python3 "$@"
-    fi
+resolve_python() {
+    [[ -n "$PYTHON" ]] && return
+    local py ver maj min
+    for py in python3.12 python3.11 python3.10 python3 python; do
+        if command -v "$py" &>/dev/null; then
+            ver=$("$py" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+            IFS='.' read -r maj min <<< "$ver"
+            if [[ $maj -eq 3 && $min -ge 10 ]]; then
+                PYTHON="$py"
+                return
+            fi
+        fi
+    done
+    die "未找到 Python 3.10+，请先安装：https://python.org"
 }
 
 # ── 进程 PID 文件 ──────────────────────────────────────────────────

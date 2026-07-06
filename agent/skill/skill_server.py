@@ -50,6 +50,7 @@ def load_skills_from_subfolders(skills_dir: Path, skill_type: str):
         try:
             parsed = _parse_skill_frontmatter(skill_md.read_text(encoding="utf-8"))
             if parsed:
+                parsed["name"] = item.name
                 parsed["type"] = skill_type
                 result.append(parsed)
         except Exception:

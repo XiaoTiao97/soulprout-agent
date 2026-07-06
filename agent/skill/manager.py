@@ -2,7 +2,7 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from agent.skill.skill_server import USER_SKILLS_BASE, get_system_skills_dir
+from agent.skill.skill_server import get_system_skills_dir, get_user_skills_root
 
 
 async def load_skill_to_workspace(conversation_id: str, user_id: str, skills: dict, workspace_base: str):
@@ -15,14 +15,14 @@ async def load_skill_to_workspace(conversation_id: str, user_id: str, skills: di
         if skills and skills.get("system"):
             for skill_name in skills["system"]:
                 source = get_system_skills_dir() / skill_name
-                if not source.exists():
+                if not source.is_dir():
                     return {"success": False, "error": f"技能 {skill_name} 不存在"}
                 await asyncio.to_thread(shutil.copytree, source, workspace_root / skill_name, dirs_exist_ok=True)
 
         if skills and skills.get("user"):
             for skill_name in skills["user"]:
-                source = Path(USER_SKILLS_BASE) / user_id / "skills" / skill_name
-                if not source.exists():
+                source = get_user_skills_root(user_id) / skill_name
+                if not source.is_dir():
                     return {"success": False, "error": f"用户技能 {skill_name} 不存在"}
                 await asyncio.to_thread(shutil.copytree, source, workspace_root / skill_name, dirs_exist_ok=True)
 

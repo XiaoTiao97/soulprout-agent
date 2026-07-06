@@ -18,7 +18,7 @@ echo "║   Soulprout Agent — 启动脚本         ║"
 echo "╚══════════════════════════════════════╝"
 echo -e "${RESET}"
 
-[[ -f "$VENV_DIR/bin/activate" ]] || die "未找到虚拟环境，请先运行 bash deploy/install.sh"
+resolve_python
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
 # ── Step 1: MongoDB ───────────────────────────────────────────────
@@ -62,13 +62,12 @@ wait_port 19530 "Milvus" 120
 
 # ── Step 3: vdb ───────────────────────────────────────────────────
 section "Step 3 · VDB 服务"
-activate_venv
 
 if port_open 8888; then
     ok "vdb 已在运行（:8888）"
 else
     info "启动 vdb（端口 8888）..."
-    nohup python_cmd "$PROJECT_ROOT/vdb/main.py" \
+    nohup "$PYTHON" "$PROJECT_ROOT/vdb/main.py" \
         > "$LOG_DIR/vdb.log" 2>&1 &
     save_pid $! "vdb"
     wait_port 8888 "vdb" 30
@@ -80,7 +79,7 @@ if port_open 8080; then
     ok "agent 已在运行（:8080）"
 else
     info "启动 agent（端口 8080）..."
-    nohup python_cmd "$PROJECT_ROOT/agent/main.py" \
+    nohup "$PYTHON" "$PROJECT_ROOT/agent/main.py" \
         > "$LOG_DIR/agent.log" 2>&1 &
     save_pid $! "agent"
     wait_port 8080 "agent" 60
@@ -93,7 +92,7 @@ if $START_GATEWAY; then
         ok "gateway 已在运行（:8082）"
     else
         info "启动 gateway（端口 8082）..."
-        nohup python_cmd "$PROJECT_ROOT/gateway/main.py" \
+        nohup "$PYTHON" "$PROJECT_ROOT/gateway/main.py" \
             > "$LOG_DIR/gateway.log" 2>&1 &
         save_pid $! "gateway"
         wait_port 8082 "gateway" 30

@@ -135,6 +135,8 @@ GitHub Actions 工作流 `.github/workflows/gateway-release.yml` 会自动：
 ```
 
 > 注意：Release 资产必须命名为 **`Soulprout-Gateway-setup.exe`**，与 CI 和前端默认链接保持一致。
+>
+> 不要上传 Tauri 默认生成的 `Soulprout.Gateway_0.1.0_x64-setup.exe`（带点号、带版本号），否则前端 `latest/download/Soulprout-Gateway-setup.exe` 会 404，下载无效。应上传 `build.ps1` 复制后的 **`Soulprout-Gateway-setup.exe`**。
 
 ### 自定义下载地址
 

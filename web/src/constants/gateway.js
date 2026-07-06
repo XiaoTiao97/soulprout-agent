@@ -5,13 +5,14 @@ export const GATEWAY_DOWNLOAD_URL =
 
 export const GATEWAY_DOWNLOAD_FILENAME = 'Soulprout-Gateway-setup.exe'
 
-/** 通过隐藏 iframe 触发下载，避免跳转页面 */
+/** GitHub Release 禁止 iframe 嵌入，需用 a 标签触发下载 */
 export function downloadGatewayClient() {
-  const iframe = document.createElement('iframe')
-  iframe.style.display = 'none'
-  iframe.src = GATEWAY_DOWNLOAD_URL
-  document.body.appendChild(iframe)
-  window.setTimeout(() => {
-    iframe.remove()
-  }, 120000)
+  const link = document.createElement('a')
+  link.href = GATEWAY_DOWNLOAD_URL
+  link.download = GATEWAY_DOWNLOAD_FILENAME
+  link.rel = 'noopener noreferrer'
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }

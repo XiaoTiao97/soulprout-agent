@@ -3,7 +3,7 @@
 
 启动阶段：
     - 扫描 agent/skill/skills/ 下所有内置 skill
-    - 解析 SKILL.md frontmatter 取出 name 和 description
+    - 以子文件夹名为 skill 标识，description 取自 SKILL.md frontmatter
     - 写入 vdb 的 skill_collection
     - 后续 skills(module=search) 工具通过 description 的 hybrid_search 召回
 
