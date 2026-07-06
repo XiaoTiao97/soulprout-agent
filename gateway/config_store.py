@@ -15,22 +15,29 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "gateway_data" / "settings.json"
+# 冻结模式（PyInstaller exe）下用 exe 所在目录，开发模式下用项目根目录
+_DATA_ROOT = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent.parent
+)
+_SETTINGS_PATH = _DATA_ROOT / "gateway_data" / "settings.json"
 
 # ---------------------------------------------------------------------------
 # 默认值
 # ---------------------------------------------------------------------------
 
-_DEFAULT_AGENT_URL = "https://www.mengya.chat"
+_DEFAULT_AGENT_URL = "https://www.soulprout.com"
 
 _DEFAULTS: dict = {
     # Agent HTTP 服务地址（不含路径），支持：
-    #   https://www.mengya.chat  → Soulprout 官方云服务（默认）
+    #   https://www.soulprout.com  → Soulprout 官方云服务（默认）
     #   http://localhost:8080    → 本地自部署
     "agent_url": _DEFAULT_AGENT_URL,
 

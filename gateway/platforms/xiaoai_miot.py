@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import re
+import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,7 +39,11 @@ _CONV_UA = (
     "/XiaoMi/HybridView/ micoSoundboxApp/i appVersion/A_2.4.40"
 )
 
-_GATEWAY_ROOT = Path(__file__).resolve().parent.parent.parent
+_GATEWAY_ROOT = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent.parent.parent
+)
 XIAOAI_DATA_DIR = _GATEWAY_ROOT / "gateway_data" / "xiaoai"
 XIAOAI_CONFIG_PATH = XIAOAI_DATA_DIR / "config.json"
 XIAOAI_SESSION_PATH = XIAOAI_DATA_DIR / ".mi.json"

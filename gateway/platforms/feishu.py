@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from collections import OrderedDict
 from datetime import datetime
@@ -61,7 +62,11 @@ from gateway.base import (
 # 数据目录
 # ---------------------------------------------------------------------------
 
-_GATEWAY_ROOT = Path(__file__).resolve().parent.parent.parent
+_GATEWAY_ROOT = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent.parent.parent
+)
 FEISHU_DATA_DIR = _GATEWAY_ROOT / "gateway_data" / "feishu"
 FEISHU_CONFIG_PATH = FEISHU_DATA_DIR / "config.json"
 

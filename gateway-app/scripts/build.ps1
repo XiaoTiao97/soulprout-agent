@@ -113,6 +113,17 @@ if (-not $SkipTauri) {
     }
 
     $InstallerDir = Join-Path $AppDir 'src-tauri\target\release\bundle'
+    $NsisDir = Join-Path $InstallerDir 'nsis'
+    if (Test-Path $NsisDir) {
+        $NsisExe = Get-ChildItem (Join-Path $NsisDir '*.exe') |
+            Where-Object { $_.Name -ne 'Soulprout-Gateway-setup.exe' } |
+            Select-Object -First 1
+        if ($NsisExe) {
+            $StableInstaller = Join-Path $NsisDir 'Soulprout-Gateway-setup.exe'
+            Copy-Item -Path $NsisExe.FullName -Destination $StableInstaller -Force
+            Success "Stable installer: $StableInstaller"
+        }
+    }
     Success "Build complete. Installers at: $InstallerDir"
 } else {
     Warn "Step 4/5 skipped (-SkipTauri). Sidecar ready at: $SidecarPath"

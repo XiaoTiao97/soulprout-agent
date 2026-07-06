@@ -1,6 +1,7 @@
 export default {
   nav: {
     capabilities: '能力',
+    connectivity: '互联',
     openSource: '开源',
     start: '立即体验',
     langSwitch: 'English',
@@ -12,6 +13,20 @@ export default {
     capsEyebrow: 'Core Capabilities',
     capsTitle: '能力矩阵',
     capsLabel: 'Six Pillars',
+    connectEyebrow: 'Multi-Platform',
+    connectTitle: '多端互联',
+    connectDesc: '下载 Soulprout Gateway 客户端，在微信、飞书、企业微信、小爱音箱等渠道与你的 Agent 无缝对话。',
+    connectWindowsNote: '当前客户端仅支持 Windows',
+    connectDownload: '下载 Gateway 客户端',
+    connectDownloadSub: '安装后登录Soulprout账号，即可开启互联',
+    connectStatusDev: '开发中',
+    connectPlatforms: [
+      { key: 'wechat', name: '微信', status: 'live' },
+      { key: 'feishu', name: '飞书', status: 'live' },
+      { key: 'wework', name: '企业微信', status: 'live' },
+      { key: 'xiaoai', name: '小爱音箱', status: 'live' },
+      { key: 'rokid', name: 'Rokid AI 眼镜', status: 'dev' },
+    ],
     ossEyebrow: 'Open Source',
     ossTitle: '全面开源',
     ossDesc: 'Soulprout 全面开源，欢迎开发者参与共建，一起打造更强大的智能体平台。',
@@ -110,6 +125,7 @@ export default {
     defaultUser: '用户',
     home: '主页',
     docs: '产品文档',
+    gatewayConnect: 'Soulprout 互联',
     logout: '注销',
   },
   chatWindow: {

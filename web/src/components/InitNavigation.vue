@@ -9,6 +9,7 @@
       <!-- Links -->
       <div class="sp-nav-links">
         <button class="sp-nav-link" @click="scrollTo('capabilities')">{{ t('nav.capabilities') }}</button>
+        <button class="sp-nav-link" @click="scrollTo('connectivity')">{{ t('nav.connectivity') }}</button>
         <button class="sp-nav-link" @click="scrollTo('intelligence')">{{ t('nav.openSource') }}</button>
       </div>
 

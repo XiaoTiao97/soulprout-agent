@@ -24,6 +24,7 @@ import logging
 import os
 import secrets
 import struct
+import sys
 import time
 import uuid
 from datetime import datetime
@@ -103,7 +104,11 @@ TYPING_STOP = 2
 # 数据目录（gateway_data/weixin/）
 # ---------------------------------------------------------------------------
 
-_GATEWAY_ROOT = Path(__file__).resolve().parent.parent.parent
+_GATEWAY_ROOT = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent.parent.parent
+)
 WEIXIN_DATA_DIR = _GATEWAY_ROOT / "gateway_data" / "weixin"
 
 

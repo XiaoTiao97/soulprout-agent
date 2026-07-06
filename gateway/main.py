@@ -156,6 +156,18 @@ def build_xiaoai_adapter() -> XiaoaiAdapter:
 # 主流程
 # ---------------------------------------------------------------------------
 
+async def _connect_adapter_bg(name: str, adapter: "BasePlatformAdapter", web_port: int) -> None:
+    """后台尝试连接单个平台 adapter，失败不阻塞启动。"""
+    try:
+        connected = await adapter.connect()
+        if connected:
+            logger.info("[Gateway] %s adapter 已连接", name)
+        else:
+            logger.info("[Gateway] %s 未连接，可在管理界面 http://localhost:%d/%s 配置", name, web_port, name)
+    except Exception as exc:
+        logger.error("[Gateway] %s adapter 连接异常: %s", name, exc, exc_info=True)
+
+
 async def run() -> None:
     global _weixin_adapter, _feishu_adapter, _wecom_adapter, _xiaoai_adapter
 
@@ -175,30 +187,6 @@ async def run() -> None:
     set_wecom_adapter(_wecom_adapter)
     set_xiaoai_adapter(_xiaoai_adapter)
 
-    weixin_connected = await _weixin_adapter.connect()
-    if weixin_connected:
-        logger.info("[Gateway] 微信 adapter 已连接")
-    else:
-        logger.info("[Gateway] 微信未连接，可在管理界面 http://localhost:%d/weixin 扫码登录", web_port)
-
-    feishu_connected = await _feishu_adapter.connect()
-    if feishu_connected:
-        logger.info("[Gateway] 飞书 adapter 已连接")
-    else:
-        logger.info("[Gateway] 飞书未连接，可在管理界面 http://localhost:%d/feishu 配置", web_port)
-
-    wecom_connected = await _wecom_adapter.connect()
-    if wecom_connected:
-        logger.info("[Gateway] 企业微信 adapter 已连接")
-    else:
-        logger.info("[Gateway] 企业微信未连接，可在管理界面 http://localhost:%d/wecom 配置", web_port)
-
-    xiaoai_connected = await _xiaoai_adapter.connect()
-    if xiaoai_connected:
-        logger.info("[Gateway] 小爱音箱 adapter 已连接")
-    else:
-        logger.info("[Gateway] 小爱音箱未连接，可在管理界面 http://localhost:%d/xiaoai 配置", web_port)
-
     stop_event = asyncio.Event()
 
     def _on_signal(*_):
@@ -212,21 +200,30 @@ async def run() -> None:
         except (NotImplementedError, OSError):
             pass
 
+    # Web 服务优先启动，保证 Tauri 能立刻加载管理界面
     web_task = asyncio.create_task(
         start_web_server(host=web_host, port=web_port),
         name="gateway-web",
     )
 
-    logger.info(
-        "[Gateway] 启动完成。管理界面：http://localhost:%d  按 Ctrl+C 退出",
-        web_port,
-    )
+    logger.info("[Gateway] 管理界面启动中 http://localhost:%d …", web_port)
+
+    # 各平台 adapter 在后台并发连接，不阻塞 web 服务开启
+    connect_tasks = [
+        asyncio.create_task(_connect_adapter_bg("weixin", _weixin_adapter, web_port), name="connect-weixin"),
+        asyncio.create_task(_connect_adapter_bg("feishu", _feishu_adapter, web_port), name="connect-feishu"),
+        asyncio.create_task(_connect_adapter_bg("wecom", _wecom_adapter, web_port), name="connect-wecom"),
+        asyncio.create_task(_connect_adapter_bg("xiaoai", _xiaoai_adapter, web_port), name="connect-xiaoai"),
+    ]
 
     try:
         await stop_event.wait()
     except KeyboardInterrupt:
         pass
     finally:
+        for t in connect_tasks:
+            t.cancel()
+
         web_task.cancel()
         try:
             await web_task

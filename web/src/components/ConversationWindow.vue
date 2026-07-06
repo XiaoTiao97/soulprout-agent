@@ -225,7 +225,21 @@
                 <img width="14" height="14" src="@/assets/images/product_file.svg" alt="" />
                 <span>{{ t('conversation.docs') }}</span>
               </button>
+              <button type="button" class="user-menu-item" @click="downloadGatewayConnect">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M12 3v12" stroke-linecap="round" />
+                  <path d="M8 11l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" />
+                </svg>
+                <span>{{ t('conversation.gatewayConnect') }}</span>
+              </button>
               <button type="button" class="user-menu-item" @click="toggleLocale">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18" stroke-linecap="round" />
+                  <path d="M12 3c2.5 2.9 2.5 15.1 0 18" stroke-linecap="round" />
+                  <path d="M12 3c-2.5 2.9-2.5 15.1 0 18" stroke-linecap="round" />
+                </svg>
                 <span>{{ t('nav.langSwitch') }}</span>
               </button>
               <div class="user-menu-divider" aria-hidden="true"></div>
@@ -244,7 +258,13 @@ import { ref, onMounted, onUnmounted, nextTick, toRefs, type ComponentPublicInst
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
+import { downloadGatewayClient } from '@/constants/gateway';
 import type { ConversationBase, ChatRequest } from '../types/interface';
+
+const downloadGatewayConnect = () => {
+  showMenu.value = false;
+  downloadGatewayClient();
+};
 
 const { t, locale } = useI18n();
 
@@ -725,11 +745,17 @@ onUnmounted(() => {
   opacity: 0.75;
 }
 
+.user-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
 .user-menu-item:hover {
   background: #f3f4f6;
 }
 
-.user-menu-item:hover img {
+.user-menu-item:hover img,
+.user-menu-item:hover svg {
   opacity: 1;
 }
 

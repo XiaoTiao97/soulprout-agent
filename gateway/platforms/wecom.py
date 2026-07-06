@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 import uuid
 from collections import OrderedDict
@@ -73,7 +74,11 @@ _QR_POLL_INTERVAL = 3
 _QR_POLL_TIMEOUT = 300
 _QR_HTTP_TIMEOUT = 15
 
-_GATEWAY_ROOT = Path(__file__).resolve().parent.parent.parent
+_GATEWAY_ROOT = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent.parent.parent
+)
 WECOM_DATA_DIR = _GATEWAY_ROOT / "gateway_data" / "wecom"
 WECOM_CONFIG_PATH = WECOM_DATA_DIR / "config.json"
 

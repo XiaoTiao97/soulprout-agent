@@ -7,19 +7,19 @@
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
     "devUrl": "http://localhost:8082",
-    "frontendDist": "http://localhost:8082"
+    "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "Soulprout Gateway",
-        "width": 600,
-        "height": 800,
-        "resizable": true,
+        "width": 480,
+        "height": 520,
+        "resizable": false,
         "fullscreen": false,
         "center": true,
-        "url": "http://localhost:8082"
+        "visible": true
       }
     ],
     "security": {

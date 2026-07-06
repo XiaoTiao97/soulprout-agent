@@ -72,6 +72,78 @@ soulprout-agent/
 
 构建产物：`gateway-app/src-tauri/target/release/bundle/`
 
+同时会生成固定文件名的安装包（供 GitHub Release 与前端下载链接使用）：
+
+```
+gateway-app/src-tauri/target/release/bundle/nsis/Soulprout-Gateway-setup.exe
+```
+
+---
+
+## 发布 Gateway 客户端（GitHub Releases）
+
+前端下载链接采用 **A2 方案**：始终指向 GitHub Releases 的 `latest` 资产，文件名固定为 `Soulprout-Gateway-setup.exe`，发新版后**无需修改前端代码**。
+
+默认下载地址：
+
+```
+https://github.com/XiaoTiao97/soulprout-agent/releases/latest/download/Soulprout-Gateway-setup.exe
+```
+
+### 每次发新版（3 步）
+
+**1. 更新版本号（可选但建议）**
+
+编辑 `gateway-app/src-tauri/tauri.conf.json` 中的 `version` 字段，例如 `0.1.0` → `0.1.1`。
+
+**2. 打 tag 并推送，触发 CI 自动构建**
+
+```powershell
+# 在项目根目录，tag 必须以 gateway-v 开头
+git tag gateway-v0.1.1
+git push origin gateway-v0.1.1
+```
+
+GitHub Actions 工作流 `.github/workflows/gateway-release.yml` 会自动：
+
+- 在 Windows runner 上执行 `build.ps1`
+- 生成 `Soulprout-Gateway-setup.exe`
+- 上传到对应 GitHub Release
+
+可在 GitHub 仓库 **Actions** 页查看构建进度，在 **Releases** 页确认安装包已上传。
+
+**3. 验证下载**
+
+浏览器打开上面的 `latest/download/...` 链接，确认能下载最新安装包。  
+前端主页「多端互联」与用户菜单「Soulprout 互联」会自动指向该地址。
+
+### 本地手动发布（不依赖 CI）
+
+若 CI 暂不可用，可本地构建后手动上传：
+
+```powershell
+# 1. 本地构建
+.\gateway-app\scripts\build.ps1
+
+# 2. 产物路径
+# gateway-app\src-tauri\target\release\bundle\nsis\Soulprout-Gateway-setup.exe
+
+# 3. GitHub → Releases → Draft a new release
+#    - Tag: gateway-v0.1.1
+#    - 上传 Soulprout-Gateway-setup.exe
+#    - Publish release
+```
+
+> 注意：Release 资产必须命名为 **`Soulprout-Gateway-setup.exe`**，与 CI 和前端默认链接保持一致。
+
+### 自定义下载地址
+
+若改用 OSS 等托管，在 Web 构建时设置环境变量即可：
+
+```env
+VITE_GATEWAY_DOWNLOAD_URL=https://your-cdn.example.com/Soulprout-Gateway-setup.exe
+```
+
 ---
 
 ## 跳过部分步骤

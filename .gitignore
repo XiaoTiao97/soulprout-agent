@@ -210,8 +210,9 @@ __marimo__/
 # Gateway 本地运行时数据（登录 token、微信凭证、同步游标等）
 gateway_data/
 
-# Gateway 本地运行时数据（登录凭证、微信 token、消息游标等）
-gateway_data/
+# Gateway 构建产物（sidecar、调试日志等；Tauri bundle 已在 target/ 中忽略）
+gateway-app/src-tauri/binaries/*.exe
+gw-*.txt
 
 # === Node/Vue ===
 node_modules/

@@ -110,6 +110,79 @@
         </div>
       </section>
 
+      <!-- ── Multi-Platform Connectivity ── -->
+      <section id="connectivity" class="sp-connect-section">
+        <div class="sp-connect-bg-radial" />
+
+        <div class="sp-connect-inner">
+          <div class="sp-section-header">
+            <p class="sp-section-eyebrow">{{ t('init.connectEyebrow') }}</p>
+            <h2 class="sp-section-title">
+              <span class="sp-reveal-wrap" ref="connectTitleRef">
+                <span class="sp-reveal-text">{{ t('init.connectTitle') }}</span>
+              </span>
+            </h2>
+          </div>
+
+          <p class="sp-connect-desc">{{ t('init.connectDesc') }}</p>
+
+          <div class="sp-connect-panel">
+            <div class="sp-connect-panel-border" />
+            <div class="sp-connect-panel-inner">
+              <div class="sp-connect-top-line" />
+              <div class="sp-connect-list">
+                <div
+                  v-for="platform in connectPlatforms"
+                  :key="platform.key"
+                  class="sp-connect-item"
+                  :class="{ 'sp-connect-item--dev': platform.status === 'dev' }"
+                >
+                  <span
+                    class="sp-connect-box"
+                    :class="{ 'sp-connect-box--checked': platform.status === 'live' }"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      v-if="platform.status === 'live'"
+                      class="sp-connect-box-icon"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2.5 6L5 8.5L9.5 3.5"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span class="sp-connect-name">{{ platform.name }}</span>
+                  <span v-if="platform.status === 'dev'" class="sp-connect-dev-tag">
+                    {{ t('init.connectStatusDev') }}
+                  </span>
+                </div>
+              </div>
+              <div class="sp-connect-bottom-line" />
+            </div>
+          </div>
+
+          <p class="sp-connect-note">{{ t('init.connectWindowsNote') }}</p>
+
+          <button type="button" class="sp-cta-btn" @click="handleGatewayDownload">
+            <span>{{ t('init.connectDownload') }}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+              <path d="M12 3v12" stroke-linecap="round" />
+              <path d="M8 11l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" />
+            </svg>
+          </button>
+
+          <p class="sp-connect-hint">{{ t('init.connectDownloadSub') }}</p>
+        </div>
+      </section>
+
       <!-- ── Open Source ── -->
       <section id="intelligence" class="sp-oss-section">
         <div class="sp-oss-bg-radial" />
@@ -201,6 +274,7 @@ import { startExperience } from '@/utils/startExperience.js'
 import InitNavigation from '@/components/InitNavigation.vue'
 import OrbScene from '@/components/OrbScene.vue'
 import GrowingParticles from '@/components/GrowingParticles.vue'
+import { downloadGatewayClient } from '@/constants/gateway'
 
 const router = useRouter()
 const { t, tm } = useI18n()
@@ -208,6 +282,7 @@ const { t, tm } = useI18n()
 const loaded = ref(false)
 const heroTitleRef = ref(null)
 const capTitleRef = ref(null)
+const connectTitleRef = ref(null)
 const openTitleRef = ref(null)
 const loadingChars = 'LOADING_SOULPROUT...'.split('')
 
@@ -220,6 +295,15 @@ const features = computed(() => {
     desc: items[i]?.desc ?? '',
   }))
 })
+
+const connectPlatforms = computed(() => {
+  const items = tm('init.connectPlatforms')
+  return Array.isArray(items) ? items : []
+})
+
+function handleGatewayDownload() {
+  downloadGatewayClient()
+}
 
 onMounted(() => {
   setTimeout(() => { loaded.value = true }, 2000)
@@ -235,7 +319,7 @@ onMounted(() => {
     },
     { threshold: 0.2 }
   )
-  ;[heroTitleRef.value, capTitleRef.value, openTitleRef.value].forEach(el => {
+  ;[heroTitleRef.value, capTitleRef.value, connectTitleRef.value, openTitleRef.value].forEach(el => {
     if (el) revealObs.observe(el)
   })
 
@@ -628,6 +712,123 @@ const scrollTo = (id) => {
   color: rgba(15, 15, 15, 0.2);
 }
 
+/* ─── Connectivity ─────────────────────── */
+.sp-connect-section {
+  position: relative;
+  padding: 9rem 1.5rem;
+  overflow: hidden;
+  background: #ffffff;
+}
+.sp-connect-bg-radial {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 80% 60% at 50% 50%, #f0f7f7 0%, #ffffff 70%);
+}
+.sp-connect-inner {
+  position: relative;
+  z-index: 10;
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+.sp-connect-desc {
+  font-size: 1.05rem;
+  color: rgba(15, 15, 15, 0.4);
+  font-weight: 300;
+  line-height: 1.8;
+  max-width: 600px;
+  margin: -2rem auto 3rem;
+}
+.sp-connect-panel {
+  position: relative;
+  margin-bottom: 2.5rem;
+}
+.sp-connect-panel-border {
+  position: absolute;
+  inset: -1px;
+  border-radius: 1.5rem;
+  pointer-events: none;
+  background: linear-gradient(135deg,
+    rgba(30,180,140,0.08) 0%,
+    rgba(30,180,140,0.02) 50%,
+    rgba(30,180,140,0.06) 100%);
+}
+.sp-connect-panel-inner {
+  position: relative;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(15, 15, 15, 0.06);
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 0 80px rgba(30, 180, 140, 0.04);
+}
+.sp-connect-top-line,
+.sp-connect-bottom-line {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(to right, transparent, rgba(30,180,140,0.2), transparent);
+}
+.sp-connect-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 1.75rem;
+  padding: 2rem 2.5rem;
+}
+.sp-connect-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(51, 65, 85, 0.95);
+}
+.sp-connect-item--dev {
+  color: rgba(100, 116, 139, 0.88);
+}
+.sp-connect-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.75);
+  border-radius: 3px;
+  background: rgba(248, 250, 252, 0.9);
+  flex-shrink: 0;
+}
+.sp-connect-box--checked {
+  border-color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+.sp-connect-box-icon {
+  width: 8px;
+  height: 8px;
+}
+.sp-connect-name {
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+.sp-connect-dev-tag {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(100, 116, 139, 0.75);
+}
+.sp-connect-note {
+  margin: 0 0 1.75rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: rgba(15, 15, 15, 0.35);
+}
+.sp-connect-hint {
+  margin: 1.25rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgba(15, 15, 15, 0.35);
+}
+
 /* ─── Open Source ──────────────────────── */
 .sp-oss-section {
   position: relative;
@@ -824,6 +1025,10 @@ const scrollTo = (id) => {
   .sp-cap-card--mid {
     border-left: none;
     border-right: none;
+  }
+  .sp-connect-list {
+    padding: 1.5rem 1.25rem;
+    gap: 0.85rem 1.25rem;
   }
   .sp-stats-row {
     gap: 2rem;
