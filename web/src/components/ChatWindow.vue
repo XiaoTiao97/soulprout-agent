@@ -799,7 +799,7 @@ async function getAgentCardList() {
 
 async function getKBList() {
   try {
-    const response = await axios.get(`/kb/kb/list/?user_id=${props.userId}`)
+    const response = await axios.get(`/api/kb/list/?user_id=${props.userId}`)
     if (response.data.success) {
       kb_list.value = response.data.data.map(kb => ({
         id: kb.kb_id,

@@ -1229,7 +1229,7 @@ async function fetchSkills() {
 // Add fetchKbs function
 async function fetchKbs() {
   try {
-    const response = await axios.get(`/kb/kb/list/?user_id=${userId}`)
+    const response = await axios.get(`/api/kb/list/?user_id=${userId}`)
     if (response.data.success) {
       allKbs.value = response.data.data.map((kb: any) => ({
         kb_id: kb.kb_id,

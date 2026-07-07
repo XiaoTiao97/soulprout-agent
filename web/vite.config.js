@@ -14,14 +14,9 @@ export default defineConfig({
     proxy: {
       // Agent 主服务（含 /tools_info、/skills_info、/skill、聊天等），不再走 6666 MCP 端口
       '/api': {
-        target: 'http://localhost:8080', // 后端地址
+        target: 'http://localhost:8080', // 后端地址（含 /api/kb 知识库接口）
         changeOrigin: true,
         rewrite: path => path.replace(/^\/api/, ''),
-      },
-      '/kb': {
-        target: 'http://localhost:8080', // agent 知识库接口（已合并至 8080）
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/kb/, ''),
       },
     },
   },

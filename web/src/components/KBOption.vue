@@ -327,7 +327,7 @@ async function fetchKBList() {
   loading.value = true
   error.value = ''
   try {
-    const response = await axios.get(`/kb/kb/list/?user_id=${userId}`)
+    const response = await axios.get(`/api/kb/list/?user_id=${userId}`)
     if (response.data.success) {
       kbList.value = response.data.data.map((kb: any) => ({
         kb_id: kb.kb_id,
@@ -368,7 +368,7 @@ async function loadDocs(kbId: string) {
   kb.loadingDocs = true
   kb.docsError = ''
   try {
-    const response = await axios.get(`/kb/kb/docs/?kb_id=${kbId}`)
+    const response = await axios.get(`/api/kb/docs/?kb_id=${kbId}`)
     if (response.data.success) {
       kb.docs = response.data.data
     } else {
@@ -456,7 +456,7 @@ async function uploadFiles() {
       currentFiles.value.forEach(file => formData.append('files', file))
       formData.append('user_id', userId)
 
-      response = await fetch('/kb/kb/create/', {
+      response = await fetch('/api/kb/create/', {
         method: 'POST',
         body: formData
       })
@@ -465,7 +465,7 @@ async function uploadFiles() {
       formData.append('kb_id', selectedKB.value!.kb_id)
       currentFiles.value.forEach(file => formData.append('files', file))
 
-      response = await fetch('/kb/kb/add-file/', {
+      response = await fetch('/api/kb/add-file/', {
         method: 'POST',
         body: formData
       })
@@ -562,13 +562,13 @@ async function confirmDelete() {
   showConfirmModal.value = false
   try {
     if (confirmType.value === 'kb') {
-      await axios.delete(`/kb/kb/delete/${currentKBIdForDelete.value}`)
+      await axios.delete(`/api/kb/delete/${currentKBIdForDelete.value}`)
       fetchKBList()
       if (selectedKB.value?.kb_id === currentKBIdForDelete.value) {
         selectedKB.value = null
       }
     } else {
-      await axios.delete(`/kb/kb/delete-doc/${currentDocIdForDelete.value}`)
+      await axios.delete(`/api/kb/delete-doc/${currentDocIdForDelete.value}`)
       if (selectedKB.value?.kb_id === currentKBIdForDelete.value) {
         loadDocs(currentKBIdForDelete.value)
       }
@@ -598,7 +598,7 @@ async function saveEdit() {
     formData.append('kb_name_zh', editedName.value)
     formData.append('kb_description', editedDescription.value)
     
-    const response = await axios.post('kb/kb/update/kb_info/', formData, {
+    const response = await axios.post('/api/kb/update/kb_info/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -678,7 +678,7 @@ watch(selectedFile, () => {
 const fetchFileContent = async (filename: string) => {
   selectedFile.value = filename
   try {
-    const response = await axios.get(`/kb/kb/file_content/${filename}?kb_id=${selectedKB.value!.kb_id}`, {
+    const response = await axios.get(`/api/kb/file_content/${filename}?kb_id=${selectedKB.value!.kb_id}`, {
       responseType: 'blob'
     })
     const blob = response.data
@@ -758,7 +758,7 @@ const fetchFileContent = async (filename: string) => {
 
 const downloadFile = async (filename: string) => {
   try {
-    const response = await axios.get(`/kb/kb/download/${filename}?kb_id=${selectedKB.value!.kb_id}`, {
+    const response = await axios.get(`/api/kb/download/${filename}?kb_id=${selectedKB.value!.kb_id}`, {
       responseType: 'blob'
     });
     const url = window.URL.createObjectURL(new Blob([response.data]));
