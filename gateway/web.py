@@ -622,8 +622,10 @@ async def api_test_connection():
     except ImportError:
         return JSONResponse({"success": False, "mode": mode, "message": "aiohttp 未安装"})
 
+    from gateway.config_store import api_path
+
     # Step 1: HTTP 健康检查（/health 不存在也视为可达）
-    health_url = f"{agent_url}/health"
+    health_url = api_path(agent_url, "/health")
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(health_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
@@ -651,7 +653,7 @@ async def api_test_connection():
 
     async with aiohttp.ClientSession() as session:
         async with session.get(
-            f"{agent_url}/user/me",
+            api_path(agent_url, "/user/me"),
             cookies={"token": token},
             headers={"Authorization": f"Bearer {token}"},
             timeout=aiohttp.ClientTimeout(total=8),
@@ -704,11 +706,13 @@ async def api_email_send_code(request: Request):
         return JSONResponse({"success": False, "message": "请填写邮箱"})
 
     agent_url = _resolve_agent_url(body)
+    from gateway.config_store import api_path, get_auth_url
+    auth_url = get_auth_url(agent_url)
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{agent_url}/user/email/send-code",
+                api_path(auth_url, "/user/email/send-code"),
                 json={"email": email},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
@@ -718,7 +722,7 @@ async def api_email_send_code(request: Request):
     except Exception as exc:
         return JSONResponse({
             "success": False,
-            "message": f"调用 Agent 失败：{exc}",
+            "message": f"发送验证码失败：{exc}",
             "agent_url": agent_url,
         })
 
@@ -739,11 +743,13 @@ async def api_email_login(request: Request):
         return JSONResponse({"success": False, "message": "邮箱与验证码不能为空"})
 
     agent_url = _resolve_agent_url(body)
+    from gateway.config_store import api_path, get_auth_url
+    auth_url = get_auth_url(agent_url)
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{agent_url}/user/email/login",
+                api_path(auth_url, "/user/email/login"),
                 json={"email": email, "code": code, "username": username},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
@@ -751,7 +757,7 @@ async def api_email_login(request: Request):
     except Exception as exc:
         return JSONResponse({
             "success": False,
-            "message": f"调用 Agent 失败：{exc}",
+            "message": f"登录失败：{exc}",
             "agent_url": agent_url,
         })
 
@@ -790,11 +796,12 @@ async def api_sso_login(request: Request):
         return JSONResponse({"success": False, "message": "请填写 user_id"})
 
     agent_url = _resolve_agent_url(body)
+    from gateway.config_store import api_path
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{agent_url}/user/sso-token",
+                api_path(agent_url, "/user/sso-token"),
                 json={"user_id": user_id, "username": username},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:

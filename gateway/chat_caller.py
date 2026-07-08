@@ -86,7 +86,9 @@ async def _call_http(
     except ImportError:
         return "（aiohttp 未安装，无法调用 Agent）"
 
-    endpoint = f"{agent_url.rstrip('/')}/message/chat"
+    from gateway.config_store import api_path
+
+    endpoint = api_path(agent_url, "/message/chat")
 
     chat_req: dict = {
         "message": message,

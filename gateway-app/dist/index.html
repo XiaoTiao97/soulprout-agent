@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Soulprout Gateway</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .card {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 16px;
+      padding: 44px 40px 32px;
+      width: 400px;
+      text-align: center;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #7c3aed;
+    }
+
+    .logo-text {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: 0.5px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 32px;
+    }
+
+    /* ─── 连接方式选择 ─── */
+    .conn-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 18px;
+      text-align: left;
+    }
+
+    .conn-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .conn-option.primary {
+      border-color: rgba(124, 58, 237, 0.5);
+      background: rgba(124, 58, 237, 0.08);
+    }
+
+    .conn-option:hover { border-color: #7c3aed; }
+
+    .conn-option input[type="radio"] {
+      accent-color: #7c3aed;
+      flex-shrink: 0;
+      width: 15px;
+      height: 15px;
+    }
+
+    .conn-option-text { display: flex; flex-direction: column; gap: 2px; }
+    .conn-option-title { font-size: 14px; font-weight: 500; color: #e2e8f0; }
+    .conn-option-desc { font-size: 11px; color: #64748b; }
+
+    /* 「指定端口」选项刻意做得更小、更不显眼，避免抢云服务默认项的视觉重心 */
+    .conn-option.secondary {
+      padding: 8px 14px;
+      border-style: dashed;
+    }
+    .conn-option.secondary .conn-option-title { font-size: 12px; color: #94a3b8; font-weight: 400; }
+    .conn-option.secondary .conn-option-desc { font-size: 10px; }
+
+    .custom-url-row {
+      display: none;
+      margin: -6px 0 14px;
+    }
+    .custom-url-row.show { display: block; }
+
+    input[type="text"] {
+      width: 100%;
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: #e2e8f0;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus { border-color: #7c3aed; }
+
+    /* ─── 确认按钮 ─── */
+    .btn-confirm {
+      width: 100%;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-confirm:hover:not(:disabled) { background: #6d28d9; }
+    .btn-confirm:active:not(:disabled) { background: #5b21b6; }
+    .btn-confirm:disabled { opacity: 0.75; cursor: default; }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-msg {
+      min-height: 18px;
+      margin-top: 14px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .status-msg.err { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-row">
+      <div class="logo-dot"></div>
+      <div class="logo-text">Soulprout Gateway</div>
+    </div>
+    <div class="subtitle">智能体接入平台</div>
+
+    <div class="conn-options">
+      <label class="conn-option primary" for="mode-cloud">
+        <input type="radio" id="mode-cloud" name="conn-mode" value="cloud" checked onchange="onModeChange()" />
+        <span class="conn-option-text">
+          <span class="conn-option-title">使用云服务（默认）</span>
+          <span class="conn-option-desc">推荐，无需任何配置，点击确定即可开始</span>
+        </span>
+      </label>
+
+      <label class="conn-option secondary" for="mode-custom">
+        <input type="radio" id="mode-custom" name="conn-mode" value="custom" onchange="onModeChange()" />
+        <span class="conn-option-text">
+          <span class="conn-option-title">连接指定端口</span>
+          <span class="conn-option-desc">高级选项，仅自行部署 Gateway 时使用</span>
+        </span>
+      </label>
+    </div>
+
+    <div class="custom-url-row" id="custom-url-row">
+      <input id="url-input" type="text" value="http://localhost:8082" spellcheck="false" />
+    </div>
+
+    <button class="btn-confirm" id="btn-confirm" onclick="confirmConnect()">
+      <span id="btn-confirm-text">确定</span>
+    </button>
+
+    <div class="status-msg" id="status-msg"></div>
+  </div>
+
+  <script>
+    const DEFAULT_URL = 'http://localhost:8082';
+    const urlInput = document.getElementById('url-input');
+    const customRow = document.getElementById('custom-url-row');
+    const btnConfirm = document.getElementById('btn-confirm');
+    const btnConfirmText = document.getElementById('btn-confirm-text');
+    const statusMsg = document.getElementById('status-msg');
+
+    function currentMode() {
+      return document.querySelector('input[name="conn-mode"]:checked').value;
+    }
+
+    function onModeChange() {
+      customRow.classList.toggle('show', currentMode() === 'custom');
+    }
+
+    function targetUrl() {
+      if (currentMode() === 'custom') {
+        return (urlInput.value || '').trim().replace(/\/$/, '') || DEFAULT_URL;
+      }
+      return DEFAULT_URL;
+    }
+
+    function setStatus(text, isErr) {
+      statusMsg.textContent = text || '';
+      statusMsg.className = 'status-msg' + (isErr ? ' err' : '');
+    }
+
+    function setBusy(busy, label) {
+      btnConfirm.disabled = busy;
+      btnConfirmText.innerHTML = busy
+        ? `<span class="spinner"></span><span>${label}</span>`
+        : label;
+    }
+
+    async function pingOnce(url) {
+      try {
+        // no-cors：只要服务器有响应（哪怕 4xx）即视为就绪，仅网络层失败才会 reject
+        await fetch(url, { mode: 'no-cors', signal: AbortSignal.timeout(1500) });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    let connecting = false;
+
+    async function confirmConnect() {
+      if (connecting) return;
+      connecting = true;
+      const url = targetUrl();
+      setStatus('');
+
+      const isDefault = currentMode() === 'cloud';
+      const MAX_WAIT_MS = 20000;
+      const STEP_MS = 500;
+      let waited = 0;
+
+      setBusy(true, isDefault ? '正在连接…' : '连接中…');
+
+      while (waited <= MAX_WAIT_MS) {
+        if (await pingOnce(url)) {
+          window.location.href = url;
+          return;
+        }
+        // 首次已启动 Gateway 一般 1~2 秒内即可就绪，这里静默重试，不打扰用户
+        await new Promise(r => setTimeout(r, STEP_MS));
+        waited += STEP_MS;
+      }
+
+      connecting = false;
+      setBusy(false, '确定');
+      setStatus(
+        isDefault
+          ? 'Gateway 尚未就绪，请稍候片刻后重试'
+          : '无法连接到该地址，请检查端口是否正确',
+        true,
+      );
+    }
+
+    // 页面打开后本地 Gateway 通常已在后台启动，静默预热一次，
+    // 命中即可让用户点击「确定」后几乎无感跳转。
+    pingOnce(DEFAULT_URL);
+  </script>
+</body>
+</html>

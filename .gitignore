@@ -214,6 +214,11 @@ gateway_data/
 gateway-app/src-tauri/binaries/*.exe
 gw-*.txt
 
+# gateway-app/dist 是手写的 Tauri 开屏页源码（非构建产物），需纳入版本控制，
+# 排除通用 `dist/` 规则的误伤
+!gateway-app/dist/
+!gateway-app/dist/**
+
 # === Node/Vue ===
 node_modules/
 dist-ssr/

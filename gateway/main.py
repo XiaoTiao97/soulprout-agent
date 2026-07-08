@@ -57,6 +57,58 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# 父进程看门狗
+# ---------------------------------------------------------------------------
+#
+# gateway 进程由 Tauri 桌面端（或本地调试时的父进程）拉起时，会通过环境变量
+# GATEWAY_PARENT_PID 传入父进程 PID。桌面端关闭时会主动 kill 本进程，但为防止
+# 出现「桌面端被强制结束 / 崩溃 / 未走到清理逻辑」导致 gateway 变成孤儿进程、
+# 长期占用端口从而导致下次启动/安装失败的情况，这里额外做一层保险：
+# 定期检测父进程是否还存活，一旦父进程消失就立即自我退出。
+
+
+def _pid_alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        import ctypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = ctypes.windll.kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+        )
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not ctypes.windll.kernel32.GetExitCodeProcess(
+                handle, ctypes.byref(exit_code)
+            ):
+                return False
+            return exit_code.value == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    else:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+
+async def _watch_parent_process(parent_pid: int, interval: float = 3.0) -> None:
+    """父进程消失后立即自我退出，避免残留为孤儿进程。"""
+    while True:
+        await asyncio.sleep(interval)
+        if not _pid_alive(parent_pid):
+            logger.warning(
+                "[Gateway] 检测到父进程 (pid=%d) 已退出，自动关闭 Gateway 进程", parent_pid
+            )
+            os._exit(0)
+
+
+# ---------------------------------------------------------------------------
 # 平台适配器注册表
 # ---------------------------------------------------------------------------
 
@@ -199,6 +251,12 @@ async def run() -> None:
             loop.add_signal_handler(sig, _on_signal)
         except (NotImplementedError, OSError):
             pass
+
+    parent_pid_raw = os.getenv("GATEWAY_PARENT_PID", "").strip()
+    if parent_pid_raw.isdigit():
+        parent_pid = int(parent_pid_raw)
+        logger.info("[Gateway] 已启用父进程看门狗，父进程 pid=%d", parent_pid)
+        asyncio.create_task(_watch_parent_process(parent_pid), name="parent-watchdog")
 
     # Web 服务优先启动，保证 Tauri 能立刻加载管理界面
     web_task = asyncio.create_task(

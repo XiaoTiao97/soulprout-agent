@@ -150,7 +150,6 @@ class SoulproutToolFunction:
                     "--tmpfs", "/tmp",
                     "--unshare-user",
                     "--unshare-pid",
-                    "--unshare-net",
                     "--unshare-ipc",
                     "--unshare-uts",
                     "--uid", "65534",

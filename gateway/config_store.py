@@ -131,6 +131,19 @@ def get_default_agent_url() -> str:
     return _DEFAULT_AGENT_URL
 
 
+def get_auth_url(agent_url: Optional[str] = None) -> str:
+    """邮箱验证码等用户认证 API 地址。
+
+    与 Web 前端保持一致：认证接口和 Agent 业务接口同源，跟随 ``agent_url``
+    （云服务或自部署都一样），不再额外指向独立域名。
+    如确有需要，仍可通过环境变量 ``AUTH_URL`` 强制覆盖。
+    """
+    env_url = os.getenv("AUTH_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    return (agent_url or get_agent_url()).rstrip("/")
+
+
 def normalize_agent_url(url: str) -> str:
     return (url or "").strip().rstrip("/")
 
@@ -141,6 +154,24 @@ def is_local_agent(url: Optional[str] = None) -> bool:
         target.startswith(prefix)
         for prefix in ("http://localhost", "http://127.0.0.1", "http://0.0.0.0")
     )
+
+
+def api_path(url: str, path: str) -> str:
+    """拼接调用 Agent HTTP 接口的完整地址。
+
+    Web 前端始终通过 ``/api/*`` 相对路径请求后端，本地由 Vite 代理、
+    线上由反向代理去掉 ``/api`` 前缀后转发给 FastAPI（其路由本身不带该前缀）。
+    因此这里访问的目标是：
+
+    - 本地直连自部署的 Agent 进程（未经反向代理）：不加 ``/api`` 前缀，
+      直接匹配 FastAPI 路由。
+    - 云端 / 自定义域名（经过反向代理）：需加 ``/api`` 前缀，与 Web 前端行为保持一致。
+    """
+    base = (url or "").rstrip("/")
+    suffix = path if path.startswith("/") else f"/{path}"
+    if is_local_agent(base):
+        return f"{base}{suffix}"
+    return f"{base}/api{suffix}"
 
 
 # ---------------------------------------------------------------------------
