@@ -142,7 +142,7 @@ class Config:
 5. 汇总：输出结论，必要时用 write 保存报告。""",
                 supervisor_history=False,
                 files=[],
-                tools=["web_search", "web_fetch", "write", "edit", "read"],
+                tools=["web_search", "web_fetch", "write", "edit", "read", "bash", "ask_user_feedback"],
                 skills=None,
                 kbs=[],
                 agents=None,
@@ -163,8 +163,8 @@ class Config:
 如果缺少关键信息，先说明需要补充的内容。""",
                 supervisor_history=True,
                 files=[],
-                tools=["skills", "bash", "read", "write", "edit"],
-                skills={"system": ["pptx"]},
+                tools=["skills", "bash", "read", "write", "edit", "ask_user_feedback", "knowledge_base"],
+                skills={"system": ["powerpoint-pptx"]},
                 kbs=[],
                 agents=None,
                 announcement=None,
@@ -235,19 +235,16 @@ class Config:
                         ---
         
                         ## 步骤5：资源调研（工具调用）
-                        一旦架构确定，立即调用以下工具获取可用资源：
+                        一旦架构确定，立即调用list_info工具获取可用资源：
         
                         ### 5.1 获取模型列表
-                        工具：`get_models_list`
                         用途：查看可用的模型名称(model)和来源(model_source)，为每个AI员工选择合适的模型
         
                         ### 5.2 获取工具列表
-                        工具：`get_tools_list`
                         用途：查看可用工具的类型、描述和参数，确定每个AI员工需要配置哪些工具能力
         
-                        ### 5.3 获取子智能体列表
-                        工具：`get_agent_cards_list`
-                        用途：查看用户已有的智能体，评估是否可以复用为子智能体
+                        ### 5.3 获取专家库列表
+                        用途：查看用户已有的专家，评估是否可以复用为子智能体
         
                         ⚠️ 必须等待工具返回结果后再进行方案设计！
         
@@ -292,7 +289,7 @@ class Config:
                         """,
                 supervisor_history=True,
                 files=[],
-                tools=["create_agent", "list_info", "exec", "call_sub_agent"],
+                tools=["create_agent", "list_info", "exec", "call_sub_agent", "skills", "knowledge_base", "ask_user_feedback"],
                 skills=None,
                 kbs=[],
                 agents=None,

@@ -1186,6 +1186,11 @@ class Chat:
 
         # Process expert pick
         if self.agent_use in ["expert-agent"]:
+            # process conversation_init
+            conversation_init, abstract = await self.conversation_init()
+            if conversation_init:
+                yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract).model_dump_json()
+
             agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
             self.agent_card = AgentCard(**agent_card)
             tools = await self.expert_agent_init_process()
@@ -1270,8 +1275,8 @@ class Chat:
                         ]
                     else:
                         message_save["tool_calls"] = None
-                    if message.tool_calls:
-                        message_save["tool_call_id"] = message.tool_calls[0].id
+                    # if message.tool_calls:
+                    #     message_save["tool_call_id"] = message.tool_calls[0].id
                     if len(message_total) > 0:
                         self.messages[-1]["content"] = message_total
                         message_save["content"] = message_total
