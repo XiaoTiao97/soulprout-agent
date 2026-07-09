@@ -23,6 +23,20 @@
     .brand-logo { width: 1.75rem; height: 1.75rem; background: linear-gradient(135deg,#2eab6f,#1d8f58); border-radius: 0.4rem; display: flex; align-items: center; justify-content: center; text-decoration: none; }
     .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
     .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-locale {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.25s;
+      white-space: nowrap;
+    }
+    .btn-locale:hover { border-color: var(--accent-border); color: var(--accent); }
     .page-main { position: relative; z-index: 10; max-width: 540px; margin: 0 auto; padding: 6rem 1.5rem 3rem; }
     .page-eyebrow { font-size: 10px; letter-spacing: 0.4em; text-transform: uppercase; color: rgba(46,171,111,0.55); margin-bottom: 0.5rem; }
     .page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.375rem; display: flex; align-items: center; gap: 0.625rem; }
@@ -67,45 +81,48 @@
 <div class="bg-deco"><div class="bg-radial"></div></div>
 <header class="header">
   <div class="header-left">
-    <a href="/" class="btn-back">← 返回</a>
+    <a href="/" class="btn-back">← <span data-i18n="common.back">返回</span></a>
     <a href="/" class="brand-logo">🌱</a>
     <a href="/" class="brand-name">Soulprout</a>
   </div>
-  <span class="page-tag">企业微信</span>
+  <div class="header-right">
+    <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
+    <span class="page-tag" data-i18n="wecom.pageTag">企业微信</span>
+  </div>
 </header>
 <main class="page-main">
-  <p class="page-eyebrow">Platform · 接入配置</p>
-  <h1 class="page-title"><span>💼</span> 企业微信 AI Bot</h1>
-  <p class="page-desc">通过 WebSocket 长连接接入企业微信智能机器人。推荐扫码获取 Bot ID / Secret；也可手动填写凭证。无需公网地址。</p>
+  <p class="page-eyebrow" data-i18n="wecom.eyebrow">Platform · 接入配置</p>
+  <h1 class="page-title"><span>💼</span> <span data-i18n="wecom.title">企业微信 AI Bot</span></h1>
+  <p class="page-desc" data-i18n="wecom.desc">通过 WebSocket 长连接接入企业微信智能机器人。推荐扫码获取 Bot ID / Secret；也可手动填写凭证。无需公网地址。</p>
 
   <div class="section-card">
-    <p class="section-label">连接状态</p>
-    <div class="status-row"><span class="status-label">WebSocket</span><span id="badge-connected" class="badge badge-gray">检测中…</span></div>
-    <div class="status-row"><span class="status-label">Bot 名称</span><span id="txt-bot" style="font-size:0.8125rem;color:var(--text-sub)">—</span></div>
+    <p class="section-label" data-i18n="wecom.statusSection">连接状态</p>
+    <div class="status-row"><span class="status-label" data-i18n="wecom.ws">WebSocket</span><span id="badge-connected" class="badge badge-gray" data-i18n="common.detecting">检测中…</span></div>
+    <div class="status-row"><span class="status-label" data-i18n="wecom.botName">Bot 名称</span><span id="txt-bot" style="font-size:0.8125rem;color:var(--text-sub)">—</span></div>
     <div class="status-row"><span class="status-label">Bot ID</span><span id="txt-bot-id" style="font-size:0.8125rem;color:var(--text-sub)">—</span></div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="refreshStatus()">刷新状态</button>
-      <button class="btn btn-secondary" onclick="reloadAdapter()">重新连接</button>
+      <button class="btn btn-secondary" onclick="refreshStatus()" data-i18n="common.refreshStatus">刷新状态</button>
+      <button class="btn btn-secondary" onclick="reloadAdapter()" data-i18n="common.reconnect">重新连接</button>
     </div>
   </div>
 
   <div class="section-card">
-    <p class="section-label">配置方式</p>
+    <p class="section-label" data-i18n="wecom.configSection">配置方式</p>
     <div class="tabs">
-      <button class="tab active" id="tab-qr" onclick="switchTab('qr')">扫码获取（推荐）</button>
-      <button class="tab" id="tab-manual" onclick="switchTab('manual')">手动填写凭证</button>
+      <button class="tab active" id="tab-qr" onclick="switchTab('qr')" data-i18n="wecom.tabQr">扫码获取（推荐）</button>
+      <button class="tab" id="tab-manual" onclick="switchTab('manual')" data-i18n="wecom.tabManual">手动填写凭证</button>
     </div>
 
     <div id="panel-qr" class="tab-panel active">
       <div class="qr-wrap">
-        <div class="qr-frame" id="qr-frame"><div class="qr-placeholder">点击「获取二维码」<br>后用企业微信 App 扫描</div></div>
-        <p class="qr-hint">使用企业微信手机 App 扫描二维码，按提示创建/绑定 AI 智能机器人</p>
+        <div class="qr-frame" id="qr-frame"><div class="qr-placeholder" data-i18n-html="wecom.qrPlaceholder">点击「获取二维码」<br>后用企业微信 App 扫描</div></div>
+        <p class="qr-hint" data-i18n="wecom.qrHint">使用企业微信手机 App 扫描二维码，按提示创建/绑定 AI 智能机器人</p>
         <a class="qr-link" id="qr-link" href="#" target="_blank" style="display:none"></a>
       </div>
       <p class="poll-msg" id="poll-msg"></p>
       <div class="btn-row" style="justify-content:center">
-        <button id="btn-qr" class="btn btn-primary" onclick="startQR()">获取二维码</button>
-        <button id="btn-cancel" class="btn btn-secondary" onclick="cancelQR()" style="display:none">取消</button>
+        <button id="btn-qr" class="btn btn-primary" data-i18n="common.getQr" onclick="startQR()">获取二维码</button>
+        <button id="btn-cancel" class="btn btn-secondary" data-i18n="common.cancel" onclick="cancelQR()" style="display:none">取消</button>
       </div>
     </div>
 
@@ -113,14 +130,26 @@
       <div class="field"><label>Bot ID</label><input id="manual-bot-id" class="input-field" type="text" placeholder="bot_xxx" /></div>
       <div class="field"><label>Secret</label><input id="manual-secret" class="input-field" type="password" placeholder="secret_xxx" /></div>
       <p class="poll-msg" id="manual-msg"></p>
-      <div class="btn-row"><button id="btn-save" class="btn btn-primary" onclick="saveManual()">保存并连接</button></div>
-      <p class="qr-hint" style="margin-top:0.75rem">请在企业微信管理后台创建「AI 智能机器人」并选择 API 模式，复制 Bot ID 与 Secret。</p>
+      <div class="btn-row"><button id="btn-save" class="btn btn-primary" data-i18n="common.saveAndConnect" onclick="saveManual()">保存并连接</button></div>
+      <p class="qr-hint" style="margin-top:0.75rem" data-i18n="wecom.manualHint">请在企业微信管理后台创建「AI 智能机器人」并选择 API 模式，复制 Bot ID 与 Secret。</p>
     </div>
 
-    <p class="ref-note">企业微信 WebSocket 接入实现参考 <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">hermes-agent</a> 的 gateway/platforms/wecom.py。</p>
+    <p class="ref-note">
+      <span data-i18n="wecom.refNote">企业微信 WebSocket 接入实现参考</span>
+      <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">hermes-agent</a>
+      <span data-i18n="wecom.refNoteSuffix">的 gateway/platforms/wecom.py。</span>
+    </p>
   </div>
 </main>
+<script src="/static/i18n.js"></script>
 <script>
+const { t } = GW_I18N;
+window.__onLocaleChange = function () {
+  GW_I18N.applyI18n();
+  refreshStatus();
+  if (!_pollTimer) resetQrBtn();
+};
+
 async function api(url, opts) {
   const r = await fetch(url, opts || {});
   const data = await r.json().catch(() => ({}));
@@ -133,43 +162,66 @@ function switchTab(name) {
     document.getElementById('panel-' + n).classList.toggle('active', n === name);
   });
 }
-function setPollMsg(t,c){ const e=document.getElementById('poll-msg'); e.textContent=t; e.className='poll-msg'+(c?' '+c:''); }
-function setManualMsg(t,c){ const e=document.getElementById('manual-msg'); e.textContent=t; e.className='poll-msg'+(c?' '+c:''); }
+function setPollMsg(text, cls) {
+  const el = document.getElementById('poll-msg');
+  el.textContent = text;
+  el.className = 'poll-msg' + (cls ? ' ' + cls : '');
+}
+function setManualMsg(text, cls) {
+  const el = document.getElementById('manual-msg');
+  el.textContent = text;
+  el.className = 'poll-msg' + (cls ? ' ' + cls : '');
+}
 async function refreshStatus() {
   try {
     const d = await api('/api/wecom/status');
     const b = document.getElementById('badge-connected');
     b.className = 'badge ' + (d.connected ? 'badge-green' : 'badge-red');
-    b.textContent = d.connected ? '已连接' : (d.configured ? '未连接' : '未配置');
+    b.textContent = d.connected
+      ? t('common.connected')
+      : (d.configured ? t('common.disconnected') : t('common.notConfigured'));
     document.getElementById('txt-bot').textContent = d.bot_name || '—';
     document.getElementById('txt-bot-id').textContent = d.bot_id ? (d.bot_id.slice(0,12)+'…') : '—';
     if (d.bot_id) document.getElementById('manual-bot-id').value = d.bot_id;
-  } catch(e) { document.getElementById('badge-connected').textContent = '无法连接'; }
+  } catch(e) {
+    document.getElementById('badge-connected').textContent = t('common.cannotConnect');
+  }
 }
 async function reloadAdapter() {
-  try { await api('/api/wecom/reload', { method: 'POST' }); setPollMsg('正在重新连接…',''); setTimeout(refreshStatus, 2000); }
-  catch(e) { setPollMsg('重连失败：'+e.message,'err'); }
+  try {
+    await api('/api/wecom/reload', { method: 'POST' });
+    setPollMsg(t('common.reconnecting'), '');
+    setTimeout(refreshStatus, 2000);
+  } catch(e) {
+    setPollMsg(t('common.reconnectFailed') + e.message, 'err');
+  }
 }
 let _pollTimer = null;
 async function startQR() {
   const btn = document.getElementById('btn-qr');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 加载中';
-  setPollMsg('正在获取二维码…','');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> ' + t('common.loading');
+  setPollMsg(t('wecom.gettingQr'), '');
   try {
     const d = await api('/api/wecom/login/start', { method: 'POST' });
-    if (!d.success) { setPollMsg(d.error||'获取失败','err'); resetQrBtn(); return; }
-    renderQR(d.qrcode_url||d.qr_url, d.qr_url);
-    setPollMsg('等待扫码…','');
+    if (!d.success) { setPollMsg(d.error || t('wecom.getFailed'), 'err'); resetQrBtn(); return; }
+    renderQR(d.qrcode_url || d.qr_url, d.qr_url);
+    setPollMsg(t('common.waitingScan'), '');
     document.getElementById('btn-cancel').style.display = '';
     document.getElementById('btn-qr').style.display = 'none';
     _pollTimer = setInterval(pollQR, 2000);
-  } catch(e) { setPollMsg('网络错误：'+e.message,'err'); resetQrBtn(); }
+  } catch(e) {
+    setPollMsg(t('common.networkError') + e.message, 'err');
+    resetQrBtn();
+  }
 }
 function renderQR(imgUrl, linkUrl) {
   const box = document.getElementById('qr-frame');
   if (imgUrl && imgUrl.startsWith('http')) {
-    box.innerHTML = ''; const img = document.createElement('img'); img.src = imgUrl;
-    img.onerror = () => { box.innerHTML = '<div class="qr-placeholder">无法显示二维码<br>请点击下方链接</div>'; };
+    box.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    img.onerror = () => { box.innerHTML = '<div class="qr-placeholder">' + t('wecom.qrShowFailed') + '</div>'; };
     box.appendChild(img);
   }
   const link = document.getElementById('qr-link');
@@ -178,20 +230,27 @@ function renderQR(imgUrl, linkUrl) {
 async function pollQR() {
   try {
     const d = await api('/api/wecom/login/poll');
-    if (d.status === 'wait') setPollMsg('等待扫码…','');
+    if (d.status === 'wait') setPollMsg(t('common.waitingScan'), '');
     else if (d.status === 'confirmed') {
       clearInterval(_pollTimer); _pollTimer = null;
-      setPollMsg('✓ 配置成功！正在连接…','ok'); cancelQRUIOnly(); setTimeout(refreshStatus, 2000);
+      setPollMsg(t('wecom.success'), 'ok');
+      cancelQRUIOnly();
+      setTimeout(refreshStatus, 2000);
     } else if (d.status === 'error') {
       clearInterval(_pollTimer); _pollTimer = null;
-      setPollMsg('✗ '+(d.error||'失败'),'err'); cancelQRUIOnly();
+      setPollMsg(d.error ? ('✗ ' + d.error) : t('wecom.failed'), 'err');
+      cancelQRUIOnly();
     }
-  } catch(e) { setPollMsg('轮询失败：'+e.message,'err'); }
+  } catch(e) {
+    setPollMsg(t('common.pollFailed') + e.message, 'err');
+  }
 }
 function cancelQR() {
-  clearInterval(_pollTimer); _pollTimer = null; setPollMsg('已取消','');
+  clearInterval(_pollTimer); _pollTimer = null;
+  setPollMsg(t('common.cancelled'), '');
   cancelQRUIOnly();
-  document.getElementById('qr-frame').innerHTML = '<div class="qr-placeholder">点击「获取二维码」<br>后用企业微信 App 扫描</div>';
+  document.getElementById('qr-frame').innerHTML =
+    '<div class="qr-placeholder">' + t('wecom.qrPlaceholder') + '</div>';
   document.getElementById('qr-link').style.display = 'none';
 }
 function cancelQRUIOnly() {
@@ -199,21 +258,40 @@ function cancelQRUIOnly() {
   document.getElementById('btn-qr').style.display = '';
   resetQrBtn();
 }
-function resetQrBtn() { const b=document.getElementById('btn-qr'); b.disabled=false; b.textContent='获取二维码'; }
+function resetQrBtn() {
+  const b = document.getElementById('btn-qr');
+  b.disabled = false;
+  b.textContent = t('common.getQr');
+}
 async function saveManual() {
   const bot_id = document.getElementById('manual-bot-id').value.trim();
   const secret = document.getElementById('manual-secret').value.trim();
-  if (!bot_id || !secret) { setManualMsg('请填写 Bot ID 和 Secret','err'); return; }
-  const btn = document.getElementById('btn-save'); btn.disabled = true; setManualMsg('保存中…','');
+  if (!bot_id || !secret) {
+    setManualMsg(t('wecom.fillRequired'), 'err');
+    return;
+  }
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  setManualMsg(t('common.saving'), '');
   try {
-    const d = await api('/api/wecom/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bot_id, secret }) });
-    setManualMsg('✓ '+(d.message||'已保存'),'ok');
+    const d = await api('/api/wecom/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bot_id, secret }),
+    });
+    setManualMsg('✓ ' + (d.message || t('wecom.saved')), 'ok');
     document.getElementById('manual-secret').value = '';
     setTimeout(refreshStatus, 2000);
-  } catch(e) { setManualMsg('保存失败：'+e.message,'err'); }
-  finally { btn.disabled = false; }
+  } catch(e) {
+    setManualMsg(t('common.saveFailed') + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('common.saveAndConnect');
+  }
 }
-refreshStatus(); setInterval(refreshStatus, 8000);
+GW_I18N.applyI18n();
+refreshStatus();
+setInterval(refreshStatus, 8000);
 </script>
 </body>
 </html>

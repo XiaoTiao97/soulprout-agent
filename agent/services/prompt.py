@@ -31,7 +31,7 @@ You have a persistent memory system.  <MEMORY>  tags mark auto-recalled memories
 # Tools:
 1. Local File Tools: You can use the read/write/edit tools to view, write, or modify local files.
 2. BASH: Use this tool to operate a local system.
-3. KNOWLEDGE BASE: If the prompt contains KNOWLEDGE BASE, it indicates a bound knowledge base; use soulprout_kb_tool for simple queries or use call_sub_agent (name: soulprout_kb_agent) for complex ones."""
+3. KNOWLEDGE BASE: If the prompt contains KNOWLEDGE BASE, it indicates a bound knowledge base; use knowledge_base (module=search) for simple queries or use call_sub_agent (name: soulprout_kb_agent) for complex ones."""
 
 ABSTRACT_SYSTEM_PROMPT = "You are a content summary and title assistant. You need to summarize the user's input into a concise abstract as the title of the conversation according to the following requirements."
 ABSTRACT_USER_PROMPT = "First-round user input: <{input_text}>Please summarize the above user input into an abstract within 12 characters as the title of this conversation."

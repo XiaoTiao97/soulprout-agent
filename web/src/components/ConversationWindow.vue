@@ -365,9 +365,9 @@ const toggleLocale = () => {
 const logout = async () => {
   try {
     await fetch('api/user/logout', { method: 'POST' });
-    console.log('后端注销调用成功');
+    console.log('后端退出登录调用成功');
   } catch (error) {
-    console.error('注销调用失败:', error);
+    console.error('退出登录调用失败:', error);
   }
   // 尝试清除 token cookie（备份）
   document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';

@@ -33,11 +33,26 @@ _SETTINGS_PATH = _DATA_ROOT / "gateway_data" / "settings.json"
 # 默认值
 # ---------------------------------------------------------------------------
 
-_DEFAULT_AGENT_URL = "https://www.soulprout.com"
+# 中国大陆云服务（默认）。注意：www.mengya.chat 证书主机名不匹配，须用裸域。
+_DEFAULT_AGENT_URL = "https://mengya.chat"
+# 海外云服务
+_OVERSEAS_AGENT_URL = "https://www.soulprout.com"
+# 旧默认 / 错误默认：未登录时迁移到当前中国大陆默认
+_LEGACY_DEFAULT_AGENT_URLS = (
+    "https://www.soulprout.com",
+    "https://www.mengya.chat",
+)
+
+# 可选官方云域名（登录页域名选择）
+CLOUD_AGENT_URLS: list[dict] = [
+    {"url": _DEFAULT_AGENT_URL, "region": "cn", "label_zh": "中国大陆", "label_en": "Mainland China"},
+    {"url": _OVERSEAS_AGENT_URL, "region": "overseas", "label_zh": "海外", "label_en": "Overseas"},
+]
 
 _DEFAULTS: dict = {
     # Agent HTTP 服务地址（不含路径），支持：
-    #   https://www.soulprout.com  → Soulprout 官方云服务（默认）
+    #   https://mengya.chat        → 中国大陆云服务（默认）
+    #   https://www.soulprout.com → 海外云服务
     #   http://localhost:8080    → 本地自部署
     "agent_url": _DEFAULT_AGENT_URL,
 
@@ -66,6 +81,20 @@ def load_settings() -> dict:
         data = json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
         merged = dict(_DEFAULTS)
         merged.update({k: v for k, v in data.items() if k in _DEFAULTS})
+        # 未登录时，把旧默认 / 证书异常的 www 域名迁移为当前中国大陆默认
+        saved_url = normalize_agent_url(merged.get("agent_url", ""))
+        legacy_urls = {normalize_agent_url(u) for u in _LEGACY_DEFAULT_AGENT_URLS}
+        if saved_url in legacy_urls and not merged.get("agent_token"):
+            merged["agent_url"] = _DEFAULT_AGENT_URL
+            try:
+                save_settings(merged)
+                logger.info(
+                    "已将未登录的旧默认 agent_url 从 %s 迁移为 %s",
+                    saved_url,
+                    _DEFAULT_AGENT_URL,
+                )
+            except Exception as exc:
+                logger.warning("迁移默认 agent_url 失败: %s", exc)
         return merged
     except Exception as exc:
         logger.warning("settings 读取失败，使用默认值: %s", exc)
@@ -129,6 +158,16 @@ def get_default_agent_url() -> str:
     if env_url:
         return env_url.rstrip("/")
     return _DEFAULT_AGENT_URL
+
+
+def get_cloud_agent_urls() -> list[dict]:
+    """返回官方云服务域名列表（供登录页选择）。"""
+    return [dict(item) for item in CLOUD_AGENT_URLS]
+
+
+def is_cloud_agent_url(url: Optional[str] = None) -> bool:
+    target = normalize_agent_url(url or get_agent_url()).lower()
+    return any(target == item["url"].lower() for item in CLOUD_AGENT_URLS)
 
 
 def get_auth_url(agent_url: Optional[str] = None) -> str:

@@ -201,7 +201,7 @@ TOOL_SCHEMAS = [
                 "Unified information list query entry point; returns the corresponding list based on category:\n"
                 "- category=models: returns the list of large models supported by the current service\n"
                 "- category=tools: returns the list of all tools available for invocation\n"
-                "- category=agent_cards: returns the list of sub-agents (experts) available to the current user"
+                "- category=agent_cards: returns the list of experts(sub-agents) available to the current user"
             ),
             "parameters": {
                 "type": "object",
@@ -292,39 +292,38 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "soulprout_kb_tool",
-            "description": "Basic RAG retrieval tool for knowledge bases.",
+            "name": "knowledge_base",
+            "description": (
+                "Unified knowledge base tool; switch sub-actions via module.\n"
+                "- module=search: basic RAG retrieval by purpose within a given kb_id; returns matched chunks "
+                "(chunk_id and content).\n"
+                "- module=kb_info: list basic info of all knowledge bases under the current user "
+                "- module=chunk_abstract: get document/chunk abstracts for a knowledge base by kb_id.\n"
+                "- module=chunk_content: extract the full paragraph text by chunk_id.\n"
+                "(kb_id, kb_name, kb_name_zh, kb_description, kb_file_count); library layer only."
+            ),
             "parameters": {
                 "type": "object",
-                "required": ["purpose", "kb_id"],
+                "required": ["module"],
                 "properties": {
-                    "purpose": {"type": "string", "description": "Retrieval intent"},
-                    "kb_id": {"type": "string", "description": "Knowledge base ID"},
+                    "module": {
+                        "type": "string",
+                        "enum": ["kb_info", "search", "chunk_abstract", "chunk_content"],
+                        "description": "Sub-action: search / chunk_abstract / chunk_content / kb_info",
+                    },
+                    "purpose": {
+                        "type": "string",
+                        "description": "[Required for module=search] Retrieval intent",
+                    },
+                    "kb_id": {
+                        "type": "string",
+                        "description": "[Required for module=search / module=chunk_abstract] Knowledge base ID",
+                    },
+                    "chunk_id": {
+                        "type": "string",
+                        "description": "[Required for module=chunk_content] Paragraph / chunk ID",
+                    },
                 },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kb_chunk_abstract",
-            "description": "Get knowledge base chunk abstracts by kb_id.",
-            "parameters": {
-                "type": "object",
-                "required": ["kb_id"],
-                "properties": {"kb_id": {"type": "string", "description": "Knowledge base ID"}},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "chunk_content",
-            "description": "Extract the full paragraph text by chunk_id.",
-            "parameters": {
-                "type": "object",
-                "required": ["chunk_id"],
-                "properties": {"chunk_id": {"type": "string", "description": "Paragraph ID"}},
             },
         },
     },

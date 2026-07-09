@@ -172,7 +172,7 @@ class Blueprint:
                 tool_name = tool.get("function", {}).get("name")
                 if tool_name in self.soulprout_tools:
                     tools_use_final.append(tool)
-                elif tool_name in ["soulprout_kb_agent", "soulprout_kb_tool"]:
+                elif tool_name in ["soulprout_kb_agent", "knowledge_base"]:
                     tools_use_final.append(tool)
 
             message = [{"role": "system", "content": prompt.PLAN_PROMPT}]

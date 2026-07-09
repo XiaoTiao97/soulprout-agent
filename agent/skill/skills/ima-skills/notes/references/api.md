@@ -353,7 +353,7 @@ POST /openapi/note/v1/list_notebook
 | 210009 | CONTENT_SIZE_OVERLOAD  | 单篇笔记超过最大限制     |
 | 210010 | EXIST_GUIDE            | 新手引导笔记添加重复     |
 | 210011 | SHARE_DOC_NOPERM       | 共享知识库的笔记无权访问 |
-| 210012 | USER_IS_DELETE         | 用户已注销               |
+| 210012 | USER_IS_DELETE         | 用户已退出登录               |
 | 210030 | notebook_NAME_EXIST    | 笔记本名称重复           |
 | 210031 | notebook_NUM_LIMIT     | 笔记本数量达到上限       |
 | 210032 | BATCH_EXEC_FAIL        | 批量操作部分失败         |

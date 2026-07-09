@@ -551,11 +551,17 @@ async def api_xiaoai_reload():
 @app.get("/api/settings")
 async def api_get_settings():
     """返回当前网关配置（敏感字段会做脱敏处理）。"""
-    from gateway.config_store import get_default_agent_url, is_local_agent, load_settings
+    from gateway.config_store import (
+        get_cloud_agent_urls,
+        get_default_agent_url,
+        is_local_agent,
+        load_settings,
+    )
     cfg = load_settings()
     return JSONResponse({
         "agent_url": cfg.get("agent_url", ""),
         "default_agent_url": get_default_agent_url(),
+        "cloud_urls": get_cloud_agent_urls(),
         "agent_user_id": cfg.get("agent_user_id", ""),
         "agent_email": cfg.get("agent_email", ""),
         "agent_login_mode": cfg.get("agent_login_mode", "email"),

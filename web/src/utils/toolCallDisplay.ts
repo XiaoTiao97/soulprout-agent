@@ -173,18 +173,25 @@ export function getToolSummaryLabel(
         : `正在调用知识库智能体${purpose ? `：${purpose}` : '…'}`
     }
 
-    case 'soulprout_kb_tool': {
-      const purpose = truncate(str(args.purpose), 32)
-      return hasResult
-        ? `知识库检索完成${purpose ? `：${purpose}` : ''}`
-        : `正在检索知识库${purpose ? `：${purpose}` : '…'}`
+    case 'knowledge_base': {
+      const mod = str(args.module)
+      if (mod === 'search') {
+        const purpose = truncate(str(args.purpose), 32)
+        return hasResult
+          ? `知识库检索完成${purpose ? `：${purpose}` : ''}`
+          : `正在检索知识库${purpose ? `：${purpose}` : '…'}`
+      }
+      if (mod === 'chunk_abstract') {
+        return hasResult ? '已获取知识库摘要' : '正在获取知识库摘要…'
+      }
+      if (mod === 'chunk_content') {
+        return hasResult ? '已读取段落内容' : '正在读取段落内容…'
+      }
+      if (mod === 'kb_info') {
+        return hasResult ? '已获取知识库列表' : '正在获取知识库列表…'
+      }
+      return hasResult ? '知识库操作完成' : '正在操作知识库…'
     }
-
-    case 'kb_chunk_abstract':
-      return hasResult ? '已获取知识库摘要' : '正在获取知识库摘要…'
-
-    case 'chunk_content':
-      return hasResult ? '已读取段落内容' : '正在读取段落内容…'
 
     case 'base_memory': {
       const mod = str(args.module)
@@ -330,6 +337,6 @@ export function getToolIconKind(toolName: string, messageType?: string): 'search
   if (['read', 'write', 'edit', 'read_picture'].includes(toolName)) return 'file'
   if (toolName === 'bash') return 'shell'
   if (['base_memory', 'create_memory', 'edit_memory'].includes(toolName)) return 'memory'
-  if (['soulprout_kb_tool', 'kb_chunk_abstract', 'chunk_content'].includes(toolName)) return 'kb'
+  if (toolName === 'knowledge_base') return 'kb'
   return 'default'
 }

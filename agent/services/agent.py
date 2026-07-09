@@ -89,10 +89,11 @@ class Chat:
             "edit",
             "read_picture",
             "bash",
+            "list_info",
             "skills",
             "web_search",
             "web_fetch",
-            "soulprout_kb_tool",
+            "knowledge_base",
             "call_sub_agent",
             "user_option",
             "base_memory",
@@ -567,15 +568,17 @@ class Chat:
 
         userinfo_text = ""
         agentinfo_text = ""
+        user_name = ""
         try:
             user = await UserInfo.find_one(UserInfo.user_id == self.user_id)
             if user:
+                user_name = (getattr(user, "username", "") or "").strip()
                 userinfo_text = (getattr(user, "userinfo", "") or "").strip()
                 agentinfo_text = (getattr(user, "agentinfo", "") or "").strip()
         except Exception as e:
             print(f"加载 UserInfo 失败：{e}")
 
-        userinfo_section = f"User-info: {userinfo_text}" if userinfo_text else "User-info: (empty)"
+        userinfo_section = f"User-name: {user_name}\nUser-info: {userinfo_text}" if userinfo_text else f"User-name: {user_name}\nUser-info: (empty)"
         if agentinfo_text:
             agentinfo_section = f"Agent-info: {agentinfo_text}"
         else:
@@ -607,7 +610,7 @@ class Chat:
         self.sub_agents = agent_name_list
         for tool in tools:
             name = tool.get("function", {}).get("name")
-            if name in ("call_sub_agent", "soulprout_kb_tool"):
+            if name in ("call_sub_agent", "knowledge_base"):
                 tools_use_final.append(tool)
         if len(tools_use_final) > 0:
             self.tools_use = True
@@ -1029,7 +1032,7 @@ class Chat:
             tool_name = tool.get("function").get("name")
             if tool_name in tools_use_list:
                 tools_use_final.append(tool)
-            elif tool_name in ["soulprout_kb_tool", "kb_chunk_abstract", "chunk_content"] and len(self.kb_use) > 0:
+            elif tool_name == "knowledge_base" and len(self.kb_use) > 0:
                 tools_use_final.append(tool)
         if len(tools_use_final) > 0:
             self.tools_use = True

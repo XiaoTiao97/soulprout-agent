@@ -47,6 +47,20 @@
     }
     .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
     .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-locale {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.25s;
+      white-space: nowrap;
+    }
+    .btn-locale:hover { border-color: var(--accent-border); color: var(--accent); }
     .page-main { position: relative; z-index: 10; max-width: 560px; margin: 0 auto; padding: 6rem 1.5rem 3rem; }
     .page-eyebrow { font-size: 10px; letter-spacing: 0.4em; text-transform: uppercase; color: rgba(255,138,61,0.55); margin-bottom: 0.5rem; }
     .page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.375rem; display: flex; align-items: center; gap: 0.625rem; }
@@ -97,98 +111,111 @@
 
 <header class="header">
   <div class="header-left">
-    <a href="/" class="btn-back">← 返回</a>
+    <a href="/" class="btn-back">← <span data-i18n="common.back">返回</span></a>
     <a href="/" class="brand-logo">🌱</a>
     <a href="/" class="brand-name">Soulprout Gateway</a>
-    <span class="page-tag">小爱音箱</span>
+  </div>
+  <div class="header-right">
+    <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
+    <span class="page-tag" data-i18n="xiaoai.pageTag">小爱音箱</span>
   </div>
 </header>
 
 <main class="page-main">
-  <p class="page-eyebrow">Gateway · 免刷机接入</p>
-  <h1 class="page-title">🔊 小爱音箱</h1>
-  <p class="page-desc">
+  <p class="page-eyebrow" data-i18n="xiaoai.eyebrow">Gateway · 音箱刷机接入</p>
+  <h1 class="page-title">🔊 <span data-i18n="xiaoai.title">小爱音箱</span></h1>
+  <p class="page-desc" data-i18n="xiaoai.desc">
     通过小米云端 API 接入，无需刷机或拆机。配置完成后，对音箱说带触发词的话，
     Gateway 会调用 Soulprout Agent 并通过音箱 TTS 播报回复。
   </p>
 
   <div class="section-card">
-    <p class="section-label">连接状态</p>
+    <p class="section-label" data-i18n="xiaoai.statusSection">连接状态</p>
     <div class="status-row">
-      <span class="status-label">轮询状态</span>
-      <span id="badge-status" class="badge badge-gray">检测中…</span>
+      <span class="status-label" data-i18n="xiaoai.pollStatus">轮询状态</span>
+      <span id="badge-status" class="badge badge-gray" data-i18n="common.detecting">检测中…</span>
     </div>
     <div class="status-row">
-      <span class="status-label">设备名称</span>
+      <span class="status-label" data-i18n="xiaoai.deviceName">设备名称</span>
       <span id="status-device" class="status-label">—</span>
     </div>
     <div class="status-row">
-      <span class="status-label">最近错误</span>
+      <span class="status-label" data-i18n="xiaoai.lastError">最近错误</span>
       <span id="status-error" class="status-label">—</span>
     </div>
   </div>
 
   <div class="section-card">
-    <p class="section-label">小米账号配置</p>
+    <p class="section-label" data-i18n="xiaoai.accountSection">小米账号配置</p>
 
     <div class="field">
-      <label for="user-id">小米 ID（数字，非手机号）</label>
-      <input id="user-id" class="input-field" type="text" placeholder="在小米账号「个人信息」中查看" />
+      <label for="user-id" data-i18n="xiaoai.userId">小米 ID（数字，非手机号）</label>
+      <input id="user-id" class="input-field" type="text" data-i18n-placeholder="xiaoai.userIdPh" placeholder="在小米账号「个人信息」中查看" />
     </div>
 
     <div class="field">
-      <label for="password">小米账号密码</label>
-      <input id="password" class="input-field" type="password" placeholder="留空则保留已保存的密码" />
+      <label for="password" data-i18n="xiaoai.password">小米账号密码</label>
+      <input id="password" class="input-field" type="password" data-i18n-placeholder="xiaoai.passwordPh" placeholder="留空则保留已保存的密码" />
       <small id="password-hint"></small>
     </div>
 
     <div class="field">
-      <label for="pass-token">passToken（可选）</label>
-      <input id="pass-token" class="input-field" type="text" placeholder="登录触发验证码时填写" />
-      <small>获取教程：<a href="https://github.com/idootop/migpt-next/issues/4" target="_blank" style="color:var(--accent)">migpt-next/issues/4</a></small>
+      <label for="pass-token" data-i18n="xiaoai.passToken">passToken（可选）</label>
+      <input id="pass-token" class="input-field" type="text" data-i18n-placeholder="xiaoai.passTokenPh" placeholder="登录触发验证码时填写" />
+      <small><span data-i18n="xiaoai.passTokenGuide">获取教程：</span><a href="https://github.com/idootop/migpt-next/issues/4" target="_blank" style="color:var(--accent)">migpt-next/issues/4</a></small>
     </div>
 
     <div class="field">
-      <label for="did">音箱设备名称（米家中的名称）</label>
-      <input id="did" class="input-field" type="text" placeholder="例如：Xiaomi 智能音箱 Pro" />
-      <small>必须与米家 App 里显示的名称完全一致（注意空格和大小写）。</small>
+      <label for="did" data-i18n="xiaoai.did">音箱设备名称（米家中的名称）</label>
+      <input id="did" class="input-field" type="text" data-i18n-placeholder="xiaoai.didPh" placeholder="例如：Xiaomi 智能音箱 Pro" />
+      <small data-i18n="xiaoai.didHint">必须与米家 App 里显示的名称完全一致（注意空格和大小写）。</small>
     </div>
 
     <div class="field">
-      <label for="keywords">触发关键词（逗号分隔）</label>
-      <input id="keywords" class="input-field" type="text" placeholder="请,你" />
-      <small>识别到这些词后，会去掉触发词及之前的内容，只把之后的文字发给 Soulprout。</small>
+      <label for="keywords" data-i18n="xiaoai.keywords">触发关键词（逗号分隔）</label>
+      <input id="keywords" class="input-field" type="text" data-i18n-placeholder="xiaoai.keywordsPh" placeholder="请,你" />
+      <small data-i18n="xiaoai.keywordsHint">识别到这些词后，会去掉触发词及之前的内容，只把之后的文字发给 Soulprout。</small>
     </div>
 
     <div class="field">
-      <label for="heartbeat">轮询间隔（毫秒，最小 1000）</label>
+      <label for="heartbeat" data-i18n="xiaoai.heartbeat">轮询间隔（毫秒，最小 1000）</label>
       <input id="heartbeat" class="input-field" type="number" min="1000" step="100" value="1000" />
     </div>
 
     <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:var(--text-sub);">
-      <input id="debug" type="checkbox" /> 开启调试日志
+      <input id="debug" type="checkbox" /> <span data-i18n="xiaoai.debug">开启调试日志</span>
     </label>
 
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="testLogin()">测试登录</button>
-      <button class="btn btn-primary" onclick="saveSettings()">保存并连接</button>
-      <button class="btn btn-secondary" onclick="reloadAdapter()">重新连接</button>
+      <button class="btn btn-secondary" onclick="testLogin()" data-i18n="xiaoai.testLogin">测试登录</button>
+      <button class="btn btn-primary" onclick="saveSettings()" data-i18n="common.saveAndConnect">保存并连接</button>
+      <button class="btn btn-secondary" onclick="reloadAdapter()" data-i18n="common.reconnect">重新连接</button>
     </div>
     <div id="form-msg" class="msg"></div>
   </div>
 
   <div class="section-card">
-    <p class="section-label">使用说明</p>
+    <p class="section-label" data-i18n="xiaoai.helpSection">使用说明</p>
     <div class="note">
-      <p><strong>1.</strong> 先在首页完成 Soulprout Agent 登录。</p>
-      <p style="margin-top:0.5rem"><strong>2.</strong> 在此页填写小米账号与音箱名称，点击「保存并连接」。</p>
-      <p style="margin-top:0.5rem"><strong>3.</strong> 对音箱说：<em>「小爱同学，请帮我……」</em>（默认触发词「请」「你」；发给 Soulprout 的仅为触发词之后的内容）。</p>
-      <p style="margin-top:0.5rem"><strong>注意：</strong> 此方案无法打断小爱原生回复，可能出现两边同时说话的情况。</p>
+      <p><strong>1.</strong> <span data-i18n="xiaoai.help1">先在首页完成 Soulprout Agent 登录。</span></p>
+      <p style="margin-top:0.5rem"><strong>2.</strong> <span data-i18n="xiaoai.help2">在此页填写小米账号与音箱名称，点击「保存并连接」。</span></p>
+      <p style="margin-top:0.5rem"><strong>3.</strong> <span data-i18n="xiaoai.help3">对音箱说：「小爱同学，请帮我……」（默认触发词「请」「你」；发给 Soulprout 的仅为触发词之后的内容）。</span></p>
+      <p style="margin-top:0.5rem" data-i18n="xiaoai.helpNote">注意：此方案无法打断小爱原生回复，可能出现两边同时说话的情况。</p>
     </div>
   </div>
 </main>
 
+<script src="/static/i18n.js"></script>
 <script>
+const { t } = GW_I18N;
+window.__onLocaleChange = function () {
+  GW_I18N.applyI18n();
+  loadStatus();
+  refreshPasswordHints();
+};
+
+let _cfgHints = { has_password: false, has_pass_token: false };
+
 async function api(url, opts) {
   const r = await fetch(url, opts || {});
   const data = await r.json().catch(() => ({}));
@@ -200,6 +227,13 @@ function setMsg(text, type) {
   const el = document.getElementById('form-msg');
   el.textContent = text || '';
   el.className = 'msg' + (type ? ' ' + type : '');
+}
+
+function refreshPasswordHints() {
+  const hints = [];
+  if (_cfgHints.has_password) hints.push(t('xiaoai.pwdSaved'));
+  if (_cfgHints.has_pass_token) hints.push(t('xiaoai.tokenSaved'));
+  document.getElementById('password-hint').textContent = hints.join(' · ');
 }
 
 function collectForm() {
@@ -223,12 +257,13 @@ async function loadConfig() {
     document.getElementById('keywords').value = (cfg.call_ai_keywords || ['请', '你']).join(',');
     document.getElementById('heartbeat').value = cfg.heartbeat_ms || 1000;
     document.getElementById('debug').checked = !!cfg.debug;
-    const hints = [];
-    if (cfg.has_password) hints.push('已保存密码（留空则不修改）');
-    if (cfg.has_pass_token) hints.push('已保存 passToken（留空则不修改）');
-    document.getElementById('password-hint').textContent = hints.join(' · ');
+    _cfgHints = {
+      has_password: !!cfg.has_password,
+      has_pass_token: !!cfg.has_pass_token,
+    };
+    refreshPasswordHints();
   } catch (e) {
-    setMsg('加载配置失败：' + e.message, 'err');
+    setMsg(t('xiaoai.loadFailed') + e.message, 'err');
   }
 }
 
@@ -238,13 +273,13 @@ async function loadStatus() {
     const badge = document.getElementById('badge-status');
     if (d.connected) {
       badge.className = 'badge badge-green';
-      badge.textContent = '已连接';
+      badge.textContent = t('common.connected');
     } else if (d.configured) {
       badge.className = 'badge badge-red';
-      badge.textContent = '未连接';
+      badge.textContent = t('common.disconnected');
     } else {
       badge.className = 'badge badge-gray';
-      badge.textContent = '未配置';
+      badge.textContent = t('common.notConfigured');
     }
     document.getElementById('status-device').textContent = d.device_name || '—';
     document.getElementById('status-error').textContent = d.last_error || '—';
@@ -252,34 +287,43 @@ async function loadStatus() {
 }
 
 async function testLogin() {
-  setMsg('正在测试登录…', '');
+  const body = collectForm();
+  if (!body.user_id || !body.did) {
+    setMsg(t('xiaoai.fillUserDid'), 'err');
+    return;
+  }
+  setMsg(t('xiaoai.testing'), '');
   try {
-    const body = collectForm();
     const d = await api('/api/xiaoai/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (d.success) {
-      setMsg('✓ ' + (d.message || '登录成功'), 'ok');
+      setMsg('✓ ' + (d.message || t('xiaoai.testOk')), 'ok');
       await loadStatus();
     } else {
-      setMsg('✗ ' + (d.message || '登录失败'), 'err');
+      setMsg('✗ ' + (d.message || t('xiaoai.testFailed').replace(/[：:]\s*$/, '')), 'err');
     }
   } catch (e) {
-    setMsg('✗ ' + e.message, 'err');
+    setMsg(t('xiaoai.testFailed') + e.message, 'err');
   }
 }
 
 async function saveSettings() {
-  setMsg('正在保存…', '');
+  const body = collectForm();
+  if (!body.user_id || !body.did) {
+    setMsg(t('xiaoai.fillUserDid'), 'err');
+    return;
+  }
+  setMsg(t('common.saving'), '');
   try {
     const d = await api('/api/xiaoai/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(collectForm()),
+      body: JSON.stringify(body),
     });
-    setMsg('✓ ' + (d.message || '已保存'), 'ok');
+    setMsg('✓ ' + (d.message || t('xiaoai.saved')), 'ok');
     document.getElementById('password').value = '';
     await loadConfig();
     await loadStatus();
@@ -289,16 +333,17 @@ async function saveSettings() {
 }
 
 async function reloadAdapter() {
-  setMsg('正在重新连接…', '');
+  setMsg(t('common.reconnecting'), '');
   try {
     const d = await api('/api/xiaoai/reload', { method: 'POST' });
-    setMsg('✓ ' + (d.message || '已触发重连'), 'ok');
+    setMsg('✓ ' + (d.message || t('common.reconnect')), 'ok');
     setTimeout(loadStatus, 1500);
   } catch (e) {
-    setMsg('✗ ' + e.message, 'err');
+    setMsg(t('common.reconnectFailed') + e.message, 'err');
   }
 }
 
+GW_I18N.applyI18n();
 loadConfig();
 loadStatus();
 setInterval(loadStatus, 5000);

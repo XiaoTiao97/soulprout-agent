@@ -103,6 +103,20 @@
       border: 1px solid var(--border);
       border-radius: 1rem;
     }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-locale {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.25s;
+      white-space: nowrap;
+    }
+    .btn-locale:hover { border-color: var(--accent-border); color: var(--accent); }
 
     /* ─── Main ─── */
     .page-main {
@@ -328,41 +342,44 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
-      返回
+      <span data-i18n="common.back">返回</span>
     </a>
     <a href="/" class="header-brand">
       <div class="brand-logo">🌱</div>
       <span class="brand-name">Soulprout</span>
     </a>
   </div>
-  <span class="page-tag">微信接入</span>
+  <div class="header-right">
+    <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
+    <span class="page-tag" data-i18n="weixin.pageTag">微信接入</span>
+  </div>
 </header>
 
 <!-- Main -->
 <main class="page-main">
 
   <div class="page-header">
-    <p class="page-eyebrow">Platform · 接入配置</p>
+    <p class="page-eyebrow" data-i18n="weixin.eyebrow">Platform · 接入配置</p>
     <h1 class="page-title">
-      <span>💬</span> 微信（个人号）
+      <span>💬</span> <span data-i18n="weixin.title">微信（个人号）</span>
     </h1>
-    <p class="page-desc">通过微信个人号接入 Soulprout，扫码登录后 Gateway 将自动建立长轮询连接。</p>
+    <p class="page-desc" data-i18n="weixin.desc">通过微信个人号接入 Soulprout，扫码登录后 Gateway 将自动建立长轮询连接。</p>
   </div>
 
   <!-- 连接状态 -->
   <div class="section-card">
-    <p class="section-label">连接状态</p>
+    <p class="section-label" data-i18n="weixin.statusSection">连接状态</p>
 
     <div class="status-row">
-      <span class="status-label">连接状态</span>
+      <span class="status-label" data-i18n="weixin.statusLabel">连接状态</span>
       <span id="badge-connected" class="badge badge-gray">检测中…</span>
     </div>
     <div class="status-row">
-      <span class="status-label">账号 ID</span>
+      <span class="status-label" data-i18n="weixin.accountId">账号 ID</span>
       <span id="txt-account" style="font-size:0.8125rem;color:var(--text-sub)">—</span>
     </div>
     <div class="status-row">
-      <span class="status-label">已保存账号数</span>
+      <span class="status-label" data-i18n="weixin.savedAccounts">已保存账号数</span>
       <span id="txt-accounts" style="font-size:0.8125rem;color:var(--text-sub)">—</span>
     </div>
 
@@ -371,63 +388,75 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M21 2v6h-6M3 12a9 9 0 0115-6.7L21 8M3 22v-6h6M21 12a9 9 0 01-15 6.7L3 16" />
         </svg>
-        刷新状态
+        <span data-i18n="common.refreshStatus">刷新状态</span>
       </button>
       <button class="btn btn-secondary" onclick="reloadAdapter()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M5 12h14M12 5l7 7-7 7" />
         </svg>
-        重新连接
+        <span data-i18n="common.reconnect">重新连接</span>
       </button>
     </div>
   </div>
 
   <!-- 扫码登录 -->
   <div class="section-card">
-    <p class="section-label">扫码登录</p>
+    <p class="section-label" data-i18n="weixin.loginSection">扫码登录</p>
 
     <div class="qr-wrap">
       <div class="qr-frame" id="qr-frame">
-        <div class="qr-placeholder">点击「获取二维码」<br>后在此处扫描</div>
+        <div class="qr-placeholder" data-i18n-html="weixin.qrPlaceholder">点击「获取二维码」<br>后在此处扫描</div>
       </div>
-      <p class="qr-hint" id="qr-hint">使用微信扫描上方二维码，在手机端确认登录</p>
+      <p class="qr-hint" id="qr-hint" data-i18n="weixin.qrHint">使用微信扫描上方二维码，在手机端确认登录</p>
       <a class="qr-link" id="qr-link" href="#" target="_blank" style="display:none"></a>
     </div>
 
     <p class="poll-msg" id="poll-msg"></p>
 
     <div class="btn-row" style="justify-content:center">
-      <button id="btn-qr" class="btn btn-primary" onclick="startQR()">获取二维码</button>
-      <button id="btn-cancel" class="btn btn-secondary" onclick="cancelQR()" style="display:none">取消</button>
+      <button id="btn-qr" class="btn btn-primary" data-i18n="common.getQr" onclick="startQR()">获取二维码</button>
+      <button id="btn-cancel" class="btn btn-secondary" data-i18n="common.cancel" onclick="cancelQR()" style="display:none">取消</button>
     </div>
   </div>
 
   <!-- 使用说明 -->
   <div class="section-card">
-    <p class="section-label">使用说明</p>
+    <p class="section-label" data-i18n="weixin.helpSection">使用说明</p>
     <ul class="help-list">
       <li>
         <span class="help-num">1</span>
-        点击「获取二维码」，使用微信 App 扫描
+        <span data-i18n="weixin.help1">点击「获取二维码」，使用微信 App 扫描</span>
       </li>
       <li>
         <span class="help-num">2</span>
-        在手机微信中点击「确认登录」
+        <span data-i18n="weixin.help2">在手机微信中点击「确认登录」</span>
       </li>
       <li>
         <span class="help-num">3</span>
-        登录成功后 Gateway 自动建立长轮询连接
+        <span data-i18n="weixin.help3">登录成功后 Gateway 自动建立长轮询连接</span>
       </li>
       <li>
         <span class="help-num">4</span>
-        凭证本地保存，下次启动无需重新扫码
+        <span data-i18n="weixin.help4">凭证本地保存，下次启动无需重新扫码</span>
       </li>
     </ul>
   </div>
 
 </main>
 
+<script src="/static/i18n.js"></script>
 <script>
+const { t } = GW_I18N;
+window.__onLocaleChange = function () {
+  GW_I18N.applyI18n();
+  refreshStatus();
+  if (!_pollTimer) resetQrBtnLabel();
+};
+function resetQrBtnLabel() {
+  const btn = document.getElementById('btn-qr');
+  if (btn && !btn.disabled) btn.textContent = t('common.getQr');
+}
+
 async function api(url, opts) {
   const r = await fetch(url, opts || {});
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -445,24 +474,24 @@ async function refreshStatus() {
     const d = await api('/api/status');
     const badge = document.getElementById('badge-connected');
     badge.className = 'badge ' + (d.connected ? 'badge-green' : 'badge-red');
-    badge.textContent = d.connected ? '已连接' : '未连接';
+    badge.textContent = d.connected ? t('common.connected') : t('common.disconnected');
     document.getElementById('txt-account').textContent = d.account_id || '—';
     document.getElementById('txt-accounts').textContent =
-      d.saved_accounts && d.saved_accounts.length ? d.saved_accounts.join(', ') : '无';
+      d.saved_accounts && d.saved_accounts.length ? d.saved_accounts.join(', ') : t('weixin.none');
   } catch(e) {
     const badge = document.getElementById('badge-connected');
     badge.className = 'badge badge-yellow';
-    badge.textContent = '无法连接';
+    badge.textContent = t('common.cannotConnect');
   }
 }
 
 async function reloadAdapter() {
   try {
     await api('/api/weixin/reload', { method: 'POST' });
-    setPollMsg('正在重新连接…', '');
+    setPollMsg(t('common.reconnecting'), '');
     setTimeout(refreshStatus, 1800);
   } catch(e) {
-    setPollMsg('重连失败：' + e.message, 'err');
+    setPollMsg(t('common.reconnectFailed') + e.message, 'err');
   }
 }
 
@@ -470,17 +499,17 @@ async function reloadAdapter() {
 let _pollTimer = null;
 
 async function startQR() {
-  setBusy(true, '正在获取二维码…');
+  setBusy(true, t('weixin.gettingQr'));
   try {
     const d = await api('/api/weixin/login/start', { method: 'POST' });
-    if (!d.success) { setBusy(false, d.error || '获取失败', true); return; }
+    if (!d.success) { setBusy(false, d.error || t('weixin.getFailed'), true); return; }
     renderQR(d.qrcode_url, d.qrcode_value);
-    setPollMsg('等待扫码…', '');
+    setPollMsg(t('common.waitingScan'), '');
     document.getElementById('btn-cancel').style.display = '';
     document.getElementById('btn-qr').style.display = 'none';
     _pollTimer = setInterval(pollQR, 2000);
   } catch(e) {
-    setBusy(false, '网络错误：' + e.message, true);
+    setBusy(false, t('common.networkError') + e.message, true);
   }
 }
 
@@ -492,11 +521,11 @@ function renderQR(url, value) {
     const img = document.createElement('img');
     img.src = url;
     img.onerror = () => {
-      box.innerHTML = '<div class="qr-placeholder">无法渲染图片，<br>请点击下方链接扫码</div>';
+      box.innerHTML = '<div class="qr-placeholder">' + t('weixin.qrShowFailed') + '</div>';
     };
     box.appendChild(img);
   } else {
-    box.innerHTML = '<div class="qr-placeholder">请点击下方链接扫码</div>';
+    box.innerHTML = '<div class="qr-placeholder">' + t('weixin.qrLinkFallback') + '</div>';
   }
   const scanUrl = url || value || '';
   if (scanUrl) {
@@ -510,32 +539,32 @@ async function pollQR() {
   try {
     const d = await api('/api/weixin/login/poll');
     const s = d.status;
-    if (s === 'wait')     setPollMsg('等待扫码…', '');
-    else if (s === 'scaned')  setPollMsg('已扫码，请在手机微信中确认…', '');
+    if (s === 'wait')     setPollMsg(t('common.waitingScan'), '');
+    else if (s === 'scaned')  setPollMsg(t('weixin.scanned'), '');
     else if (s === 'refreshed') {
-      setPollMsg('二维码已刷新，请重新扫码', '');
+      setPollMsg(t('weixin.refreshed'), '');
       renderQR(d.qrcode_url, d.qrcode_value);
     } else if (s === 'confirmed') {
       clearInterval(_pollTimer); _pollTimer = null;
-      setPollMsg('✓ 登录成功！正在连接…', 'ok');
+      setPollMsg(t('weixin.success'), 'ok');
       resetQRUI();
       setTimeout(refreshStatus, 2000);
     } else if (s === 'error') {
       clearInterval(_pollTimer); _pollTimer = null;
-      setPollMsg('✗ 错误：' + (d.error || '未知'), 'err');
+      setPollMsg(t('weixin.failed') + (d.error || t('weixin.unknown')), 'err');
       resetQRUI();
     }
   } catch(e) {
-    setPollMsg('轮询失败：' + e.message, 'err');
+    setPollMsg(t('common.pollFailed') + e.message, 'err');
   }
 }
 
 function cancelQR() {
   clearInterval(_pollTimer); _pollTimer = null;
-  setPollMsg('已取消', '');
+  setPollMsg(t('common.cancelled'), '');
   resetQRUI();
   document.getElementById('qr-frame').innerHTML =
-    '<div class="qr-placeholder">点击「获取二维码」<br>后在此处扫描</div>';
+    '<div class="qr-placeholder">' + t('weixin.qrPlaceholder') + '</div>';
   document.getElementById('qr-link').style.display = 'none';
 }
 
@@ -549,12 +578,13 @@ function setBusy(busy, text, isErr) {
   const btn = document.getElementById('btn-qr');
   btn.disabled = busy;
   btn.innerHTML = busy
-    ? '<span class="spinner"></span> 加载中'
-    : '获取二维码';
+    ? '<span class="spinner"></span> ' + t('common.loading')
+    : t('common.getQr');
   if (text) setPollMsg(text, isErr ? 'err' : '');
 }
 
 /* ─── Init ─── */
+GW_I18N.applyI18n();
 refreshStatus();
 setInterval(refreshStatus, 8000);
 </script>

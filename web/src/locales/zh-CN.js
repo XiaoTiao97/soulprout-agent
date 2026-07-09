@@ -126,7 +126,7 @@ export default {
     home: '主页',
     docs: '产品文档',
     gatewayConnect: 'Soulprout 互联',
-    logout: '注销',
+    logout: '退出登录',
   },
   chatWindow: {
     cancel: '取消',

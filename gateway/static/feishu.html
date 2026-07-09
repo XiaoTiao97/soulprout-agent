@@ -55,6 +55,20 @@
     }
     .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
     .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-locale {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.25s;
+      white-space: nowrap;
+    }
+    .btn-locale:hover { border-color: var(--accent-border); color: var(--accent); }
 
     .page-main { position: relative; z-index: 10; max-width: 540px; margin: 0 auto; padding: 6rem 1.5rem 3rem; }
     .page-eyebrow { font-size: 10px; letter-spacing: 0.4em; text-transform: uppercase; color: rgba(76,139,245,0.55); margin-bottom: 0.5rem; }
@@ -139,26 +153,29 @@
 
 <header class="header">
   <div class="header-left">
-    <a href="/" class="btn-back">← 返回</a>
+    <a href="/" class="btn-back">← <span data-i18n="common.back">返回</span></a>
     <a href="/" class="brand-logo">🌱</a>
     <a href="/" class="brand-name">Soulprout</a>
   </div>
-  <span class="page-tag">飞书接入</span>
+  <div class="header-right">
+    <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
+    <span class="page-tag" data-i18n="feishu.pageTag">飞书接入</span>
+  </div>
 </header>
 
 <main class="page-main">
-  <p class="page-eyebrow">Platform · 接入配置</p>
-  <h1 class="page-title"><span>🪽</span> 飞书 / Lark</h1>
-  <p class="page-desc">通过 WebSocket 长连接接入飞书 Bot。推荐扫码自动创建应用；也可手动填写 App ID 与 App Secret。</p>
+  <p class="page-eyebrow" data-i18n="feishu.eyebrow">Platform · 接入配置</p>
+  <h1 class="page-title"><span>🪽</span> <span data-i18n="feishu.title">飞书 / Lark</span></h1>
+  <p class="page-desc" data-i18n="feishu.desc">通过 WebSocket 长连接接入飞书 Bot。推荐扫码自动创建应用；也可手动填写 App ID 与 App Secret。</p>
 
   <div class="section-card">
-    <p class="section-label">连接状态</p>
+    <p class="section-label" data-i18n="feishu.statusSection">连接状态</p>
     <div class="status-row">
-      <span class="status-label">WebSocket</span>
-      <span id="badge-connected" class="badge badge-gray">检测中…</span>
+      <span class="status-label" data-i18n="feishu.ws">WebSocket</span>
+      <span id="badge-connected" class="badge badge-gray" data-i18n="common.detecting">检测中…</span>
     </div>
     <div class="status-row">
-      <span class="status-label">Bot 名称</span>
+      <span class="status-label" data-i18n="feishu.botName">Bot 名称</span>
       <span id="txt-bot" style="font-size:0.8125rem;color:var(--text-sub)">—</span>
     </div>
     <div class="status-row">
@@ -166,39 +183,39 @@
       <span id="txt-app-id" style="font-size:0.8125rem;color:var(--text-sub)">—</span>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="refreshStatus()">刷新状态</button>
-      <button class="btn btn-secondary" onclick="reloadAdapter()">重新连接</button>
+      <button class="btn btn-secondary" onclick="refreshStatus()" data-i18n="common.refreshStatus">刷新状态</button>
+      <button class="btn btn-secondary" onclick="reloadAdapter()" data-i18n="common.reconnect">重新连接</button>
     </div>
   </div>
 
   <div class="section-card">
-    <p class="section-label">配置方式</p>
+    <p class="section-label" data-i18n="feishu.configSection">配置方式</p>
 
     <div class="tabs">
-      <button class="tab active" id="tab-qr" onclick="switchTab('qr')">扫码创建（推荐）</button>
-      <button class="tab" id="tab-manual" onclick="switchTab('manual')">手动填写凭证</button>
+      <button class="tab active" id="tab-qr" onclick="switchTab('qr')" data-i18n="feishu.tabQr">扫码创建（推荐）</button>
+      <button class="tab" id="tab-manual" onclick="switchTab('manual')" data-i18n="feishu.tabManual">手动填写凭证</button>
     </div>
 
     <!-- 扫码 -->
     <div id="panel-qr" class="tab-panel active">
       <div class="field">
-        <label>平台域名</label>
+        <label data-i18n="feishu.domain">平台域名</label>
         <select id="qr-domain" class="input-field">
-          <option value="feishu">飞书（国内）</option>
-          <option value="lark">Lark（国际）</option>
+          <option value="feishu" data-i18n="feishu.domainFeishu">飞书（国内）</option>
+          <option value="lark" data-i18n="feishu.domainLark">Lark（国际）</option>
         </select>
       </div>
       <div class="qr-wrap">
         <div class="qr-frame" id="qr-frame">
-          <div class="qr-placeholder">点击「获取二维码」<br>后用飞书 App 扫描</div>
+          <div class="qr-placeholder" data-i18n-html="feishu.qrPlaceholder">点击「获取二维码」<br>后用飞书 App 扫描</div>
         </div>
-        <p class="qr-hint">使用飞书 / Lark 手机 App 扫描二维码，按提示授权创建 Bot</p>
+        <p class="qr-hint" data-i18n="feishu.qrHint">使用飞书 / Lark 手机 App 扫描二维码，按提示授权创建 Bot</p>
         <a class="qr-link" id="qr-link" href="#" target="_blank" style="display:none"></a>
       </div>
       <p class="poll-msg" id="poll-msg"></p>
       <div class="btn-row" style="justify-content:center">
-        <button id="btn-qr" class="btn btn-primary" onclick="startQR()">获取二维码</button>
-        <button id="btn-cancel" class="btn btn-secondary" onclick="cancelQR()" style="display:none">取消</button>
+        <button id="btn-qr" class="btn btn-primary" data-i18n="common.getQr" onclick="startQR()">获取二维码</button>
+        <button id="btn-cancel" class="btn btn-secondary" data-i18n="common.cancel" onclick="cancelQR()" style="display:none">取消</button>
       </div>
     </div>
 
@@ -209,34 +226,42 @@
         <input id="manual-app-id" class="input-field" type="text" placeholder="cli_xxx" />
       </div>
       <div class="field">
-        <label>App Secret</label>
+        <label data-i18n="feishu.appSecret">App Secret</label>
         <input id="manual-app-secret" class="input-field" type="password" placeholder="secret_xxx" />
       </div>
       <div class="field">
-        <label>平台域名</label>
+        <label data-i18n="feishu.domain">平台域名</label>
         <select id="manual-domain" class="input-field">
-          <option value="feishu">飞书（国内）</option>
-          <option value="lark">Lark（国际）</option>
+          <option value="feishu" data-i18n="feishu.domainFeishu">飞书（国内）</option>
+          <option value="lark" data-i18n="feishu.domainLark">Lark（国际）</option>
         </select>
       </div>
       <p class="poll-msg" id="manual-msg"></p>
       <div class="btn-row">
-        <button id="btn-save" class="btn btn-primary" onclick="saveManual()">保存并连接</button>
+        <button id="btn-save" class="btn btn-primary" data-i18n="common.saveAndConnect" onclick="saveManual()">保存并连接</button>
       </div>
-      <p class="qr-hint" style="margin-top:0.75rem">
+      <p class="qr-hint" style="margin-top:0.75rem" data-i18n="feishu.manualHint">
         请在飞书开发者后台启用 Bot，并将事件订阅设为「使用长连接接收事件」。
       </p>
     </div>
 
     <p class="ref-note">
-      飞书 WebSocket 接入实现参考
+      <span data-i18n="feishu.refNote">飞书 WebSocket 接入实现参考</span>
       <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">hermes-agent</a>
-      项目的 gateway/platforms/feishu.py。
+      <span data-i18n="feishu.refNoteSuffix">项目的 gateway/platforms/feishu.py。</span>
     </p>
   </div>
 </main>
 
+<script src="/static/i18n.js"></script>
 <script>
+const { t } = GW_I18N;
+window.__onLocaleChange = function () {
+  GW_I18N.applyI18n();
+  refreshStatus();
+  if (!_pollTimer) resetQrBtn();
+};
+
 async function api(url, opts) {
   const r = await fetch(url, opts || {});
   const data = await r.json().catch(() => ({}));
@@ -268,7 +293,9 @@ async function refreshStatus() {
     const d = await api('/api/feishu/status');
     const badge = document.getElementById('badge-connected');
     badge.className = 'badge ' + (d.connected ? 'badge-green' : 'badge-red');
-    badge.textContent = d.connected ? '已连接' : (d.configured ? '未连接' : '未配置');
+    badge.textContent = d.connected
+      ? t('common.connected')
+      : (d.configured ? t('common.disconnected') : t('common.notConfigured'));
     document.getElementById('txt-bot').textContent = d.bot_name || '—';
     document.getElementById('txt-app-id').textContent = d.app_id ? (d.app_id.slice(0, 10) + '…') : '—';
     if (d.app_id) document.getElementById('manual-app-id').value = d.app_id;
@@ -277,17 +304,17 @@ async function refreshStatus() {
       document.getElementById('qr-domain').value = d.domain;
     }
   } catch(e) {
-    document.getElementById('badge-connected').textContent = '无法连接';
+    document.getElementById('badge-connected').textContent = t('common.cannotConnect');
   }
 }
 
 async function reloadAdapter() {
   try {
     await api('/api/feishu/reload', { method: 'POST' });
-    setPollMsg('正在重新连接…', '');
+    setPollMsg(t('common.reconnecting'), '');
     setTimeout(refreshStatus, 2000);
   } catch(e) {
-    setPollMsg('重连失败：' + e.message, 'err');
+    setPollMsg(t('common.reconnectFailed') + e.message, 'err');
   }
 }
 
@@ -297,22 +324,22 @@ async function startQR() {
   const domain = document.getElementById('qr-domain').value;
   const btn = document.getElementById('btn-qr');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> 加载中';
-  setPollMsg('正在获取二维码…', '');
+  btn.innerHTML = '<span class="spinner"></span> ' + t('common.loading');
+  setPollMsg(t('feishu.gettingQr'), '');
   try {
     const d = await api('/api/feishu/login/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain }),
     });
-    if (!d.success) { setPollMsg(d.error || '获取失败', 'err'); resetQrBtn(); return; }
+    if (!d.success) { setPollMsg(d.error || t('feishu.getFailed'), 'err'); resetQrBtn(); return; }
     renderQR(d.qrcode_url || d.qr_url, d.qr_url);
-    setPollMsg('等待扫码…', '');
+    setPollMsg(t('common.waitingScan'), '');
     document.getElementById('btn-cancel').style.display = '';
     document.getElementById('btn-qr').style.display = 'none';
     _pollTimer = setInterval(pollQR, 2000);
   } catch(e) {
-    setPollMsg('网络错误：' + e.message, 'err');
+    setPollMsg(t('common.networkError') + e.message, 'err');
     resetQrBtn();
   }
 }
@@ -324,7 +351,7 @@ function renderQR(imgUrl, linkUrl) {
     box.innerHTML = '';
     const img = document.createElement('img');
     img.src = imgUrl;
-    img.onerror = () => { box.innerHTML = '<div class="qr-placeholder">无法显示二维码<br>请点击下方链接</div>'; };
+    img.onerror = () => { box.innerHTML = '<div class="qr-placeholder">' + t('feishu.qrShowFailed') + '</div>'; };
     box.appendChild(img);
   }
   if (linkUrl) {
@@ -337,27 +364,28 @@ function renderQR(imgUrl, linkUrl) {
 async function pollQR() {
   try {
     const d = await api('/api/feishu/login/poll');
-    if (d.status === 'wait') setPollMsg('等待扫码…', '');
+    if (d.status === 'wait') setPollMsg(t('common.waitingScan'), '');
     else if (d.status === 'confirmed') {
       clearInterval(_pollTimer); _pollTimer = null;
-      setPollMsg('✓ 配置成功！正在连接…', 'ok');
+      setPollMsg(t('feishu.success'), 'ok');
       cancelQRUIOnly();
       setTimeout(refreshStatus, 2000);
     } else if (d.status === 'error') {
       clearInterval(_pollTimer); _pollTimer = null;
-      setPollMsg('✗ ' + (d.error || '失败'), 'err');
+      setPollMsg(d.error ? ('✗ ' + d.error) : t('feishu.failed'), 'err');
       cancelQRUIOnly();
     }
   } catch(e) {
-    setPollMsg('轮询失败：' + e.message, 'err');
+    setPollMsg(t('common.pollFailed') + e.message, 'err');
   }
 }
 
 function cancelQR() {
   clearInterval(_pollTimer); _pollTimer = null;
-  setPollMsg('已取消', '');
+  setPollMsg(t('common.cancelled'), '');
   cancelQRUIOnly();
-  document.getElementById('qr-frame').innerHTML = '<div class="qr-placeholder">点击「获取二维码」<br>后用飞书 App 扫描</div>';
+  document.getElementById('qr-frame').innerHTML =
+    '<div class="qr-placeholder">' + t('feishu.qrPlaceholder') + '</div>';
   document.getElementById('qr-link').style.display = 'none';
 }
 
@@ -370,7 +398,7 @@ function cancelQRUIOnly() {
 function resetQrBtn() {
   const btn = document.getElementById('btn-qr');
   btn.disabled = false;
-  btn.textContent = '获取二维码';
+  btn.textContent = t('common.getQr');
 }
 
 async function saveManual() {
@@ -378,28 +406,30 @@ async function saveManual() {
   const app_secret = document.getElementById('manual-app-secret').value.trim();
   const domain = document.getElementById('manual-domain').value;
   if (!app_id || !app_secret) {
-    setManualMsg('请填写 App ID 和 App Secret', 'err');
+    setManualMsg(t('feishu.fillRequired'), 'err');
     return;
   }
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
-  setManualMsg('保存中…', '');
+  setManualMsg(t('common.saving'), '');
   try {
     const d = await api('/api/feishu/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id, app_secret, domain }),
     });
-    setManualMsg('✓ ' + (d.message || '已保存'), 'ok');
+    setManualMsg('✓ ' + (d.message || t('feishu.saved')), 'ok');
     document.getElementById('manual-app-secret').value = '';
     setTimeout(refreshStatus, 2000);
   } catch(e) {
-    setManualMsg('保存失败：' + e.message, 'err');
+    setManualMsg(t('common.saveFailed') + e.message, 'err');
   } finally {
     btn.disabled = false;
+    btn.textContent = t('common.saveAndConnect');
   }
 }
 
+GW_I18N.applyI18n();
 refreshStatus();
 setInterval(refreshStatus, 8000);
 </script>

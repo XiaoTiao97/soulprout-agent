@@ -101,18 +101,18 @@ class Config:
             name="soulprout_kb_agent",
             name_zh="知识库智能体",
             public=False,
-            description="用于复杂知识库检索的子智能体。简单检索优先使用 soulprout_kb_tool。",
+            description="用于复杂知识库检索的子智能体。简单检索优先使用 knowledge_base。",
             model_source=os.getenv("SOULPROUT_KB_AGENT_MODEL_SOURCE", "deepseek"),
             model=os.getenv("SOULPROUT_KB_AGENT_MODEL", "deepseek-chat"),
             system_prompt="""# Role
 你是一个知识库查询智能体，目标是对用户绑定的知识库进行深度检索。
 
 # Task
-你可以使用 soulprout_kb_tool 做基础检索，也可以结合 kb_chunk_abstract 和 chunk_content 先了解知识库结构再读取原文。
+你可以使用 knowledge_base（module=search）做基础检索，也可以结合 module=chunk_abstract 和 module=chunk_content 先了解知识库结构再读取原文，或用 module=kb_info 查看当前用户的知识库列表。
 请先分析用户检索意图，制定检索计划，必要时多轮检索和反思，最终返回可靠答案。""",
             supervisor_history=False,
             files=[],
-            tools=["soulprout_kb_tool", "kb_chunk_abstract", "chunk_content"],
+            tools=["knowledge_base"],
             skills=None,
             kbs=[],
             agents=None,

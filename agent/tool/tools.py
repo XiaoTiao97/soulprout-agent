@@ -471,27 +471,76 @@ class SoulproutToolFunction:
         except Exception as e:
             return f"错误: {e}"
 
-    async def soulprout_kb_tool(self, purpose, kb_id):
+    async def knowledge_base(
+        self,
+        module,
+        conversation_id=None,
+        purpose=None,
+        kb_id=None,
+        chunk_id=None,
+    ):
+        """统一知识库工具：module=search / chunk_abstract / chunk_content / kb_info。"""
+        if module == "search":
+            if not purpose or not kb_id:
+                return "错误：module=search 时 purpose 与 kb_id 必填"
+            return await self._kb_search(purpose, kb_id)
+        if module == "chunk_abstract":
+            if not kb_id:
+                return "错误：module=chunk_abstract 时 kb_id 必填"
+            return await self._kb_chunk_abstract(kb_id)
+        if module == "chunk_content":
+            if not chunk_id:
+                return "错误：module=chunk_content 时 chunk_id 必填"
+            return await self._kb_chunk_content(chunk_id)
+        if module == "kb_info":
+            return await self._kb_info(conversation_id)
+        return (
+            f"错误：未知的 module={module}，"
+            "仅支持 search / chunk_abstract / chunk_content / kb_info"
+        )
+
+    async def _kb_search(self, purpose, kb_id):
         try:
             await self.vdb_client.ensure_collection(KB_COLLECTION, "kb")
+            kb_id_esc = self._escape_filter_value(kb_id)
             results = await self.vdb_client.hybrid_search(
                 KB_COLLECTION,
                 query=purpose,
                 limit=5,
-                filter=f'kb_id == "{kb_id}"',
+                filter=f'kb_id == "{kb_id_esc}"',
                 output_fields=["chunk_id", "content"],
             )
             return str(results)
         except Exception as e:
             return f"错误：知识库检索失败，失败原因：{e}"
 
-    async def kb_chunk_abstract(self, kb_id):
+    async def _kb_chunk_abstract(self, kb_id):
         rows = self.config.db_documents.find({"kb_id": kb_id})
         return str([row async for row in rows])
 
-    async def chunk_content(self, chunk_id):
+    async def _kb_chunk_content(self, chunk_id):
         rows = self.config.db_chunks.find({"chunk_id": chunk_id})
         return str([row.get("content") async for row in rows])
+
+    async def _kb_info(self, conversation_id):
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            return "错误：无法获取用户信息"
+        try:
+            rows = self.config.db_libraries.find({"user_id": user_id})
+            libraries = [
+                {
+                    "kb_id": row.get("kb_id"),
+                    "kb_name": row.get("kb_name"),
+                    "kb_name_zh": row.get("kb_name_zh"),
+                    "kb_description": row.get("kb_description"),
+                    "kb_file_count": row.get("kb_file_count", 0),
+                }
+                async for row in rows
+            ]
+            return str(libraries)
+        except Exception as e:
+            return f"错误：获取知识库信息失败，失败原因：{e}"
 
     # ─────────────────────────────────────────────────────────────────────────
     # 记忆相关工具：

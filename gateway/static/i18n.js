@@ -1,0 +1,512 @@
+/**
+ * Gateway 管理页简易 i18n（与 web 端一致：zh-CN / en，localStorage 持久化）。
+ * 默认中文；用户可切换英文。
+ */
+(function (global) {
+  'use strict';
+
+  var STORAGE_KEY = 'locale';
+  var SUPPORTED = ['zh-CN', 'en'];
+
+  var MESSAGES = {
+    'zh-CN': {
+      langSwitch: 'English',
+      common: {
+        back: '返回',
+        loading: '加载中…',
+        detecting: '检测中…',
+        connected: '已连接',
+        disconnected: '未连接',
+        notConfigured: '未配置',
+        configuredDisconnected: '已配置但未连接',
+        cannotConnect: '无法连接',
+        refreshStatus: '刷新状态',
+        reconnect: '重新连接',
+        reconnecting: '正在重新连接…',
+        reconnectFailed: '重连失败：',
+        cancel: '取消',
+        cancelled: '已取消',
+        getQr: '获取二维码',
+        saveAndConnect: '保存并连接',
+        saving: '保存中…',
+        waitingScan: '等待扫码…',
+        networkError: '网络错误：',
+        pollFailed: '轮询失败：',
+        saveFailed: '保存失败：',
+      },
+      index: {
+        title: 'Soulprout Gateway',
+        logout: '退出登录',
+        loginEyebrow: 'Gateway · 账号登录',
+        loginTitle: '登录 Soulprout',
+        loginDesc: '使用你的 Soulprout 账号登录，即可管理 Gateway 平台接入配置。',
+        connTitle: '连接 Soulprout 服务',
+        connCustom: '自定义地址',
+        connUseDefault: '使用默认',
+        cloudCn: '中国大陆云服务',
+        cloudOverseas: '海外云服务',
+        cloudSelf: '自部署服务器',
+        regionCn: '中国大陆',
+        regionOverseas: '海外',
+        emailPh: '邮箱地址',
+        codePh: '6 位邮箱验证码',
+        getCode: '获取验证码',
+        resendAfter: 's 后重发',
+        usernamePh: '昵称（可选，首次登录用）',
+        loginBtn: '登录 / 注册',
+        loginHint: '未注册的邮箱将自动创建账号',
+        dashEyebrow: 'Gateway · 管理面板',
+        dashTitle: '服务配置',
+        dashDesc: '配置 Agent 服务地址，并管理各平台接入状态。',
+        dashDescUser: '当前账号：{user}。管理各平台接入状态。',
+        agentSection: 'Agent 服务',
+        currentMode: '当前模式',
+        modeLocal: '本地模式',
+        modeRemote: '远端模式',
+        changeUrlHint: '如需更换服务地址，请退出登录后在登录页重新选择。',
+        testConn: '测试连接',
+        testing: '测试连接中…',
+        testFailed: '测试失败：',
+        platforms: '接入平台',
+        weixinName: '微信（个人号）',
+        weixinLoading: '加载中…',
+        weixinConnected: '已连接 · {id}',
+        weixinIdle: '未连接，点击进入配置',
+        feishuName: '飞书 / Lark',
+        feishuConnected: '已连接 · {id}',
+        feishuConfigured: '已配置但未连接，点击进入',
+        feishuIdle: '未配置，点击进入扫码或填写凭证',
+        wecomName: '企业微信',
+        wecomConnected: '已连接 · {id}',
+        wecomConfigured: '已配置但未连接，点击进入',
+        wecomIdle: '未配置，点击进入扫码或填写凭证',
+        xiaoaiName: '小爱音箱',
+        xiaoaiConnected: '已连接 · {id}',
+        xiaoaiConfigured: '已配置但未连接，点击进入',
+        xiaoaiIdle: '未配置，点击进入填写小米账号',
+        fillEmail: '请填写邮箱',
+        sending: '发送中…',
+        codeSent: '验证码已发送，请查收邮箱',
+        sendFailed: '发送失败',
+        sendFailedPrefix: '发送失败：',
+        fillEmailCode: '请填写邮箱和验证码',
+        loginFailed: '登录失败',
+        loginFailedPrefix: '登录失败：',
+        logoutConfirm: '确定要退出登录吗？',
+        userFallback: '用户',
+      },
+      weixin: {
+        pageTag: '微信接入',
+        eyebrow: 'Platform · 接入配置',
+        title: '微信（个人号）',
+        desc: '通过微信个人号接入 Soulprout，扫码登录后 Gateway 将自动建立长轮询连接。',
+        statusSection: '连接状态',
+        statusLabel: '连接状态',
+        accountId: '账号 ID',
+        savedAccounts: '已保存账号数',
+        none: '无',
+        loginSection: '扫码登录',
+        qrPlaceholder: '点击「获取二维码」<br>后在此处扫描',
+        qrHint: '使用微信扫描上方二维码，在手机端确认登录',
+        helpSection: '使用说明',
+        help1: '点击「获取二维码」，使用微信 App 扫描',
+        help2: '在手机微信中点击「确认登录」',
+        help3: '登录成功后 Gateway 自动建立长轮询连接',
+        help4: '凭证本地保存，下次启动无需重新扫码',
+        gettingQr: '正在获取二维码…',
+        getFailed: '获取失败',
+        qrShowFailed: '无法渲染图片，<br>请点击下方链接扫码',
+        qrLinkFallback: '请点击下方链接扫码',
+        scanned: '已扫码，请在手机微信中确认…',
+        refreshed: '二维码已刷新，请重新扫码',
+        success: '✓ 登录成功！正在连接…',
+        failed: '✗ 错误：',
+        unknown: '未知',
+      },
+      feishu: {
+        pageTag: '飞书接入',
+        eyebrow: 'Platform · 接入配置',
+        title: '飞书 / Lark',
+        desc: '通过 WebSocket 长连接接入飞书 Bot。推荐扫码自动创建应用；也可手动填写 App ID 与 App Secret。',
+        statusSection: '连接状态',
+        ws: 'WebSocket',
+        botName: 'Bot 名称',
+        configSection: '配置方式',
+        tabQr: '扫码创建（推荐）',
+        tabManual: '手动填写凭证',
+        domain: '平台域名',
+        domainFeishu: '飞书（国内）',
+        domainLark: 'Lark（国际）',
+        qrPlaceholder: '点击「获取二维码」<br>后用飞书 App 扫描',
+        qrHint: '使用飞书 / Lark 手机 App 扫描二维码，按提示授权创建 Bot',
+        gettingQr: '正在获取二维码…',
+        getFailed: '获取失败',
+        qrShowFailed: '无法显示二维码<br>请点击下方链接',
+        success: '✓ 配置成功！正在连接…',
+        failed: '✗ 失败',
+        appSecret: 'App Secret',
+        manualHint: '请在飞书开发者后台启用 Bot，并将事件订阅设为「使用长连接接收事件」。',
+        fillRequired: '请填写 App ID 和 App Secret',
+        saved: '已保存',
+        refNote: '飞书 WebSocket 接入实现参考',
+        refNoteSuffix: '项目的 gateway/platforms/feishu.py。',
+      },
+      wecom: {
+        pageTag: '企业微信',
+        eyebrow: 'Platform · 接入配置',
+        title: '企业微信 AI Bot',
+        desc: '通过 WebSocket 长连接接入企业微信智能机器人。推荐扫码获取 Bot ID / Secret；也可手动填写凭证。无需公网地址。',
+        statusSection: '连接状态',
+        ws: 'WebSocket',
+        botName: 'Bot 名称',
+        configSection: '配置方式',
+        tabQr: '扫码获取（推荐）',
+        tabManual: '手动填写凭证',
+        qrPlaceholder: '点击「获取二维码」<br>后用企业微信 App 扫描',
+        qrHint: '使用企业微信手机 App 扫描二维码，按提示创建/绑定 AI 智能机器人',
+        gettingQr: '正在获取二维码…',
+        getFailed: '获取失败',
+        qrShowFailed: '无法显示二维码<br>请点击下方链接',
+        success: '✓ 配置成功！正在连接…',
+        failed: '✗ 失败',
+        manualHint: '请在企业微信管理后台创建「AI 智能机器人」并选择 API 模式，复制 Bot ID 与 Secret。',
+        fillRequired: '请填写 Bot ID 和 Secret',
+        saved: '已保存',
+        refNote: '企业微信 WebSocket 接入实现参考',
+        refNoteSuffix: '的 gateway/platforms/wecom.py。',
+      },
+      xiaoai: {
+        pageTag: '小爱音箱',
+        eyebrow: 'Gateway · 音箱刷机接入',
+        title: '小爱音箱',
+        desc: '通过小米云端 API 接入，无需刷机或拆机。配置完成后，对音箱说带触发词的话，Gateway 会调用 Soulprout Agent 并通过音箱 TTS 播报回复。',
+        statusSection: '连接状态',
+        pollStatus: '轮询状态',
+        deviceName: '设备名称',
+        lastError: '最近错误',
+        accountSection: '小米账号配置',
+        userId: '小米 ID（数字，非手机号）',
+        userIdPh: '在小米账号「个人信息」中查看',
+        password: '小米账号密码',
+        passwordPh: '留空则保留已保存的密码',
+        passToken: 'passToken（可选）',
+        passTokenPh: '登录触发验证码时填写',
+        passTokenGuide: '获取教程：',
+        did: '音箱设备名称（米家中的名称）',
+        didPh: '例如：Xiaomi 智能音箱 Pro',
+        didHint: '必须与米家 App 里显示的名称完全一致（注意空格和大小写）。',
+        keywords: '触发关键词（逗号分隔）',
+        keywordsPh: '请,你',
+        keywordsHint: '识别到这些词后，会去掉触发词及之前的内容，只把之后的文字发给 Soulprout。',
+        heartbeat: '轮询间隔（毫秒，最小 1000）',
+        debug: '开启调试日志',
+        testLogin: '测试登录',
+        helpSection: '使用说明',
+        help1: '先在首页完成 Soulprout Agent 登录。',
+        help2: '在此页填写小米账号与音箱名称，点击「保存并连接」。',
+        help3: '对音箱说：「小爱同学，请帮我……」（默认触发词「请」「你」；发给 Soulprout 的仅为触发词之后的内容）。',
+        helpNote: '注意：此方案无法打断小爱原生回复，可能出现两边同时说话的情况。',
+        loadFailed: '加载配置失败：',
+        pwdSaved: '已保存密码（留空则不修改）',
+        tokenSaved: '已保存 passToken（留空则不修改）',
+        fillUserDid: '请填写小米 ID 和设备名称',
+        testing: '测试登录中…',
+        testOk: '登录成功',
+        testFailed: '登录失败：',
+        saved: '已保存并开始连接',
+      },
+    },
+    en: {
+      langSwitch: '中文',
+      common: {
+        back: 'Back',
+        loading: 'Loading…',
+        detecting: 'Checking…',
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        notConfigured: 'Not configured',
+        configuredDisconnected: 'Configured but disconnected',
+        cannotConnect: 'Unavailable',
+        refreshStatus: 'Refresh',
+        reconnect: 'Reconnect',
+        reconnecting: 'Reconnecting…',
+        reconnectFailed: 'Reconnect failed: ',
+        cancel: 'Cancel',
+        cancelled: 'Cancelled',
+        getQr: 'Get QR Code',
+        saveAndConnect: 'Save & Connect',
+        saving: 'Saving…',
+        waitingScan: 'Waiting for scan…',
+        networkError: 'Network error: ',
+        pollFailed: 'Poll failed: ',
+        saveFailed: 'Save failed: ',
+      },
+      index: {
+        title: 'Soulprout Gateway',
+        logout: 'Log out',
+        loginEyebrow: 'Gateway · Sign in',
+        loginTitle: 'Sign in to Soulprout',
+        loginDesc: 'Sign in with your Soulprout account to manage Gateway platform connections.',
+        connTitle: 'Connect to Soulprout',
+        connCustom: 'Custom URL',
+        connUseDefault: 'Use default',
+        cloudCn: 'Mainland China cloud',
+        cloudOverseas: 'Overseas cloud',
+        cloudSelf: 'Self-hosted server',
+        regionCn: 'Mainland China',
+        regionOverseas: 'Overseas',
+        emailPh: 'Email address',
+        codePh: '6-digit email code',
+        getCode: 'Get code',
+        resendAfter: 's to resend',
+        usernamePh: 'Nickname (optional, first sign-in)',
+        loginBtn: 'Sign in / Register',
+        loginHint: 'Unregistered emails will create an account automatically',
+        dashEyebrow: 'Gateway · Dashboard',
+        dashTitle: 'Service Settings',
+        dashDesc: 'Configure the Agent service URL and manage platform connections.',
+        dashDescUser: 'Signed in as {user}. Manage platform connections.',
+        agentSection: 'Agent Service',
+        currentMode: 'Current mode',
+        modeLocal: 'Local',
+        modeRemote: 'Remote',
+        changeUrlHint: 'To change the service URL, log out and choose again on the sign-in page.',
+        testConn: 'Test connection',
+        testing: 'Testing…',
+        testFailed: 'Test failed: ',
+        platforms: 'Platforms',
+        weixinName: 'WeChat (personal)',
+        weixinLoading: 'Loading…',
+        weixinConnected: 'Connected · {id}',
+        weixinIdle: 'Not connected — tap to configure',
+        feishuName: 'Feishu / Lark',
+        feishuConnected: 'Connected · {id}',
+        feishuConfigured: 'Configured but disconnected — tap to open',
+        feishuIdle: 'Not configured — scan QR or enter credentials',
+        wecomName: 'WeCom',
+        wecomConnected: 'Connected · {id}',
+        wecomConfigured: 'Configured but disconnected — tap to open',
+        wecomIdle: 'Not configured — scan QR or enter credentials',
+        xiaoaiName: 'XiaoAI Speaker',
+        xiaoaiConnected: 'Connected · {id}',
+        xiaoaiConfigured: 'Configured but disconnected — tap to open',
+        xiaoaiIdle: 'Not configured — enter Xiaomi account',
+        fillEmail: 'Please enter your email',
+        sending: 'Sending…',
+        codeSent: 'Code sent — check your inbox',
+        sendFailed: 'Failed to send',
+        sendFailedPrefix: 'Failed to send: ',
+        fillEmailCode: 'Please enter email and verification code',
+        loginFailed: 'Sign-in failed',
+        loginFailedPrefix: 'Sign-in failed: ',
+        logoutConfirm: 'Log out?',
+        userFallback: 'User',
+      },
+      weixin: {
+        pageTag: 'WeChat',
+        eyebrow: 'Platform · Setup',
+        title: 'WeChat (personal)',
+        desc: 'Connect Soulprout via a personal WeChat account. After scanning, Gateway keeps a long-poll connection.',
+        statusSection: 'Status',
+        statusLabel: 'Connection',
+        accountId: 'Account ID',
+        savedAccounts: 'Saved accounts',
+        none: 'None',
+        loginSection: 'Scan to sign in',
+        qrPlaceholder: 'Tap “Get QR Code”<br>then scan here',
+        qrHint: 'Scan the QR with WeChat and confirm on your phone',
+        helpSection: 'How to use',
+        help1: 'Tap “Get QR Code” and scan with the WeChat app',
+        help2: 'Tap “Confirm login” in WeChat on your phone',
+        help3: 'After success, Gateway starts a long-poll connection',
+        help4: 'Credentials are saved locally — no need to scan next time',
+        gettingQr: 'Fetching QR code…',
+        getFailed: 'Failed to get QR',
+        qrShowFailed: 'Cannot render image,<br>use the link below',
+        qrLinkFallback: 'Use the link below to scan',
+        scanned: 'Scanned — confirm in WeChat on your phone…',
+        refreshed: 'QR refreshed — please scan again',
+        success: '✓ Signed in! Connecting…',
+        failed: '✗ Error: ',
+        unknown: 'unknown',
+      },
+      feishu: {
+        pageTag: 'Feishu',
+        eyebrow: 'Platform · Setup',
+        title: 'Feishu / Lark',
+        desc: 'Connect a Feishu bot over WebSocket. Prefer QR to create the app, or enter App ID and App Secret manually.',
+        statusSection: 'Status',
+        ws: 'WebSocket',
+        botName: 'Bot name',
+        configSection: 'Configuration',
+        tabQr: 'Scan to create (recommended)',
+        tabManual: 'Enter credentials',
+        domain: 'Platform domain',
+        domainFeishu: 'Feishu (China)',
+        domainLark: 'Lark (International)',
+        qrPlaceholder: 'Tap “Get QR Code”<br>then scan with Feishu / Lark',
+        qrHint: 'Scan with the Feishu / Lark app and authorize to create the bot',
+        gettingQr: 'Fetching QR code…',
+        getFailed: 'Failed to get QR',
+        qrShowFailed: 'Cannot display QR<br>Use the link below',
+        success: '✓ Configured! Connecting…',
+        failed: '✗ Failed',
+        appSecret: 'App Secret',
+        manualHint: 'Enable Bot in the Feishu developer console and set event subscription to long connection.',
+        fillRequired: 'Please enter App ID and App Secret',
+        saved: 'Saved',
+        refNote: 'Feishu WebSocket integration is based on',
+        refNoteSuffix: 'gateway/platforms/feishu.py.',
+      },
+      wecom: {
+        pageTag: 'WeCom',
+        eyebrow: 'Platform · Setup',
+        title: 'WeCom AI Bot',
+        desc: 'Connect a WeCom AI bot over WebSocket. Prefer QR to get Bot ID / Secret, or enter credentials manually. No public URL required.',
+        statusSection: 'Status',
+        ws: 'WebSocket',
+        botName: 'Bot name',
+        configSection: 'Configuration',
+        tabQr: 'Scan to get credentials (recommended)',
+        tabManual: 'Enter credentials',
+        qrPlaceholder: 'Tap “Get QR Code”<br>then scan with WeCom',
+        qrHint: 'Scan with the WeCom app and follow prompts to create/bind the AI bot',
+        gettingQr: 'Fetching QR code…',
+        getFailed: 'Failed to get QR',
+        qrShowFailed: 'Cannot display QR<br>Use the link below',
+        success: '✓ Configured! Connecting…',
+        failed: '✗ Failed',
+        manualHint: 'Create an AI bot in WeCom admin (API mode) and copy Bot ID and Secret.',
+        fillRequired: 'Please enter Bot ID and Secret',
+        saved: 'Saved',
+        refNote: 'WeCom WebSocket integration is based on',
+        refNoteSuffix: 'gateway/platforms/wecom.py.',
+      },
+      xiaoai: {
+        pageTag: 'XiaoAI',
+        eyebrow: 'Gateway · Speaker',
+        title: 'XiaoAI Speaker',
+        desc: 'Connect via Xiaomi cloud API — no flashing required. After setup, say a trigger phrase to the speaker; Gateway calls Soulprout Agent and replies via TTS.',
+        statusSection: 'Status',
+        pollStatus: 'Poll status',
+        deviceName: 'Device name',
+        lastError: 'Last error',
+        accountSection: 'Xiaomi account',
+        userId: 'Xiaomi ID (numeric, not phone)',
+        userIdPh: 'Find it under Xiaomi account → Profile',
+        password: 'Xiaomi password',
+        passwordPh: 'Leave blank to keep saved password',
+        passToken: 'passToken (optional)',
+        passTokenPh: 'Fill when login requires a captcha',
+        passTokenGuide: 'Guide: ',
+        did: 'Speaker name (as in Mi Home)',
+        didPh: 'e.g. Xiaomi Smart Speaker Pro',
+        didHint: 'Must match the Mi Home name exactly (spaces and case).',
+        keywords: 'Trigger keywords (comma-separated)',
+        keywordsPh: 'please,you',
+        keywordsHint: 'After a trigger word is detected, only the text after it is sent to Soulprout.',
+        heartbeat: 'Poll interval (ms, min 1000)',
+        debug: 'Enable debug logs',
+        testLogin: 'Test login',
+        helpSection: 'How to use',
+        help1: 'Sign in to Soulprout Agent on the home page first.',
+        help2: 'Enter Xiaomi account and speaker name here, then tap “Save & Connect”.',
+        help3: 'Say: “XiaoAI, please help me…” (default triggers “请”/“你”; only text after the trigger is sent).',
+        helpNote: 'Note: This cannot interrupt XiaoAI’s native reply — both may speak at once.',
+        loadFailed: 'Failed to load config: ',
+        pwdSaved: 'Password saved (leave blank to keep)',
+        tokenSaved: 'passToken saved (leave blank to keep)',
+        fillUserDid: 'Please enter Xiaomi ID and device name',
+        testing: 'Testing login…',
+        testOk: 'Login OK',
+        testFailed: 'Login failed: ',
+        saved: 'Saved — connecting',
+      },
+    },
+  };
+
+  function detectDefaultLocale() {
+    try {
+      var saved = localStorage.getItem(STORAGE_KEY);
+      if (saved && SUPPORTED.indexOf(saved) !== -1) return saved;
+    } catch (e) {}
+    // Gateway 默认中文（与产品面向中国大陆用户一致）
+    return 'zh-CN';
+  }
+
+  var _locale = detectDefaultLocale();
+
+  function t(path, vars) {
+    var parts = path.split('.');
+    var node = MESSAGES[_locale] || MESSAGES['zh-CN'];
+    for (var i = 0; i < parts.length; i++) {
+      if (node == null) break;
+      node = node[parts[i]];
+    }
+    if (node == null) {
+      node = MESSAGES['zh-CN'];
+      for (var j = 0; j < parts.length; j++) {
+        if (node == null) break;
+        node = node[parts[j]];
+      }
+    }
+    var text = typeof node === 'string' ? node : path;
+    if (vars) {
+      Object.keys(vars).forEach(function (k) {
+        text = text.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+      });
+    }
+    return text;
+  }
+
+  function setLocale(locale) {
+    if (SUPPORTED.indexOf(locale) === -1) return;
+    _locale = locale;
+    try {
+      localStorage.setItem(STORAGE_KEY, locale);
+    } catch (e) {}
+    document.documentElement.lang = locale === 'zh-CN' ? 'zh-CN' : 'en';
+    if (typeof global.__onLocaleChange === 'function') {
+      global.__onLocaleChange(locale);
+    }
+  }
+
+  function getLocale() {
+    return _locale;
+  }
+
+  function toggleLocale() {
+    setLocale(_locale === 'zh-CN' ? 'en' : 'zh-CN');
+  }
+
+  /** 将带 data-i18n / data-i18n-placeholder / data-i18n-html 的节点刷新为当前语言 */
+  function applyI18n(root) {
+    var scope = root || document;
+    scope.querySelectorAll('[data-i18n]').forEach(function (el) {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    scope.querySelectorAll('[data-i18n-html]').forEach(function (el) {
+      el.innerHTML = t(el.getAttribute('data-i18n-html'));
+    });
+    scope.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {
+      el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+    });
+    scope.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+      el.title = t(el.getAttribute('data-i18n-title'));
+    });
+    var switchBtn = document.getElementById('btn-locale');
+    if (switchBtn) switchBtn.textContent = t('langSwitch');
+  }
+
+  // 初始化 html lang
+  document.documentElement.lang = _locale === 'zh-CN' ? 'zh-CN' : 'en';
+
+  global.GW_I18N = {
+    t: t,
+    setLocale: setLocale,
+    getLocale: getLocale,
+    toggleLocale: toggleLocale,
+    applyI18n: applyI18n,
+    STORAGE_KEY: STORAGE_KEY,
+  };
+})(typeof window !== 'undefined' ? window : this);

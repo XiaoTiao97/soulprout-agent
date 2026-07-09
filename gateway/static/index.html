@@ -31,7 +31,6 @@
       overflow-x: hidden;
     }
 
-    /* ─── BG decoration ─── */
     .bg-deco {
       position: fixed;
       inset: 0;
@@ -53,7 +52,6 @@
     .bg-ring-1 { width: 900px; height: 900px; border: 1px solid rgba(30,180,140,0.04); }
     .bg-ring-2 { width: 560px; height: 560px; border: 1px solid rgba(30,180,140,0.06); }
 
-    /* ─── Header ─── */
     .header {
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -98,7 +96,23 @@
     .header-right {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 0.75rem;
+    }
+    .btn-locale {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.25s;
+      white-space: nowrap;
+    }
+    .btn-locale:hover {
+      border-color: var(--accent-border);
+      color: var(--accent);
     }
     .user-pill {
       display: flex;
@@ -140,7 +154,6 @@
     }
     .btn-logout:hover { border-color: #e55a5a; color: #e55a5a; }
 
-    /* ─── Main layout ─── */
     .page-main {
       position: relative;
       z-index: 10;
@@ -151,7 +164,6 @@
       padding: 6rem 1.5rem 3rem;
     }
 
-    /* ─── Login card ─── */
     .login-wrap {
       width: 100%;
       max-width: 440px;
@@ -188,7 +200,6 @@
       margin-bottom: 2rem;
     }
 
-    /* ─── Form ─── */
     .form { display: flex; flex-direction: column; gap: 0.875rem; }
     .input-field {
       width: 100%;
@@ -272,7 +283,6 @@
       line-height: 1.6;
     }
 
-    /* Connection picker on login */
     .conn-block {
       border: 1px solid var(--border);
       border-radius: 0.75rem;
@@ -307,21 +317,26 @@
     }
     .conn-option {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.5rem;
       font-size: 0.875rem;
       color: var(--text-sub);
       cursor: pointer;
+      line-height: 1.4;
     }
-    .conn-option input { accent-color: var(--accent); }
-    .conn-custom { margin-top: 0.625rem; }
-    .conn-current {
+    .conn-option input { accent-color: var(--accent); margin-top: 0.15rem; flex-shrink: 0; }
+    .conn-option-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+    .conn-option-label { color: var(--text); }
+    .conn-option-meta {
       font-size: 0.75rem;
       color: var(--text-muted);
-      margin-top: 0.5rem;
       word-break: break-all;
     }
-    .conn-current code { color: var(--accent); }
+    .conn-option-meta .region-tag {
+      color: var(--accent);
+      margin-right: 0.35rem;
+    }
+    .conn-custom { margin-top: 0.625rem; }
 
     .url-readonly {
       padding: 0.75rem 1rem;
@@ -334,7 +349,6 @@
       margin-bottom: 0.75rem;
     }
 
-    /* ─── Dashboard ─── */
     .dashboard { width: 100%; max-width: 560px; }
 
     .dash-header { margin-bottom: 2rem; }
@@ -436,7 +450,6 @@
     .save-msg.ok  { color: var(--accent); }
     .save-msg.err { color: #e55a5a; }
 
-    /* Platform grid */
     .platform-list { display: flex; flex-direction: column; gap: 0.75rem; }
 
     .platform-item {
@@ -478,7 +491,6 @@
     }
     .platform-item:hover .platform-arrow { color: var(--accent); transform: translateX(3px); }
 
-    /* Spinner */
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
       display: inline-block;
@@ -489,7 +501,6 @@
       animation: spin 0.7s linear infinite;
     }
 
-    /* Loading skeleton */
     .page-loading {
       position: fixed;
       inset: 0;
@@ -525,66 +536,61 @@
 </head>
 <body>
 
-<!-- BG -->
 <div class="bg-deco" aria-hidden="true">
   <div class="bg-radial"></div>
   <div class="bg-ring bg-ring-1"></div>
   <div class="bg-ring bg-ring-2"></div>
 </div>
 
-<!-- Page loading -->
 <div id="page-loading" class="page-loading">
   <div class="dot"></div>
   <div class="dot"></div>
   <div class="dot"></div>
 </div>
 
-<!-- Header -->
 <header class="header">
   <a href="/" class="header-brand">
     <div class="brand-logo">🌱</div>
     <span class="brand-name">Soulprout<span class="brand-tag">Gateway</span></span>
   </a>
-  <div class="header-right" id="header-user" style="display:none">
-    <div class="user-pill">
-      <div class="user-avatar" id="user-avatar-char">?</div>
-      <span class="user-email" id="header-email">—</span>
+  <div class="header-right">
+    <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
+    <div id="header-user" style="display:none; align-items:center; gap:0.75rem;">
+      <div class="user-pill">
+        <div class="user-avatar" id="user-avatar-char">?</div>
+        <span class="user-email" id="header-email">—</span>
+      </div>
+      <button class="btn-logout" data-i18n="index.logout" onclick="doLogout()">退出登录</button>
     </div>
-    <button class="btn-logout" onclick="doLogout()">退出登录</button>
   </div>
 </header>
 
-<!-- Main -->
 <main class="page-main">
 
-  <!-- ① Login view -->
   <div id="view-login" class="login-wrap" style="display:none">
     <div class="login-card">
-      <p class="card-eyebrow">Gateway · 账号登录</p>
-      <h1 class="card-title">登录 Soulprout</h1>
-      <p class="card-desc">使用你的 Soulprout 账号登录，即可管理 Gateway 平台接入配置。</p>
+      <p class="card-eyebrow" data-i18n="index.loginEyebrow">Gateway · 账号登录</p>
+      <h1 class="card-title" data-i18n="index.loginTitle">登录 Soulprout</h1>
+      <p class="card-desc" data-i18n="index.loginDesc">使用你的 Soulprout 账号登录，即可管理 Gateway 平台接入配置。</p>
 
       <form class="form" onsubmit="return false">
         <div class="conn-block">
           <div class="conn-head">
-            <span class="conn-title">连接 Soulprout 服务</span>
+            <span class="conn-title" data-i18n="index.connTitle">连接 Soulprout 服务</span>
             <button type="button" class="conn-toggle" id="btn-conn-toggle" onclick="toggleConnCustom()">自定义地址</button>
           </div>
-          <div id="conn-default-view">
-            <label class="conn-option">
-              <input type="radio" name="conn-mode" value="cloud" checked onchange="onConnModeChange()" />
-              <span>Soulprout 云服务（默认）</span>
-            </label>
-            <p class="conn-current">当前：<code id="login-cloud-url">https://www.soulprout.com</code></p>
+          <div id="conn-default-view" class="conn-options">
+            <!-- 云域名选项由 JS 渲染 -->
           </div>
           <div id="conn-custom-view" style="display:none">
-            <label class="conn-option">
-              <input type="radio" name="conn-mode" value="cloud" onchange="onConnModeChange()" />
-              <span>Soulprout 云服务</span>
-            </label>
-            <label class="conn-option">
+            <div class="conn-options" id="conn-custom-cloud-options">
+              <!-- 自定义视图中的云域名选项由 JS 渲染 -->
+            </div>
+            <label class="conn-option" style="margin-top:0.5rem">
               <input type="radio" name="conn-mode" value="self" onchange="onConnModeChange()" />
-              <span>自部署服务器</span>
+              <span class="conn-option-body">
+                <span class="conn-option-label" data-i18n="index.cloudSelf">自部署服务器</span>
+              </span>
             </label>
             <input id="login-agent-url" class="input-field conn-custom" type="text"
                    placeholder="http://localhost:8080" />
@@ -592,67 +598,64 @@
         </div>
 
         <input id="login-email" class="input-field" type="email"
-               placeholder="邮箱地址" autocomplete="email" />
+               data-i18n-placeholder="index.emailPh" placeholder="邮箱地址" autocomplete="email" />
 
         <div class="code-row">
           <input id="login-code" class="input-field code-input" type="text"
-                 placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" />
-          <button id="btn-code" class="code-btn" type="button" onclick="sendCode()">获取验证码</button>
+                 data-i18n-placeholder="index.codePh" placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" />
+          <button id="btn-code" class="code-btn" type="button" data-i18n="index.getCode" onclick="sendCode()">获取验证码</button>
         </div>
 
         <input id="login-username" class="input-field" type="text"
-               placeholder="昵称（可选，首次登录用）" maxlength="32" />
+               data-i18n-placeholder="index.usernamePh" placeholder="昵称（可选，首次登录用）" maxlength="32" />
 
         <span id="login-msg" class="status-msg"></span>
 
         <button id="btn-login" class="cta-btn" type="button" onclick="doLogin()">
-          <span>登录 / 注册</span>
+          <span data-i18n="index.loginBtn">登录 / 注册</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M5 12h14M12 5l7 7-7 7" />
           </svg>
         </button>
       </form>
 
-      <p class="hint-text">未注册的邮箱将自动创建账号</p>
+      <p class="hint-text" data-i18n="index.loginHint">未注册的邮箱将自动创建账号</p>
     </div>
   </div>
 
-  <!-- ② Dashboard view -->
   <div id="view-dash" class="dashboard" style="display:none">
     <div class="dash-header">
-      <p class="dash-eyebrow">Gateway · 管理面板</p>
-      <h1 class="dash-title">服务配置</h1>
-      <p class="dash-sub" id="dash-desc">配置 Agent 服务地址，并管理各平台接入状态。</p>
+      <p class="dash-eyebrow" data-i18n="index.dashEyebrow">Gateway · 管理面板</p>
+      <h1 class="dash-title" data-i18n="index.dashTitle">服务配置</h1>
+      <p class="dash-sub" id="dash-desc" data-i18n="index.dashDesc">配置 Agent 服务地址，并管理各平台接入状态。</p>
     </div>
 
-    <!-- Agent connection (read-only) -->
     <div class="section-card">
-      <p class="section-label">Agent 服务</p>
+      <p class="section-label" data-i18n="index.agentSection">Agent 服务</p>
 
       <div id="dash-url-display" class="url-readonly">—</div>
 
       <div class="mode-row">
-        <span class="mode-label">当前模式</span>
+        <span class="mode-label" data-i18n="index.currentMode">当前模式</span>
         <span id="badge-mode" class="badge badge-gray">检测中…</span>
       </div>
 
-      <p class="url-hint">如需更换服务地址，请退出登录后在登录页重新选择。</p>
+      <p class="url-hint" data-i18n="index.changeUrlHint">如需更换服务地址，请退出登录后在登录页重新选择。</p>
 
       <div class="input-row">
-        <button class="btn-sm" onclick="testConn()">测试连接</button>
+        <button class="btn-sm" data-i18n="index.testConn" onclick="testConn()">测试连接</button>
       </div>
 
       <div id="url-msg" class="save-msg"></div>
     </div>
 
-    <!-- Platform card -->
     <div class="section-card">
-      <p class="section-label">接入平台</p>
+      <p class="section-label" data-i18n="index.platforms">接入平台</p>
       <div class="platform-list">
         <a href="/weixin" class="platform-item">
           <div class="platform-icon">💬</div>
           <div class="platform-info">
-            <div class="platform-name">微信（个人号）</div>
+            <div class="platform-name" data-i18n="index.weixinName">微信（个人号）</div>
             <div class="platform-desc" id="weixin-status-text">加载中…</div>
           </div>
           <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
@@ -663,7 +666,7 @@
         <a href="/feishu" class="platform-item">
           <div class="platform-icon">🪽</div>
           <div class="platform-info">
-            <div class="platform-name">飞书 / Lark</div>
+            <div class="platform-name" data-i18n="index.feishuName">飞书 / Lark</div>
             <div class="platform-desc" id="feishu-status-text">加载中…</div>
           </div>
           <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
@@ -674,7 +677,7 @@
         <a href="/wecom" class="platform-item">
           <div class="platform-icon">💼</div>
           <div class="platform-info">
-            <div class="platform-name">企业微信</div>
+            <div class="platform-name" data-i18n="index.wecomName">企业微信</div>
             <div class="platform-desc" id="wecom-status-text">加载中…</div>
           </div>
           <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
@@ -685,7 +688,7 @@
         <a href="/xiaoai" class="platform-item">
           <div class="platform-icon">🔊</div>
           <div class="platform-info">
-            <div class="platform-name">小爱音箱</div>
+            <div class="platform-name" data-i18n="index.xiaoaiName">小爱音箱</div>
             <div class="platform-desc" id="xiaoai-status-text">加载中…</div>
           </div>
           <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
@@ -699,18 +702,14 @@
 
 </main>
 
+<script src="/static/i18n.js"></script>
 <script>
-/* ─── Util ─── */
+const { t } = GW_I18N;
+
 async function api(url, opts) {
   const r = await fetch(url, opts || {});
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
-}
-function msg(id, text, type) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = text;
-  el.className = (type ? `${el.className.split(' ')[0]} ${type}` : el.className.split(' ')[0]);
 }
 function setMsg(id, text, type) {
   const el = document.getElementById(id);
@@ -720,71 +719,184 @@ function setMsg(id, text, type) {
   el.className = base + (type ? ' ' + type : '');
 }
 
-/* ─── Connection config ─── */
 const LOCAL_AGENT_URL = 'http://localhost:8080';
-let DEFAULT_AGENT_URL = 'https://www.soulprout.com';
+const FALLBACK_CLOUD_URLS = [
+  { url: 'https://mengya.chat', region: 'cn', label_zh: '中国大陆', label_en: 'Mainland China' },
+  { url: 'https://www.soulprout.com', region: 'overseas', label_zh: '海外', label_en: 'Overseas' },
+];
+let CLOUD_URLS = FALLBACK_CLOUD_URLS.slice();
+let DEFAULT_AGENT_URL = FALLBACK_CLOUD_URLS[0].url;
+let _selectedCloudUrl = DEFAULT_AGENT_URL;
 let _connCustomOpen = false;
+let _lastDashSettings = null;
+let _cdLeft = 0;
 
 function isLocalAgentUrl(url) {
   const v = (url || '').toLowerCase().trim();
   return !v || v.startsWith('http://localhost') || v.startsWith('http://127.') || v.startsWith('http://0.0.0.0');
 }
 
+function normalizeUrl(url) {
+  return (url || '').trim().replace(/\/+$/, '');
+}
+
+function isKnownCloudUrl(url) {
+  const n = normalizeUrl(url).toLowerCase();
+  return CLOUD_URLS.some(c => normalizeUrl(c.url).toLowerCase() === n);
+}
+
+function regionLabel(item) {
+  return GW_I18N.getLocale() === 'en' ? (item.label_en || item.label_zh) : (item.label_zh || item.label_en);
+}
+
+function cloudOptionLabelKey(item) {
+  return item.region === 'overseas' ? 'index.cloudOverseas' : 'index.cloudCn';
+}
+
+function renderCloudOptions() {
+  const defaultView = document.getElementById('conn-default-view');
+  const customCloud = document.getElementById('conn-custom-cloud-options');
+  if (!defaultView || !customCloud) return;
+
+  const selected = normalizeUrl(_selectedCloudUrl) || DEFAULT_AGENT_URL;
+
+  defaultView.innerHTML = CLOUD_URLS.map((item, idx) => {
+    const checked = normalizeUrl(item.url).toLowerCase() === selected.toLowerCase() ||
+      (!isKnownCloudUrl(selected) && idx === 0);
+    return `<label class="conn-option">
+      <input type="radio" name="conn-cloud" value="${item.url}" ${checked ? 'checked' : ''} onchange="onCloudSelect()" />
+      <span class="conn-option-body">
+        <span class="conn-option-label">${t(cloudOptionLabelKey(item))}</span>
+        <span class="conn-option-meta"><span class="region-tag">${regionLabel(item)}</span>${item.url}</span>
+      </span>
+    </label>`;
+  }).join('');
+
+  customCloud.innerHTML = CLOUD_URLS.map((item, idx) => {
+    const checked = !_connCustomOpen ? false :
+      (document.querySelector('input[name="conn-mode"]:checked')?.value !== 'self' &&
+       (normalizeUrl(item.url).toLowerCase() === selected.toLowerCase() ||
+        (!isKnownCloudUrl(selected) && idx === 0)));
+    // In custom view, cloud radios share name="conn-mode" with value=cloud URL via data
+    return `<label class="conn-option">
+      <input type="radio" name="conn-mode" value="cloud" data-cloud-url="${item.url}"
+             ${document.querySelector('input[name="conn-mode"]:checked')?.value === 'self' ? '' : (normalizeUrl(item.url).toLowerCase() === selected.toLowerCase() || (!isKnownCloudUrl(selected) && idx === 0) ? 'checked' : '')}
+             onchange="onConnModeChange()" />
+      <span class="conn-option-body">
+        <span class="conn-option-label">${t(cloudOptionLabelKey(item))}</span>
+        <span class="conn-option-meta"><span class="region-tag">${regionLabel(item)}</span>${item.url}</span>
+      </span>
+    </label>`;
+  }).join('');
+}
+
+function onCloudSelect() {
+  const checked = document.querySelector('input[name="conn-cloud"]:checked');
+  if (checked) _selectedCloudUrl = checked.value;
+}
+
 function toggleConnCustom(forceOpen) {
   _connCustomOpen = typeof forceOpen === 'boolean' ? forceOpen : !_connCustomOpen;
   document.getElementById('conn-default-view').style.display = _connCustomOpen ? 'none' : '';
   document.getElementById('conn-custom-view').style.display = _connCustomOpen ? '' : 'none';
-  document.getElementById('btn-conn-toggle').textContent = _connCustomOpen ? '使用默认' : '自定义地址';
+  document.getElementById('btn-conn-toggle').textContent =
+    _connCustomOpen ? t('index.connUseDefault') : t('index.connCustom');
   if (_connCustomOpen) {
-    const checked = document.querySelector('#conn-default-view input[name="conn-mode"]:checked');
-    const mode = checked?.value || 'cloud';
-    document.querySelectorAll('#conn-custom-view input[name="conn-mode"]').forEach(r => {
-      r.checked = r.value === mode;
-    });
+    renderCloudOptions();
+    const selfRadio = document.querySelector('#conn-custom-view input[name="conn-mode"][value="self"]');
+    if (isLocalAgentUrl(document.getElementById('login-agent-url').value)) {
+      if (selfRadio) selfRadio.checked = true;
+    }
+  } else {
+    renderCloudOptions();
   }
   onConnModeChange();
 }
 
 function onConnModeChange() {
-  const mode = document.querySelector('input[name="conn-mode"]:checked')?.value || 'cloud';
+  const mode = document.querySelector('#conn-custom-view input[name="conn-mode"]:checked')?.value || 'cloud';
   const customInput = document.getElementById('login-agent-url');
-  if (customInput) customInput.style.display = mode === 'self' ? '' : 'none';
+  if (customInput) customInput.style.display = (_connCustomOpen && mode === 'self') ? '' : 'none';
+  if (_connCustomOpen && mode === 'cloud') {
+    const cloudRadio = document.querySelector('#conn-custom-view input[name="conn-mode"][value="cloud"]:checked');
+    if (cloudRadio?.dataset.cloudUrl) _selectedCloudUrl = cloudRadio.dataset.cloudUrl;
+  }
 }
 
 function getLoginAgentUrl() {
-  if (!_connCustomOpen) return DEFAULT_AGENT_URL;
-  const mode = document.querySelector('input[name="conn-mode"]:checked')?.value || 'cloud';
-  if (mode === 'cloud') return DEFAULT_AGENT_URL;
+  if (!_connCustomOpen) {
+    const checked = document.querySelector('input[name="conn-cloud"]:checked');
+    return (checked?.value || _selectedCloudUrl || DEFAULT_AGENT_URL).trim();
+  }
+  const modeEl = document.querySelector('#conn-custom-view input[name="conn-mode"]:checked');
+  const mode = modeEl?.value || 'cloud';
+  if (mode === 'cloud') {
+    return (modeEl?.dataset.cloudUrl || _selectedCloudUrl || DEFAULT_AGENT_URL).trim();
+  }
   return document.getElementById('login-agent-url').value.trim() || LOCAL_AGENT_URL;
 }
 
 function applyLoginConnSettings(d) {
-  const url = d?.agent_url || DEFAULT_AGENT_URL;
-  document.getElementById('login-cloud-url').textContent = DEFAULT_AGENT_URL;
+  if (Array.isArray(d?.cloud_urls) && d.cloud_urls.length) {
+    CLOUD_URLS = d.cloud_urls;
+  }
+  if (d?.default_agent_url) DEFAULT_AGENT_URL = d.default_agent_url;
+
+  const url = normalizeUrl(d?.agent_url || DEFAULT_AGENT_URL);
+  _selectedCloudUrl = isKnownCloudUrl(url) ? url : DEFAULT_AGENT_URL;
 
   if (isLocalAgentUrl(url)) {
-    toggleConnCustom(true);
-    const radios = document.querySelectorAll('input[name="conn-mode"]');
-    radios.forEach(r => { r.checked = r.value === 'self'; });
     document.getElementById('login-agent-url').value = url || LOCAL_AGENT_URL;
-  } else if (url && url !== DEFAULT_AGENT_URL) {
     toggleConnCustom(true);
-    const radios = document.querySelectorAll('input[name="conn-mode"]');
-    radios.forEach(r => { r.checked = r.value === 'cloud'; });
+    const selfRadio = document.querySelector('#conn-custom-view input[name="conn-mode"][value="self"]');
+    if (selfRadio) selfRadio.checked = true;
+  } else if (url && !isKnownCloudUrl(url)) {
+    // 未知自定义远端地址 → 自定义视图，选云服务并填入（用户可改）
     document.getElementById('login-agent-url').value = url;
+    _selectedCloudUrl = DEFAULT_AGENT_URL;
+    toggleConnCustom(true);
+    // 当作自部署自定义 URL 处理更合理
+    const selfRadio = document.querySelector('#conn-custom-view input[name="conn-mode"][value="self"]');
+    if (selfRadio) selfRadio.checked = true;
   } else {
     toggleConnCustom(false);
-    const cloudRadio = document.querySelector('input[name="conn-mode"][value="cloud"]');
-    if (cloudRadio) cloudRadio.checked = true;
+    renderCloudOptions();
   }
   onConnModeChange();
 }
 
-/* ─── Init ─── */
+function refreshStaticI18n() {
+  GW_I18N.applyI18n();
+  document.getElementById('btn-conn-toggle').textContent =
+    _connCustomOpen ? t('index.connUseDefault') : t('index.connCustom');
+  renderCloudOptions();
+  if (_cdLeft > 0) {
+    document.getElementById('btn-code').textContent = `${_cdLeft}${t('index.resendAfter')}`;
+  }
+  if (_lastDashSettings && document.getElementById('view-dash').style.display !== 'none') {
+    showDash(_lastDashSettings);
+  } else {
+    // 刷新平台状态文案（若已登录）
+    const weixinEl = document.getElementById('weixin-status-text');
+    if (weixinEl && document.getElementById('view-dash').style.display !== 'none') {
+      loadWeixinStatus();
+      loadFeishuStatus();
+      loadWecomStatus();
+      loadXiaoaiStatus();
+    }
+  }
+}
+
+window.__onLocaleChange = function () {
+  refreshStaticI18n();
+};
+
 async function init() {
+  GW_I18N.applyI18n();
   try {
     const d = await api('/api/settings');
     if (d.default_agent_url) DEFAULT_AGENT_URL = d.default_agent_url;
+    if (Array.isArray(d.cloud_urls) && d.cloud_urls.length) CLOUD_URLS = d.cloud_urls;
     applyLoginConnSettings(d);
     if (d.has_token && d.agent_user_id) {
       showDash(d);
@@ -792,6 +904,7 @@ async function init() {
       showLogin();
     }
   } catch(e) {
+    renderCloudOptions();
     showLogin();
   }
   document.getElementById('page-loading').style.display = 'none';
@@ -804,18 +917,19 @@ function showLogin() {
 }
 
 function showDash(d) {
+  _lastDashSettings = d;
   document.getElementById('view-login').style.display = 'none';
   document.getElementById('view-dash').style.display = '';
-  document.getElementById('header-user').style.display = '';
+  document.getElementById('header-user').style.display = 'flex';
 
-  const label = d.agent_email || d.agent_user_id || '用户';
+  const label = d.agent_email || d.agent_user_id || t('index.userFallback');
   document.getElementById('header-email').textContent = label;
   document.getElementById('user-avatar-char').textContent = (label[0] || 'U').toUpperCase();
-  document.getElementById('dash-desc').textContent =
-    `当前账号：${label}。管理各平台接入状态。`;
+  document.getElementById('dash-desc').textContent = t('index.dashDescUser', { user: label });
 
   document.getElementById('dash-url-display').textContent = d.agent_url || DEFAULT_AGENT_URL;
   updateModeUI(d.is_local);
+  GW_I18N.applyI18n();
   loadWeixinStatus();
   loadFeishuStatus();
   loadWecomStatus();
@@ -825,48 +939,49 @@ function showDash(d) {
 function updateModeUI(isLocal) {
   const el = document.getElementById('badge-mode');
   if (!el) return;
-  if (isLocal === true)  { el.className = 'badge badge-blue';  el.textContent = '本地模式'; }
-  else if (isLocal === false) { el.className = 'badge badge-green'; el.textContent = '远端模式'; }
-  else { el.className = 'badge badge-gray'; el.textContent = '检测中…'; }
+  if (isLocal === true)  { el.className = 'badge badge-blue';  el.textContent = t('index.modeLocal'); }
+  else if (isLocal === false) { el.className = 'badge badge-green'; el.textContent = t('index.modeRemote'); }
+  else { el.className = 'badge badge-gray'; el.textContent = t('common.detecting'); }
 }
 
-/* ─── Login ─── */
 let _cdTimer = null;
 function startCD(n) {
   const btn = document.getElementById('btn-code');
   btn.disabled = true;
-  btn.textContent = `${n}s 后重发`;
+  _cdLeft = n;
+  btn.textContent = `${_cdLeft}${t('index.resendAfter')}`;
   if (_cdTimer) clearInterval(_cdTimer);
   _cdTimer = setInterval(() => {
-    n--;
-    if (n <= 0) {
+    _cdLeft--;
+    if (_cdLeft <= 0) {
       clearInterval(_cdTimer); _cdTimer = null;
+      _cdLeft = 0;
       btn.disabled = false;
-      btn.textContent = '获取验证码';
-    } else { btn.textContent = `${n}s 后重发`; }
+      btn.textContent = t('index.getCode');
+    } else { btn.textContent = `${_cdLeft}${t('index.resendAfter')}`; }
   }, 1000);
 }
 
 async function sendCode() {
   const email = document.getElementById('login-email').value.trim();
-  if (!email) { setMsg('login-msg', '请填写邮箱', 'err'); return; }
-  setMsg('login-msg', '发送中…', '');
+  if (!email) { setMsg('login-msg', t('index.fillEmail'), 'err'); return; }
+  setMsg('login-msg', t('index.sending'), '');
   try {
     const d = await api('/api/auth/email/send-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, agent_url: getLoginAgentUrl() }),
     });
-    if (d.success) { setMsg('login-msg', '验证码已发送，请查收邮箱', 'ok'); startCD(60); }
-    else { setMsg('login-msg', d.message || '发送失败', 'err'); }
-  } catch(e) { setMsg('login-msg', '发送失败：' + e.message, 'err'); }
+    if (d.success) { setMsg('login-msg', t('index.codeSent'), 'ok'); startCD(60); }
+    else { setMsg('login-msg', d.message || t('index.sendFailed'), 'err'); }
+  } catch(e) { setMsg('login-msg', t('index.sendFailedPrefix') + e.message, 'err'); }
 }
 
 async function doLogin() {
   const email    = document.getElementById('login-email').value.trim();
   const code     = document.getElementById('login-code').value.trim();
   const username = document.getElementById('login-username').value.trim();
-  if (!email || !code) { setMsg('login-msg', '请填写邮箱和验证码', 'err'); return; }
+  if (!email || !code) { setMsg('login-msg', t('index.fillEmailCode'), 'err'); return; }
 
   const btn = document.getElementById('btn-login');
   btn.disabled = true;
@@ -886,32 +1001,32 @@ async function doLogin() {
     if (d.success) {
       const settings = await api('/api/settings');
       showDash(settings);
-    } else { setMsg('login-msg', d.message || '登录失败', 'err'); }
-  } catch(e) { setMsg('login-msg', '登录失败：' + e.message, 'err'); }
+    } else { setMsg('login-msg', d.message || t('index.loginFailed'), 'err'); }
+  } catch(e) { setMsg('login-msg', t('index.loginFailedPrefix') + e.message, 'err'); }
   finally {
     btn.disabled = false;
-    btn.innerHTML = '<span>登录 / 注册</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+    btn.innerHTML = `<span>${t('index.loginBtn')}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
   }
 }
 
 async function doLogout() {
-  if (!confirm('确定要退出登录吗？')) return;
+  if (!confirm(t('index.logoutConfirm'))) return;
   await api('/api/settings/logout', { method: 'POST' });
   try {
     const d = await api('/api/settings');
     if (d.default_agent_url) DEFAULT_AGENT_URL = d.default_agent_url;
+    if (Array.isArray(d.cloud_urls) && d.cloud_urls.length) CLOUD_URLS = d.cloud_urls;
     applyLoginConnSettings(d);
   } catch (e) {}
   showLogin();
 }
 
-/* ─── Dashboard ─── */
 async function testConn() {
-  setMsg('url-msg', '测试连接中…', '');
+  setMsg('url-msg', t('index.testing'), '');
   try {
     const d = await api('/api/settings/test', { method: 'POST' });
     setMsg('url-msg', (d.success ? '✓ ' : '✗ ') + d.message, d.success ? 'ok' : 'err');
-  } catch(e) { setMsg('url-msg', '测试失败：' + e.message, 'err'); }
+  } catch(e) { setMsg('url-msg', t('index.testFailed') + e.message, 'err'); }
 }
 
 async function loadWeixinStatus() {
@@ -920,10 +1035,10 @@ async function loadWeixinStatus() {
     const el = document.getElementById('weixin-status-text');
     if (!el) return;
     if (d.connected) {
-      el.textContent = `已连接 · ${d.account_id || ''}`;
+      el.textContent = t('index.weixinConnected', { id: d.account_id || '' });
       el.style.color = 'var(--accent)';
     } else {
-      el.textContent = '未连接，点击进入配置';
+      el.textContent = t('index.weixinIdle');
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}
@@ -935,13 +1050,13 @@ async function loadFeishuStatus() {
     const el = document.getElementById('feishu-status-text');
     if (!el) return;
     if (d.connected) {
-      el.textContent = `已连接 · ${d.bot_name || d.app_id || ''}`;
+      el.textContent = t('index.feishuConnected', { id: d.bot_name || d.app_id || '' });
       el.style.color = 'var(--accent)';
     } else if (d.configured) {
-      el.textContent = '已配置但未连接，点击进入';
+      el.textContent = t('index.feishuConfigured');
       el.style.color = 'var(--text-sub)';
     } else {
-      el.textContent = '未配置，点击进入扫码或填写凭证';
+      el.textContent = t('index.feishuIdle');
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}
@@ -953,13 +1068,13 @@ async function loadWecomStatus() {
     const el = document.getElementById('wecom-status-text');
     if (!el) return;
     if (d.connected) {
-      el.textContent = `已连接 · ${d.bot_name || d.bot_id || ''}`;
+      el.textContent = t('index.wecomConnected', { id: d.bot_name || d.bot_id || '' });
       el.style.color = 'var(--accent)';
     } else if (d.configured) {
-      el.textContent = '已配置但未连接，点击进入';
+      el.textContent = t('index.wecomConfigured');
       el.style.color = 'var(--text-sub)';
     } else {
-      el.textContent = '未配置，点击进入扫码或填写凭证';
+      el.textContent = t('index.wecomIdle');
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}
@@ -971,13 +1086,13 @@ async function loadXiaoaiStatus() {
     const el = document.getElementById('xiaoai-status-text');
     if (!el) return;
     if (d.connected) {
-      el.textContent = `已连接 · ${d.device_name || ''}`;
+      el.textContent = t('index.xiaoaiConnected', { id: d.device_name || '' });
       el.style.color = 'var(--accent)';
     } else if (d.configured) {
-      el.textContent = '已配置但未连接，点击进入';
+      el.textContent = t('index.xiaoaiConfigured');
       el.style.color = 'var(--text-sub)';
     } else {
-      el.textContent = '未配置，点击进入填写小米账号';
+      el.textContent = t('index.xiaoaiIdle');
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}
