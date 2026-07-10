@@ -47,18 +47,29 @@ wait_port 27017 "MongoDB" 60
 
 # ── Step 2: Milvus ────────────────────────────────────────────────
 section "Step 2 · Milvus"
-MILVUS_SCRIPT="$MILVUS_DIR/standalone_embed.sh"
-[[ -f "$MILVUS_SCRIPT" ]] || die "Milvus 脚本不存在，请先运行 bash deploy/install.sh"
 
-if port_open 19530; then
+mkdir -p \
+    "$MILVUS_VOLUME_DIR/volumes/etcd" \
+    "$MILVUS_VOLUME_DIR/volumes/minio" \
+    "$MILVUS_VOLUME_DIR/volumes/milvus"
+
+# 清理旧版单容器（若存在且不是 compose 管理的）
+if docker ps -a --format '{{.Names}}' | grep -qx "milvus-standalone"; then
+    # compose 管理的容器会带 com.docker.compose.project 标签
+    if ! docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' milvus-standalone 2>/dev/null | grep -q .; then
+        warn "检测到旧版单容器 milvus-standalone，正在移除以便改用 compose..."
+        docker rm -f milvus-standalone >/dev/null 2>&1 || true
+    fi
+fi
+
+if docker ps --format '{{.Names}}' | grep -qx "milvus-standalone" \
+    && port_open 19530; then
     ok "Milvus 已在运行（:19530）"
 else
-    info "启动 Milvus standalone..."
-    pushd "$MILVUS_DIR" > /dev/null
-    bash standalone_embed.sh start
-    popd > /dev/null
+    info "启动 Milvus（etcd + minio + milvus）..."
+    milvus_compose up -d
 fi
-wait_port 19530 "Milvus" 120
+wait_port 19530 "Milvus" 180
 
 # ── Step 3: vdb ───────────────────────────────────────────────────
 section "Step 3 · VDB 服务"

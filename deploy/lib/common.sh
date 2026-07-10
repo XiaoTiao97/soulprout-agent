@@ -18,6 +18,8 @@ DEPLOY_DIR="$PROJECT_ROOT/deploy"
 LOG_DIR="$PROJECT_ROOT/logs"
 DATA_DIR="$DEPLOY_DIR/data"
 MILVUS_DIR="$PROJECT_ROOT/vdb"
+MILVUS_COMPOSE_DIR="$DEPLOY_DIR/milvus"
+MILVUS_VOLUME_DIR="$DATA_DIR/milvus"
 
 # ── 端口检测 ─────────────────────────────────────────────────────
 port_open() {
@@ -46,6 +48,28 @@ require_cmd() {
 check_docker() {
     require_cmd docker
     docker info &>/dev/null || die "Docker daemon 未运行，请先启动 Docker。"
+}
+
+# 兼容 docker compose 插件与旧版 docker-compose
+docker_compose() {
+    if docker compose version &>/dev/null; then
+        docker compose "$@"
+    elif command -v docker-compose &>/dev/null; then
+        docker-compose "$@"
+    else
+        die "缺少 docker compose，请安装 Docker Compose 插件后重试。"
+    fi
+}
+
+# Milvus compose 封装（etcd + minio + milvus）
+milvus_compose() {
+    [[ -f "$MILVUS_COMPOSE_DIR/docker-compose.yml" ]] \
+        || die "未找到 $MILVUS_COMPOSE_DIR/docker-compose.yml"
+    export DOCKER_VOLUME_DIRECTORY="$MILVUS_VOLUME_DIR"
+    docker_compose \
+        -f "$MILVUS_COMPOSE_DIR/docker-compose.yml" \
+        --project-directory "$MILVUS_COMPOSE_DIR" \
+        "$@"
 }
 
 # ── Python ───────────────────────────────────────────────────────

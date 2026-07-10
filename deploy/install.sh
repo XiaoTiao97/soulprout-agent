@@ -63,13 +63,16 @@ else
     mkdir -p "$MONGO_DATA"
     ok "Mongo 数据目录：$MONGO_DATA"
 
-    # 2-c  检查 Milvus standalone 脚本
-    MILVUS_SCRIPT="$MILVUS_DIR/standalone_embed.sh"
-    if [[ -f "$MILVUS_SCRIPT" ]]; then
-        ok "Milvus 脚本就绪：$MILVUS_SCRIPT"
-    else
-        die "未找到 vdb/standalone_embed.sh，请确认文件已放置在 vdb/ 目录下"
-    fi
+    # 2-c  Milvus（docker compose：etcd + minio + milvus）
+    mkdir -p \
+        "$MILVUS_VOLUME_DIR/volumes/etcd" \
+        "$MILVUS_VOLUME_DIR/volumes/minio" \
+        "$MILVUS_VOLUME_DIR/volumes/milvus"
+    ok "Milvus 数据目录：$MILVUS_VOLUME_DIR/volumes"
+
+    info "拉取 Milvus compose 镜像..."
+    milvus_compose pull
+    ok "Milvus 镜像就绪"
 fi
 
 # ────────────────────────────────────────────────────────────────

@@ -27,15 +27,12 @@ kill_service "vdb"
 if $STOP_DB; then
     section "停止数据库"
 
-    MILVUS_SCRIPT="$MILVUS_DIR/standalone_embed.sh"
-    if [[ -f "$MILVUS_SCRIPT" ]]; then
-        info "停止 Milvus..."
-        pushd "$MILVUS_DIR" > /dev/null
-        bash standalone_embed.sh stop
-        popd > /dev/null
+    if docker ps --format '{{.Names}}' | grep -Eq '^milvus-(standalone|etcd|minio)$'; then
+        info "停止 Milvus（compose）..."
+        milvus_compose stop
         ok "Milvus 已停止"
     else
-        warn "未找到 Milvus 脚本，跳过"
+        warn "Milvus 未在运行，跳过"
     fi
 
     if docker ps --format '{{.Names}}' | grep -qx "mongo"; then
