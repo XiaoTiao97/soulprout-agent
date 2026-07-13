@@ -50,10 +50,7 @@ section "Step 2 · Milvus"
 
 EXPECTED_MILVUS_IMAGE="milvusdb/milvus:v3.0-beta"
 
-mkdir -p \
-    "$MILVUS_VOLUME_DIR/volumes/etcd" \
-    "$MILVUS_VOLUME_DIR/volumes/minio" \
-    "$MILVUS_VOLUME_DIR/volumes/milvus"
+prepare_milvus_volumes
 
 # 清理旧版单容器（若存在且不是 compose 管理的）
 if docker ps -a --format '{{.Names}}' | grep -qx "milvus-standalone"; then
@@ -67,12 +64,14 @@ fi
 need_milvus_up=true
 if docker ps --format '{{.Names}}' | grep -qx "milvus-standalone" && port_open 19530; then
     current_image=$(docker inspect -f '{{.Config.Image}}' milvus-standalone 2>/dev/null || true)
-    if [[ "$current_image" == *":v3.0-beta"* ]] || [[ "$current_image" == *"milvus:v3.0"* ]]; then
+    health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' milvus-standalone 2>/dev/null || true)
+    if { [[ "$current_image" == *":v3.0-beta"* ]] || [[ "$current_image" == *"milvus:v3.0"* ]]; } \
+        && [[ "$health" == "healthy" || "$health" == "running" ]]; then
         ok "Milvus 已在运行（:19530，镜像 $current_image）"
         need_milvus_up=false
     else
-        warn "检测到非 v3.0 Milvus 镜像（$current_image），将重建为 $EXPECTED_MILVUS_IMAGE"
-        warn "若此前用过 v2.4 数据卷，可能不兼容 BM25；必要时清空 $MILVUS_VOLUME_DIR/volumes 后重启"
+        warn "检测到异常/非 v3.0 Milvus（image=$current_image health=$health），将重建为 $EXPECTED_MILVUS_IMAGE"
+        warn "若此前用过 v2.4 或权限错误的数据卷，建议清空 $MILVUS_VOLUME_DIR/volumes 后重启"
         milvus_compose down >/dev/null 2>&1 || true
     fi
 fi

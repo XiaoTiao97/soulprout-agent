@@ -1,8 +1,8 @@
 # Milvus standalone（etcd + minio + milvus），基于官方 v3.0-beta 模板
 # 数据目录由 DOCKER_VOLUME_DIRECTORY 指定（默认当前目录）
 # 参考：https://github.com/milvus-io/milvus/releases/tag/v3.0-beta
-
-version: "3.5"
+# 注意：宿主机 volumes 需可写（容器内非 root），否则会因
+# mkdir /var/lib/milvus/data permission denied 而无法监听 19530
 
 services:
   etcd:

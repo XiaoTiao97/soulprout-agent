@@ -65,10 +65,7 @@ else
 
     # 2-c  Milvus（docker compose：etcd + minio + milvus v3.0-beta）
     # v3.0 才支持本项目 hybrid search 所需的 BM25 稀疏度量；勿降级到 2.4
-    mkdir -p \
-        "$MILVUS_VOLUME_DIR/volumes/etcd" \
-        "$MILVUS_VOLUME_DIR/volumes/minio" \
-        "$MILVUS_VOLUME_DIR/volumes/milvus"
+    prepare_milvus_volumes
     ok "Milvus 数据目录：$MILVUS_VOLUME_DIR/volumes"
 
     info "拉取 Milvus compose 镜像（v3.0-beta）..."

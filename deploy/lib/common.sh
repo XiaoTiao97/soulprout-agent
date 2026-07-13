@@ -72,6 +72,17 @@ milvus_compose() {
         "$@"
 }
 
+# 准备 Milvus 数据目录：容器内进程通常非 root，主机目录必须可写
+# 否则会 FATAL: mkdir /var/lib/milvus/data/: permission denied，19530 无法对外服务
+prepare_milvus_volumes() {
+    mkdir -p \
+        "$MILVUS_VOLUME_DIR/volumes/etcd" \
+        "$MILVUS_VOLUME_DIR/volumes/minio" \
+        "$MILVUS_VOLUME_DIR/volumes/milvus/data"
+    # 官方常见做法：放宽 volumes 写权限，避免容器内非 root 用户无法建目录
+    chmod -R a+rwX "$MILVUS_VOLUME_DIR/volumes" 2>/dev/null || true
+}
+
 # ── Python ───────────────────────────────────────────────────────
 PYTHON=""
 
