@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rokid 灵珠接入 · Soulprout Gateway</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c14;
+      --bg-card: rgba(16, 22, 34, 0.9);
+      --accent: #4f8cff;
+      --accent-dim: rgba(79, 140, 255, 0.12);
+      --accent-border: rgba(79, 140, 255, 0.28);
+      --text: #e8eef8;
+      --text-sub: rgba(232, 238, 248, 0.5);
+      --text-muted: rgba(232, 238, 248, 0.24);
+      --border: rgba(255, 255, 255, 0.06);
+      --warn: #e8b84a;
+    }
+    body {
+      font-family: 'Noto Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    .bg-deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    .bg-radial {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 55% at 50% 38%, rgba(79,140,255,0.08) 0%, transparent 68%);
+    }
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 2rem; background: rgba(8, 12, 20, 0.8);
+      backdrop-filter: blur(24px); border-bottom: 1px solid var(--border);
+    }
+    .header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-back {
+      display: inline-flex; align-items: center; gap: 0.375rem;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-sub); padding: 0.375rem 0.875rem; border-radius: 2rem;
+      font-size: 0.8125rem; font-family: inherit; cursor: pointer; text-decoration: none;
+    }
+    .btn-back:hover { border-color: var(--accent-border); color: var(--accent); }
+    .brand-logo {
+      width: 1.75rem; height: 1.75rem;
+      background: linear-gradient(135deg, #4f8cff 0%, #2f6ae0 100%);
+      border-radius: 0.4rem; display: flex; align-items: center; justify-content: center;
+    }
+    .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
+    .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-locale {
+      background: transparent; border: 1px solid var(--border); color: var(--text-sub);
+      padding: 0.35rem 0.75rem; border-radius: 2rem; font-size: 0.8rem;
+      font-family: inherit; cursor: pointer; white-space: nowrap;
+    }
+    .btn-locale:hover { border-color: var(--accent-border); color: var(--accent); }
+    .page-main { position: relative; z-index: 10; max-width: 640px; margin: 0 auto; padding: 6rem 1.5rem 3rem; }
+    .page-eyebrow { font-size: 10px; letter-spacing: 0.4em; text-transform: uppercase; color: rgba(79,140,255,0.55); margin-bottom: 0.5rem; }
+    .page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.375rem; display: flex; align-items: center; gap: 0.625rem; }
+    .page-desc { font-size: 0.875rem; color: var(--text-sub); line-height: 1.7; margin-bottom: 2rem; }
+    .section-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 1.25rem; padding: 1.5rem 1.75rem; margin-bottom: 1.25rem;
+    }
+    .section-label { font-size: 10px; letter-spacing: 0.35em; text-transform: uppercase; color: rgba(79,140,255,0.45); margin-bottom: 1.25rem; }
+    .status-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.625rem 0; }
+    .status-row + .status-row { border-top: 1px solid rgba(255,255,255,0.04); }
+    .status-label { font-size: 0.875rem; color: var(--text-sub); flex-shrink: 0; }
+    .status-value {
+      font-size: 0.8125rem; color: var(--text); word-break: break-all; text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .badge { font-size: 10px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+    .badge-green { background: rgba(79,140,255,0.14); color: var(--accent); }
+    .badge-gray { background: rgba(255,255,255,0.06); color: var(--text-sub); }
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8125rem; color: var(--text-sub); margin-bottom: 0.375rem; }
+    .field small { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; }
+    .input-field {
+      width: 100%; padding: 0.625rem 0.875rem; border-radius: 0.625rem;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.03);
+      color: var(--text); font-family: inherit; font-size: 0.875rem;
+    }
+    .copy-row { display: flex; gap: 0.5rem; align-items: stretch; }
+    .copy-row .input-field { flex: 1; }
+    .btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.625rem 1.25rem; border-radius: 0.625rem;
+      font-size: 0.875rem; font-weight: 500; font-family: inherit; cursor: pointer; border: none;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text-sub); border: 1px solid var(--border); }
+    .btn-danger { background: rgba(229,90,90,0.12); color: #e55a5a; border: 1px solid rgba(229,90,90,0.25); }
+    .msg { font-size: 0.8125rem; min-height: 1.1rem; margin-top: 0.75rem; color: var(--text-sub); }
+    .msg.ok { color: var(--accent); }
+    .msg.err { color: #e55a5a; }
+    .note {
+      font-size: 0.8125rem; color: var(--text-muted); line-height: 1.75;
+      padding: 0.875rem 1rem; border-radius: 0.75rem;
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    }
+    .note strong { color: var(--text-sub); }
+    .note a { color: var(--accent); }
+    .note p + p { margin-top: 0.65rem; }
+    .warn-box {
+      margin-top: 0.75rem; font-size: 0.8125rem; line-height: 1.6; color: var(--warn);
+      padding: 0.75rem 0.875rem; border-radius: 0.625rem;
+      background: rgba(232,184,74,0.08); border: 1px solid rgba(232,184,74,0.22);
+    }
+  </style>
+</head>
+<body>
+<div class="bg-deco"><div class="bg-radial"></div></div>
+
+<header class="header">
+  <div class="header-left">
+    <a href="/" class="btn-back">← <span data-i18n="common.back">返回</span></a>
+    <a href="/" class="brand-logo">🌱</a>
+    <a href="/" class="brand-name">Soulprout Gateway</a>
+  </div>
+  <div class="header-right">
+    <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
+    <span class="page-tag" data-i18n="rokid.pageTag">Rokid 灵珠</span>
+  </div>
+</header>
+
+<main class="page-main">
+  <p class="page-eyebrow" data-i18n="rokid.eyebrow">Gateway · 眼镜接入</p>
+  <h1 class="page-title">👓 <span data-i18n="rokid.title">Rokid 灵珠</span></h1>
+  <p class="page-desc" data-i18n="rokid.desc">
+    在本地生成 API Key 并自动上传到 Soulprout 主站。灵珠云调用主站 SSE（www.soulprout.com），按 Key 路由到你的 Soul。
+  </p>
+
+  <section class="section-card">
+    <p class="section-label" data-i18n="rokid.guideSection">如何配置 Rokid 眼镜</p>
+    <div class="note">
+      <p data-i18n-html="rokid.guide1">首先打开灵珠平台首页：<a href="https://rizon.rokid.com/space/home" target="_blank" rel="noopener">https://rizon.rokid.com/space/home</a></p>
+      <p data-i18n="rokid.guide2">如果是首次登录，需要进行个人认证，待认证通过后，点击左侧：项目开发 - 三方智能体 - 创建。</p>
+      <p data-i18n="rokid.guide3">填入：</p>
+      <p><strong data-i18n="rokid.guideVendor">三方厂商：</strong><span data-i18n="rokid.guideVendorVal">自定义智能体</span></p>
+      <p><strong data-i18n="rokid.guideFill">自定义智能体 ID / URL / AK：</strong><span data-i18n="rokid.guideFillVal">根据本页生成的内容填写</span></p>
+      <p><strong data-i18n="rokid.guideName">智能体名称：</strong><span data-i18n="rokid.guideNameVal">可自行填写</span></p>
+      <p data-i18n="rokid.guideOther">其他选项根据个人爱好填写，最后点击确认。</p>
+    </div>
+  </section>
+
+  <section class="section-card">
+    <p class="section-label" data-i18n="rokid.credSection">生成并上传 API Key</p>
+
+    <div class="status-row">
+      <span class="status-label" data-i18n="rokid.keyStatus">API Key</span>
+      <span id="badge-key" class="badge badge-gray">—</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label" data-i18n="rokid.boundUser">绑定用户</span>
+      <span id="bound-user" class="status-value">—</span>
+    </div>
+
+    <div class="field" style="margin-top:1.25rem">
+      <label data-i18n="rokid.agentId">智能体 ID</label>
+      <div class="copy-row">
+        <input id="agent-id" class="input-field" readonly placeholder="—" />
+        <button class="btn btn-secondary" type="button" onclick="copyField('agent-id')" data-i18n="rokid.copy">复制</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label data-i18n="rokid.apiKey">智能体鉴权 AK（API Key）</label>
+      <div class="copy-row">
+        <input id="api-key" class="input-field" readonly placeholder="—" />
+        <button class="btn btn-secondary" type="button" onclick="copyField('api-key')" data-i18n="rokid.copy">复制</button>
+      </div>
+      <small data-i18n="rokid.apiKeyHint">生成本地后自动上传主站；同一账号再次生成会先同步主站已有 Key，不会无故刷新。</small>
+    </div>
+
+    <div class="field">
+      <label data-i18n="rokid.sseUrl">智能体 SSE 接口地址</label>
+      <div class="copy-row">
+        <input id="sse-url" class="input-field" readonly />
+        <button class="btn btn-secondary" type="button" onclick="copyField('sse-url')" data-i18n="rokid.copy">复制</button>
+      </div>
+      <small data-i18n="rokid.sseUrlHint">固定为主站地址，请直接填入灵珠。</small>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" type="button" onclick="ensureKey()" data-i18n="rokid.ensureKey">生成 / 同步 API Key</button>
+      <button class="btn btn-danger" type="button" onclick="regenKey()" data-i18n="rokid.regenKey">重新生成 Key</button>
+    </div>
+    <div class="warn-box" data-i18n="rokid.regenWarn">
+      重新生成后，灵珠平台的第三方智能体必须重新配置新的 AK，否则眼镜将无法调用。
+    </div>
+    <p class="msg" id="msg"></p>
+  </section>
+</main>
+
+<script src="/static/i18n.js"></script>
+<script>
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && data.error) throw new Error(data.error);
+  if (!res.ok && data.message) throw new Error(data.message);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return data;
+}
+
+function t(key, vars) { return GW_I18N.t(key, vars); }
+
+function setMsg(text, kind) {
+  const el = document.getElementById('msg');
+  el.textContent = text || '';
+  el.className = 'msg' + (kind ? ' ' + kind : '');
+}
+
+function copyField(id) {
+  const el = document.getElementById(id);
+  const text = (el && el.value) || '';
+  if (!text) { setMsg(t('rokid.copyEmpty'), 'err'); return; }
+  navigator.clipboard.writeText(text).then(
+    () => setMsg(t('rokid.copied'), 'ok'),
+    () => setMsg(t('rokid.copyFailed'), 'err'),
+  );
+}
+
+function applyStatus(d) {
+  document.getElementById('agent-id').value = d.agent_id || '';
+  document.getElementById('api-key').value = d.api_key || '';
+  document.getElementById('sse-url').value = d.sse_url || 'https://www.soulprout.com/api/metis/agent/api/sse';
+  document.getElementById('bound-user').textContent = d.bound_user_id || '—';
+
+  const badgeKey = document.getElementById('badge-key');
+  if (d.api_key) {
+    badgeKey.textContent = t('rokid.ready');
+    badgeKey.className = 'badge badge-green';
+  } else {
+    badgeKey.textContent = t('rokid.notReady');
+    badgeKey.className = 'badge badge-gray';
+  }
+  if (d.sse_host_mismatch) {
+    setMsg(t('rokid.hostMismatch'), 'err');
+  } else if (d.remote_error) {
+    setMsg(t('rokid.remoteWarn') + d.remote_error, 'err');
+  }
+}
+
+async function refresh() {
+  try {
+    const d = await api('/api/rokid/status');
+    applyStatus(d);
+  } catch (e) {
+    setMsg(t('rokid.loadFailed') + e.message, 'err');
+  }
+}
+
+async function ensureKey() {
+  setMsg(t('rokid.ensuring'), '');
+  try {
+    const d = await api('/api/rokid/ensure-key', { method: 'POST' });
+    if (!d.success) { setMsg(d.error || t('rokid.ensureFailed'), 'err'); return; }
+    setMsg('✓ ' + (d.message || t('rokid.ensureOk')), 'ok');
+    await refresh();
+  } catch (e) {
+    setMsg(t('rokid.ensureFailed') + e.message, 'err');
+  }
+}
+
+async function regenKey() {
+  if (!confirm(t('rokid.regenConfirm'))) return;
+  setMsg(t('rokid.regenerating'), '');
+  try {
+    const d = await api('/api/rokid/regenerate-key', { method: 'POST' });
+    if (!d.success) { setMsg(d.error || t('rokid.regenFailed'), 'err'); return; }
+    setMsg('✓ ' + (d.message || t('rokid.regenOk')), 'ok');
+    await refresh();
+  } catch (e) {
+    setMsg(t('rokid.regenFailed') + e.message, 'err');
+  }
+}
+
+GW_I18N.applyI18n();
+window.__onLocaleChange = function () {
+  GW_I18N.applyI18n();
+};
+refresh();
+</script>
+</body>
+</html>

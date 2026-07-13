@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,38 @@ async def call_agent_chat(
         model_source=model_source,
         model=model,
     )
+
+
+async def iter_agent_chat_text_chunks(
+    message: str,
+    user_id: str,
+    conversation_id: str = "",
+    token: Optional[str] = None,
+    model_source: Optional[str] = None,
+    model: Optional[str] = None,
+) -> AsyncIterator[str]:
+    """流式产出 assistant 文本片段（供 Rokid 等 SSE 协议适配使用）。"""
+    from gateway.config_store import get_agent_token, get_agent_url
+
+    agent_url = get_agent_url()
+    effective_token = (token or get_agent_token() or "").strip()
+    effective_conversation_id = conversation_id or user_id
+
+    if not effective_token:
+        yield "（Agent 认证失败，请在 Gateway 管理界面重新登录以刷新 Rokid 绑定凭证）"
+        return
+
+    async for chunk in _iter_http_text_chunks(
+        agent_url=agent_url,
+        message=message,
+        user_id=user_id,
+        conversation_id=effective_conversation_id,
+        token=effective_token,
+        model_source=model_source,
+        model=model,
+    ):
+        yield chunk
+
 
 
 # ---------------------------------------------------------------------------
@@ -176,3 +208,97 @@ async def _call_http(
     except Exception as exc:
         logger.error("[ChatCaller] HTTP 调用失败 url=%s: %s", endpoint, exc, exc_info=True)
         return f"（Agent 调用失败: {exc}）"
+
+
+async def _iter_http_text_chunks(
+    agent_url: str,
+    message: str,
+    user_id: str,
+    conversation_id: str,
+    token: str,
+    model_source: Optional[str],
+    model: Optional[str],
+) -> AsyncIterator[str]:
+    """POST ``/message/chat``，逐 chunk 产出 assistant 文本。"""
+    try:
+        import aiohttp
+    except ImportError:
+        yield "（aiohttp 未安装，无法调用 Agent）"
+        return
+
+    from gateway.config_store import api_path
+
+    endpoint = api_path(agent_url, "/message/chat")
+    chat_req: dict = {
+        "message": message,
+        "user_id": user_id,
+        "conversation_id": conversation_id,
+        "tools_use": True,
+        "kb_use": [],
+        "agent_use": "soulprout",
+        "agent_id": None,
+        "temp_file_path": None,
+        "file_name_list": [],
+        "skills_use": False,
+    }
+    if model_source:
+        chat_req["model_source"] = model_source
+    if model:
+        chat_req["model"] = model
+
+    headers: dict = {"Authorization": f"Bearer {token}"}
+    cookies: dict = {"token": token}
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=300)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            form = aiohttp.FormData()
+            form.add_field("chat_request", json.dumps(chat_req, ensure_ascii=False))
+
+            async with session.post(
+                endpoint,
+                data=form,
+                headers=headers,
+                cookies=cookies,
+            ) as resp:
+                if resp.status == 401:
+                    logger.error("[ChatCaller] 流式调用 HTTP 401：token 已失效")
+                    yield "（Agent 认证失败，请在 Gateway 重新登录以刷新 Rokid 绑定凭证）"
+                    return
+
+                if resp.status >= 400:
+                    body = await resp.text()
+                    logger.error(
+                        "[ChatCaller] 流式调用 API 错误 HTTP %d: %s",
+                        resp.status,
+                        body[:200],
+                    )
+                    yield f"（Agent 请求失败 HTTP {resp.status}）"
+                    return
+
+                async for raw_line in resp.content:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str in ("", "[DONE]"):
+                        continue
+                    try:
+                        chunk = json.loads(data_str)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    content = chunk.get("content") or ""
+                    if not content:
+                        continue
+                    chunk_type = chunk.get("type")
+                    if chunk_type == "user_feedback":
+                        yield content
+                    elif chunk.get("role") == "assistant" and chunk_type == "text":
+                        yield content
+
+    except Exception as exc:
+        logger.error(
+            "[ChatCaller] 流式 HTTP 调用失败 url=%s: %s", endpoint, exc, exc_info=True
+        )
+        yield f"（Agent 调用失败: {exc}）"
+

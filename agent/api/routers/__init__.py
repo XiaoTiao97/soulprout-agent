@@ -9,6 +9,7 @@ from .agent_card import router as agent_card_router
 from .agent_subscription import router as agent_subscription_router
 from agent.kb.router import router as kb_router
 from .asr import router as asr_router
+from .rokid import router as rokid_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -20,3 +21,4 @@ router.include_router(agent_card_router)
 router.include_router(agent_subscription_router)
 router.include_router(kb_router)
 router.include_router(asr_router)
+router.include_router(rokid_router)

@@ -696,6 +696,17 @@
             <path d="M9 18l6-6-6-6" />
           </svg>
         </a>
+        <a href="/rokid" class="platform-item">
+          <div class="platform-icon">👓</div>
+          <div class="platform-info">
+            <div class="platform-name" data-i18n="index.rokidName">Rokid 灵珠</div>
+            <div class="platform-desc" id="rokid-status-text">加载中…</div>
+          </div>
+          <svg class="platform-arrow" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </a>
       </div>
     </div>
   </div>
@@ -883,6 +894,7 @@ function refreshStaticI18n() {
       loadFeishuStatus();
       loadWecomStatus();
       loadXiaoaiStatus();
+      loadRokidStatus();
     }
   }
 }
@@ -934,6 +946,7 @@ function showDash(d) {
   loadFeishuStatus();
   loadWecomStatus();
   loadXiaoaiStatus();
+  loadRokidStatus();
 }
 
 function updateModeUI(isLocal) {
@@ -1093,6 +1106,22 @@ async function loadXiaoaiStatus() {
       el.style.color = 'var(--text-sub)';
     } else {
       el.textContent = t('index.xiaoaiIdle');
+      el.style.color = 'var(--text-sub)';
+    }
+  } catch(e) {}
+}
+
+async function loadRokidStatus() {
+  try {
+    const d = await api('/api/rokid/status');
+    const el = document.getElementById('rokid-status-text');
+    if (!el) return;
+    if (d.configured && d.api_key) {
+      const shortId = (d.agent_id || '').slice(0, 8);
+      el.textContent = t('index.rokidReady', { id: shortId });
+      el.style.color = 'var(--accent)';
+    } else {
+      el.textContent = t('index.rokidIdle');
       el.style.color = 'var(--text-sub)';
     }
   } catch(e) {}

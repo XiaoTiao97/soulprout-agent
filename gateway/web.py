@@ -10,6 +10,7 @@ Gateway 管理 Web 服务。
 - 邮箱验证码登录（代理到 Agent ``/user/email/*``）
 - 企业 SSO 登录（代理到 Agent ``/user/sso-token``）
 - 测试连接（校验 Agent 可达性与 token 有效性）
+- Rokid 灵珠：本地生成 API Key 并上传主站；SSE 由主站提供
 
 飞书 / 企业微信 WebSocket 实现参考：https://github.com/NousResearch/hermes-agent
 """
@@ -127,6 +128,16 @@ async def xiaoai_page():
         return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
     return HTMLResponse(
         content="<h1>Soulprout Gateway</h1><p>static/xiaoai.html not found</p>"
+    )
+
+
+@app.get("/rokid", response_class=HTMLResponse)
+async def rokid_page():
+    html_path = _static_dir / "rokid.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        content="<h1>Soulprout Gateway</h1><p>static/rokid.html not found</p>"
     )
 
 
@@ -545,6 +556,221 @@ async def api_xiaoai_reload():
 
 
 # ---------------------------------------------------------------------------
+# Rokid / 灵珠（凭证在主站；Gateway 负责生成并上传）
+# ---------------------------------------------------------------------------
+
+async def _rokid_agent_request(
+    method: str,
+    path: str,
+    *,
+    token: str,
+    json_body: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """带登录态调用主站 Rokid 凭证 API。"""
+    import aiohttp
+    from gateway.config_store import api_path, get_agent_url
+
+    url = api_path(get_agent_url(), path)
+    headers = {"Authorization": f"Bearer {token}"}
+    cookies = {"token": token}
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.request(
+            method,
+            url,
+            json=json_body,
+            headers=headers,
+            cookies=cookies,
+        ) as resp:
+            data = await resp.json(content_type=None)
+            if resp.status >= 400:
+                msg = (
+                    (data or {}).get("message")
+                    or (data or {}).get("detail")
+                    or (data or {}).get("msg")
+                    or f"HTTP {resp.status}"
+                )
+                raise RuntimeError(str(msg))
+            if not isinstance(data, dict):
+                raise RuntimeError("主站返回格式异常")
+            return data
+
+
+@app.get("/api/rokid/status")
+async def api_rokid_status():
+    """优先从主站拉取凭证；失败时回退本地缓存。"""
+    from gateway.config_store import (
+        cache_rokid_credentials,
+        get_agent_token,
+        get_agent_url,
+        get_agent_user_id,
+        get_rokid_agent_id,
+        get_rokid_api_key,
+        get_rokid_bound_user_id,
+    )
+    from gateway.platforms.rokid import ROKID_HOME_URL, ROKID_PUBLIC_SSE_URL, ROKID_SSE_PATH
+
+    token = get_agent_token()
+    user_id = get_agent_user_id()
+    agent_url = get_agent_url()
+    remote: Dict[str, Any] | None = None
+    remote_error = ""
+    if token:
+        try:
+            remote = await _rokid_agent_request("GET", "/rokid/credentials", token=token)
+            if remote.get("configured") and remote.get("api_key"):
+                cache_rokid_credentials(
+                    api_key=remote.get("api_key", ""),
+                    agent_id=remote.get("agent_id", ""),
+                    user_id=remote.get("user_id") or user_id,
+                )
+        except Exception as exc:
+            remote_error = str(exc)
+
+    api_key = (remote or {}).get("api_key") or get_rokid_api_key()
+    agent_id = (remote or {}).get("agent_id") or get_rokid_agent_id()
+    bound_user = (remote or {}).get("user_id") or get_rokid_bound_user_id() or user_id
+
+    return JSONResponse({
+        "configured": bool(api_key and agent_id),
+        "logged_in": bool(token and user_id),
+        "api_key": api_key,
+        "agent_id": agent_id,
+        "bound_user_id": bound_user,
+        "sse_url": ROKID_PUBLIC_SSE_URL,
+        "sse_path": ROKID_SSE_PATH,
+        "rokid_home_url": ROKID_HOME_URL,
+        "current_user_id": user_id,
+        "remote_error": remote_error,
+        "agent_url": agent_url,
+        "sse_host_mismatch": "soulprout.com" not in (agent_url or "").lower(),
+    })
+
+
+@app.post("/api/rokid/ensure-key")
+async def api_rokid_ensure_key():
+    """本地生成（若主站尚无）并上传到主站；已有则直接返回主站凭证。"""
+    from gateway.config_store import (
+        cache_rokid_credentials,
+        generate_local_rokid_pair,
+        get_agent_token,
+        get_agent_user_id,
+        get_rokid_agent_id,
+    )
+
+    user_id = get_agent_user_id()
+    token = get_agent_token()
+    if not user_id or not token:
+        return JSONResponse(
+            {"success": False, "error": "请先在 Gateway 首页登录 Soulprout 账号"},
+            status_code=401,
+        )
+
+    try:
+        remote = await _rokid_agent_request("GET", "/rokid/credentials", token=token)
+        if remote.get("configured") and remote.get("api_key"):
+            cache_rokid_credentials(
+                api_key=remote["api_key"],
+                agent_id=remote.get("agent_id", ""),
+                user_id=remote.get("user_id") or user_id,
+            )
+            return JSONResponse({
+                "success": True,
+                "api_key": remote["api_key"],
+                "agent_id": remote.get("agent_id", ""),
+                "bound_user_id": remote.get("user_id") or user_id,
+                "sse_url": remote.get("sse_url"),
+                "message": "已从主站同步 API Key（不会重复生成）",
+            })
+
+        pair = generate_local_rokid_pair(
+            user_id=user_id,
+            reuse_agent_id=get_rokid_agent_id() or remote.get("agent_id", ""),
+        )
+        uploaded = await _rokid_agent_request(
+            "POST",
+            "/rokid/credentials",
+            token=token,
+            json_body={
+                "api_key": pair["api_key"],
+                "agent_id": pair["agent_id"],
+                "force_new_key": False,
+            },
+        )
+        cache_rokid_credentials(
+            api_key=uploaded.get("api_key") or pair["api_key"],
+            agent_id=uploaded.get("agent_id") or pair["agent_id"],
+            user_id=uploaded.get("user_id") or user_id,
+        )
+        return JSONResponse({
+            "success": True,
+            "api_key": uploaded.get("api_key") or pair["api_key"],
+            "agent_id": uploaded.get("agent_id") or pair["agent_id"],
+            "bound_user_id": uploaded.get("user_id") or user_id,
+            "sse_url": uploaded.get("sse_url"),
+            "message": "API Key 已生成并上传到主站",
+        })
+    except Exception as exc:
+        return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
+
+
+@app.post("/api/rokid/regenerate-key")
+async def api_rokid_regenerate_key():
+    """重新生成 AK 并上传主站（灵珠侧需重新配置）。"""
+    from gateway.config_store import (
+        cache_rokid_credentials,
+        generate_local_rokid_pair,
+        get_agent_token,
+        get_agent_user_id,
+        get_rokid_agent_id,
+    )
+
+    user_id = get_agent_user_id()
+    token = get_agent_token()
+    if not user_id or not token:
+        return JSONResponse(
+            {"success": False, "error": "请先在 Gateway 首页登录 Soulprout 账号"},
+            status_code=401,
+        )
+
+    try:
+        agent_id = get_rokid_agent_id()
+        try:
+            remote = await _rokid_agent_request("GET", "/rokid/credentials", token=token)
+            agent_id = remote.get("agent_id") or agent_id
+        except Exception:
+            pass
+
+        pair = generate_local_rokid_pair(user_id=user_id, reuse_agent_id=agent_id)
+        uploaded = await _rokid_agent_request(
+            "POST",
+            "/rokid/credentials",
+            token=token,
+            json_body={
+                "api_key": pair["api_key"],
+                "agent_id": pair["agent_id"],
+                "force_new_key": True,
+            },
+        )
+        cache_rokid_credentials(
+            api_key=uploaded.get("api_key") or pair["api_key"],
+            agent_id=uploaded.get("agent_id") or pair["agent_id"],
+            user_id=uploaded.get("user_id") or user_id,
+        )
+        return JSONResponse({
+            "success": True,
+            "api_key": uploaded.get("api_key") or pair["api_key"],
+            "agent_id": uploaded.get("agent_id") or pair["agent_id"],
+            "bound_user_id": uploaded.get("user_id") or user_id,
+            "sse_url": uploaded.get("sse_url"),
+            "message": "已生成新的 API Key 并上传主站。请到灵珠平台重新配置第三方智能体的 AK。",
+        })
+    except Exception as exc:
+        return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
+
+
+
+# ---------------------------------------------------------------------------
 # 设置 API（Agent URL / Token / User ID）
 # ---------------------------------------------------------------------------
 
@@ -605,7 +831,7 @@ async def api_save_settings(request: Request):
 
 @app.post("/api/settings/logout")
 async def api_logout():
-    """清空本地缓存的 token、user_id、email，恢复未登录状态。"""
+    """清空本地缓存的登录态；Rokid 凭证缓存保留（权威数据在主站）。"""
     from gateway.config_store import update_settings
     update_settings(agent_token="", agent_user_id="", agent_email="")
     return JSONResponse({"success": True, "message": "已清除登录状态"})

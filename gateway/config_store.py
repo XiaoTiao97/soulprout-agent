@@ -8,6 +8,7 @@ Gateway 本地配置持久化。
 - ``agent_user_id``：当前账号 ID，调用 Agent 时同时作为会话 ID，由登录流程自动写入
 - ``agent_email``：登录使用的邮箱（仅用于显示与「重新发送验证码」）
 - ``agent_login_mode``：``email`` | ``sso`` | ``token``，便于 UI 还原选择
+- ``rokid_*``：灵珠凭证本地缓存（权威数据在主站 Agent；退出登录不清除缓存）
 """
 
 from __future__ import annotations
@@ -15,7 +16,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -67,6 +70,12 @@ _DEFAULTS: dict = {
 
     # 登录方式：'email' | 'sso' | 'token'
     "agent_login_mode": "email",
+
+    # ---- Rokid / 灵珠（本地缓存；权威数据在主站）----
+    # 缓存主站凭证，便于 UI 展示；生成后会上传到 Agent
+    "rokid_api_key": "",
+    "rokid_agent_id": "",
+    "rokid_bound_user_id": "",
 }
 
 
@@ -151,6 +160,46 @@ def get_agent_email() -> str:
 
 def get_agent_login_mode() -> str:
     return load_settings().get("agent_login_mode", _DEFAULTS["agent_login_mode"]) or "email"
+
+
+def get_rokid_api_key() -> str:
+    return load_settings().get("rokid_api_key", "") or ""
+
+
+def get_rokid_agent_id() -> str:
+    return load_settings().get("rokid_agent_id", "") or ""
+
+
+def get_rokid_bound_user_id() -> str:
+    return load_settings().get("rokid_bound_user_id", "") or ""
+
+
+def _new_rokid_api_key() -> str:
+    return f"sk-{secrets.token_urlsafe(32)}"
+
+
+def _new_rokid_agent_id() -> str:
+    return uuid.uuid4().hex
+
+
+def cache_rokid_credentials(*, api_key: str, agent_id: str, user_id: str) -> dict:
+    """缓存主站返回的凭证到本地（退出登录不清除）。"""
+    return update_settings(
+        rokid_api_key=(api_key or "").strip(),
+        rokid_agent_id=(agent_id or "").strip(),
+        rokid_bound_user_id=(user_id or "").strip(),
+    )
+
+
+def generate_local_rokid_pair(*, user_id: str, reuse_agent_id: str = "") -> dict:
+    """本地生成一对凭证（随后由 Gateway 上传主站）。"""
+    agent_id = (reuse_agent_id or "").strip() or get_rokid_agent_id() or _new_rokid_agent_id()
+    api_key = _new_rokid_api_key()
+    return {
+        "api_key": api_key,
+        "agent_id": agent_id,
+        "user_id": (user_id or "").strip(),
+    }
 
 
 def get_default_agent_url() -> str:

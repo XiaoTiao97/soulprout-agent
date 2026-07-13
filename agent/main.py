@@ -16,6 +16,7 @@ from agent.database.models.agent_card import AgentCard
 from agent.database.models.agent_subscription import AgentSub
 from agent.database.models.conversation import Conversation, COTConversation, SubAgentConversation
 from agent.database.models.message import AgentMessage, COTMessage, SubAgentMessage
+from agent.database.models.rokid_credential import RokidCredential
 from agent.core.config import Config
 from agent.skill.skill_indexer import init_skill_collection
 from agent.utils.vdb_client import VDBClient
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
             SubAgentConversation,
             AgentCard,
             AgentSub,
+            RokidCredential,
         ],
     )
     for agent_card in [config.kb_agent_card(), *config.default_agent_cards()]:
