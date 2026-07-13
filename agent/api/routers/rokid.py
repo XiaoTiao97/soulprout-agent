@@ -14,6 +14,7 @@ from agent.services.rokid import (
     ensure_credential,
     get_credential_by_api_key,
     get_credential_by_user_id,
+    heal_oversized_agent_id,
     parse_bearer_api_key,
     stream_soul_as_rokid,
     upload_credential,
@@ -45,7 +46,7 @@ def _cred_payload(cred) -> Dict[str, Any]:
 
 class RokidUploadRequest(BaseModel):
     api_key: str = Field(..., min_length=8)
-    agent_id: str = Field(..., min_length=8)
+    agent_id: str = Field(..., min_length=1, max_length=20)
     force_new_key: bool = False
 
 
@@ -69,6 +70,8 @@ async def get_rokid_credentials(request: Request):
             "user_id": user.user_id,
             "sse_url": ROKID_PUBLIC_SSE_URL,
         })
+    # 读取时自动修复超长 ID，避免 Gateway 反复拿到旧值
+    cred = await heal_oversized_agent_id(cred)
     payload = _cred_payload(cred)
     payload["configured"] = True
     return JSONResponse(payload)

@@ -649,7 +649,10 @@ async def api_rokid_status():
 
 @app.post("/api/rokid/ensure-key")
 async def api_rokid_ensure_key():
-    """本地生成（若主站尚无）并上传到主站；已有则直接返回主站凭证。"""
+    """本地生成（若主站尚无）并上传到主站；已有则直接返回主站凭证。
+
+    若主站已有但 agent_id 超过 20 字符，会强制换发合规 ID + 新 AK。
+    """
     from gateway.config_store import (
         cache_rokid_credentials,
         generate_local_rokid_pair,
@@ -668,24 +671,29 @@ async def api_rokid_ensure_key():
 
     try:
         remote = await _rokid_agent_request("GET", "/rokid/credentials", token=token)
-        if remote.get("configured") and remote.get("api_key"):
+        remote_agent_id = (remote.get("agent_id") or "").strip()
+        need_fix_id = bool(remote.get("configured") and remote_agent_id and len(remote_agent_id) > 20)
+
+        if remote.get("configured") and remote.get("api_key") and not need_fix_id:
             cache_rokid_credentials(
                 api_key=remote["api_key"],
-                agent_id=remote.get("agent_id", ""),
+                agent_id=remote_agent_id,
                 user_id=remote.get("user_id") or user_id,
             )
             return JSONResponse({
                 "success": True,
                 "api_key": remote["api_key"],
-                "agent_id": remote.get("agent_id", ""),
+                "agent_id": remote_agent_id,
                 "bound_user_id": remote.get("user_id") or user_id,
                 "sse_url": remote.get("sse_url"),
                 "message": "已从主站同步 API Key（不会重复生成）",
             })
 
+        # 新建，或修复超长 agent_id：一律发新的合规 ID
         pair = generate_local_rokid_pair(
             user_id=user_id,
-            reuse_agent_id=get_rokid_agent_id() or remote.get("agent_id", ""),
+            reuse_agent_id="" if need_fix_id else (get_rokid_agent_id() or remote_agent_id),
+            force_new_agent_id=need_fix_id,
         )
         uploaded = await _rokid_agent_request(
             "POST",
@@ -694,21 +702,34 @@ async def api_rokid_ensure_key():
             json_body={
                 "api_key": pair["api_key"],
                 "agent_id": pair["agent_id"],
-                "force_new_key": False,
+                "force_new_key": need_fix_id,
             },
         )
+        final_agent_id = (uploaded.get("agent_id") or pair["agent_id"] or "").strip()
+        if len(final_agent_id) > 20:
+            return JSONResponse({
+                "success": False,
+                "error": (
+                    "主站仍返回超过 20 字符的智能体 ID。"
+                    "请确认 www.soulprout.com 上的 Agent 已部署最新代码并重启后再试。"
+                ),
+            }, status_code=500)
         cache_rokid_credentials(
             api_key=uploaded.get("api_key") or pair["api_key"],
-            agent_id=uploaded.get("agent_id") or pair["agent_id"],
+            agent_id=final_agent_id,
             user_id=uploaded.get("user_id") or user_id,
         )
         return JSONResponse({
             "success": True,
             "api_key": uploaded.get("api_key") or pair["api_key"],
-            "agent_id": uploaded.get("agent_id") or pair["agent_id"],
+            "agent_id": final_agent_id,
             "bound_user_id": uploaded.get("user_id") or user_id,
             "sse_url": uploaded.get("sse_url"),
-            "message": "API Key 已生成并上传到主站",
+            "message": (
+                "已将超长智能体 ID 替换为不超过 20 字符的新 ID，并更新 AK；请同步修改灵珠配置"
+                if need_fix_id
+                else "API Key 已生成并上传到主站"
+            ),
         })
     except Exception as exc:
         return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
@@ -716,7 +737,7 @@ async def api_rokid_ensure_key():
 
 @app.post("/api/rokid/regenerate-key")
 async def api_rokid_regenerate_key():
-    """重新生成 AK 并上传主站（灵珠侧需重新配置）。"""
+    """重新生成 AK；若智能体 ID 超长则一并强制换新。"""
     from gateway.config_store import (
         cache_rokid_credentials,
         generate_local_rokid_pair,
@@ -734,14 +755,20 @@ async def api_rokid_regenerate_key():
         )
 
     try:
-        agent_id = get_rokid_agent_id()
+        old_agent_id = get_rokid_agent_id()
         try:
             remote = await _rokid_agent_request("GET", "/rokid/credentials", token=token)
-            agent_id = remote.get("agent_id") or agent_id
+            # GET 若已自动 heal，这里会拿到新短 ID
+            old_agent_id = (remote.get("agent_id") or old_agent_id or "").strip()
         except Exception:
             pass
 
-        pair = generate_local_rokid_pair(user_id=user_id, reuse_agent_id=agent_id)
+        need_fix_id = (not old_agent_id) or len(old_agent_id) > 20
+        pair = generate_local_rokid_pair(
+            user_id=user_id,
+            reuse_agent_id="" if need_fix_id else old_agent_id,
+            force_new_agent_id=need_fix_id,
+        )
         uploaded = await _rokid_agent_request(
             "POST",
             "/rokid/credentials",
@@ -752,18 +779,32 @@ async def api_rokid_regenerate_key():
                 "force_new_key": True,
             },
         )
+        final_agent_id = (uploaded.get("agent_id") or pair["agent_id"] or "").strip()
+        if len(final_agent_id) > 20:
+            return JSONResponse({
+                "success": False,
+                "error": (
+                    "主站仍返回超过 20 字符的智能体 ID。"
+                    "请确认 www.soulprout.com 上的 Agent 已部署最新代码并重启后再试。"
+                ),
+            }, status_code=500)
+
         cache_rokid_credentials(
             api_key=uploaded.get("api_key") or pair["api_key"],
-            agent_id=uploaded.get("agent_id") or pair["agent_id"],
+            agent_id=final_agent_id,
             user_id=uploaded.get("user_id") or user_id,
         )
         return JSONResponse({
             "success": True,
             "api_key": uploaded.get("api_key") or pair["api_key"],
-            "agent_id": uploaded.get("agent_id") or pair["agent_id"],
+            "agent_id": final_agent_id,
             "bound_user_id": uploaded.get("user_id") or user_id,
             "sse_url": uploaded.get("sse_url"),
-            "message": "已生成新的 API Key 并上传主站。请到灵珠平台重新配置第三方智能体的 AK。",
+            "message": (
+                "已覆盖超长智能体 ID 为新 ID，并更新 AK。请到灵珠平台重新配置第三方智能体的 ID 与 AK。"
+                if need_fix_id or (old_agent_id and old_agent_id != final_agent_id)
+                else "已生成新的 API Key 并上传主站。请到灵珠平台重新配置第三方智能体的 AK。"
+            ),
         })
     except Exception as exc:
         return JSONResponse({"success": False, "error": str(exc)}, status_code=500)

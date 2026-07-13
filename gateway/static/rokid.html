@@ -160,29 +160,30 @@
     </div>
 
     <div class="field" style="margin-top:1.25rem">
-      <label data-i18n="rokid.agentId">智能体 ID</label>
+      <label data-i18n="rokid.agentId">自定义智能体 ID</label>
       <div class="copy-row">
-        <input id="agent-id" class="input-field" readonly placeholder="—" />
+        <input id="agent-id" class="input-field" readonly placeholder="—" maxlength="20" />
         <button class="btn btn-secondary" type="button" onclick="copyField('agent-id')" data-i18n="rokid.copy">复制</button>
       </div>
+      <small data-i18n="rokid.agentIdHint">不超过 20 个字符。</small>
     </div>
 
     <div class="field">
-      <label data-i18n="rokid.apiKey">智能体鉴权 AK（API Key）</label>
-      <div class="copy-row">
-        <input id="api-key" class="input-field" readonly placeholder="—" />
-        <button class="btn btn-secondary" type="button" onclick="copyField('api-key')" data-i18n="rokid.copy">复制</button>
-      </div>
-      <small data-i18n="rokid.apiKeyHint">生成本地后自动上传主站；同一账号再次生成会先同步主站已有 Key，不会无故刷新。</small>
-    </div>
-
-    <div class="field">
-      <label data-i18n="rokid.sseUrl">智能体 SSE 接口地址</label>
+      <label data-i18n="rokid.sseUrl">自定义智能体 URL</label>
       <div class="copy-row">
         <input id="sse-url" class="input-field" readonly />
         <button class="btn btn-secondary" type="button" onclick="copyField('sse-url')" data-i18n="rokid.copy">复制</button>
       </div>
       <small data-i18n="rokid.sseUrlHint">固定为主站地址，请直接填入灵珠。</small>
+    </div>
+
+    <div class="field">
+      <label data-i18n="rokid.apiKey">自定义智能体 AK</label>
+      <div class="copy-row">
+        <input id="api-key" class="input-field" readonly placeholder="—" />
+        <button class="btn btn-secondary" type="button" onclick="copyField('api-key')" data-i18n="rokid.copy">复制</button>
+      </div>
+      <small data-i18n="rokid.apiKeyHint">生成本地后自动上传主站；同一账号再次生成会先同步主站已有 Key，不会无故刷新。</small>
     </div>
 
     <div class="btn-row">

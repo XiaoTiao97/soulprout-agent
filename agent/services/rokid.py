@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-import uuid
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -27,11 +26,29 @@ def new_api_key() -> str:
 
 
 def new_agent_id() -> str:
-    return uuid.uuid4().hex
+    """灵珠限制智能体 ID 不超过 20 字符。"""
+    return secrets.token_hex(10)  # 20 hex chars
 
 
 async def get_credential_by_user_id(user_id: str) -> Optional[RokidCredential]:
     return await RokidCredential.find_one(Eq(RokidCredential.user_id, str(user_id)))
+
+
+async def heal_oversized_agent_id(cred: RokidCredential) -> RokidCredential:
+    """若 agent_id 超过 20 字符，原地换成合规新 ID（不改 AK，除非调用方另行更新）。"""
+    if not cred or len(cred.agent_id or "") <= 20:
+        return cred
+    for _ in range(5):
+        candidate = new_agent_id()
+        conflict = await RokidCredential.find_one(Eq(RokidCredential.agent_id, candidate))
+        if conflict and conflict.user_id != cred.user_id:
+            continue
+        cred.agent_id = candidate
+        cred.updated_at = datetime.utcnow()
+        await cred.save()
+        logger.info("[rokid] 已自动修复超长 agent_id user=%s -> %s", cred.user_id, candidate)
+        return cred
+    raise RuntimeError("无法分配新的 agent_id")
 
 
 async def get_credential_by_api_key(api_key: str) -> Optional[RokidCredential]:
@@ -80,27 +97,39 @@ async def upload_credential(
     agent_id: str,
     force_new_key: bool = False,
 ) -> RokidCredential:
-    """Gateway 生成后上传；已存在且非强制时返回原凭证。"""
+    """Gateway 生成后上传；已存在且非强制时返回原凭证。
+
+    例外：已有 agent_id 超过 20 字符时，即使未 force 也会用本次上传的合规 ID 覆盖。
+    """
     api_key = (api_key or "").strip()
     agent_id = (agent_id or "").strip()
     if not api_key or not agent_id:
         raise ValueError("api_key 与 agent_id 不能为空")
+    if len(agent_id) > 20:
+        raise ValueError("agent_id 不能超过 20 个字符")
 
     existing = await get_credential_by_user_id(user_id)
     now = datetime.utcnow()
-    if existing and not force_new_key:
+    needs_id_fix = bool(existing and len(existing.agent_id or "") > 20)
+
+    if existing and not force_new_key and not needs_id_fix:
         return existing
 
-    if existing and force_new_key:
-        # 避免唯一索引冲突：先清掉其它占用同一 api_key 的记录（理论上不应有）
+    if existing and (force_new_key or needs_id_fix):
         conflict = await get_credential_by_api_key(api_key)
         if conflict and conflict.user_id != str(user_id):
             raise ValueError("api_key 已被占用")
         existing.api_key = api_key
-        # agent_id 保持不变（灵珠侧智能体 ID 尽量固定）
+        if agent_id != existing.agent_id:
+            conflict_agent = await RokidCredential.find_one(Eq(RokidCredential.agent_id, agent_id))
+            if conflict_agent and conflict_agent.user_id != str(user_id):
+                raise ValueError("agent_id 已被占用")
+            existing.agent_id = agent_id
         existing.updated_at = now
         await existing.save()
-        return existing
+        # 再读一次，确保返回库里的最新值
+        refreshed = await get_credential_by_user_id(user_id)
+        return refreshed or existing
 
     conflict_key = await get_credential_by_api_key(api_key)
     if conflict_key:

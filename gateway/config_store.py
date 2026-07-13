@@ -18,7 +18,6 @@ import logging
 import os
 import secrets
 import sys
-import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -179,7 +178,8 @@ def _new_rokid_api_key() -> str:
 
 
 def _new_rokid_agent_id() -> str:
-    return uuid.uuid4().hex
+    """灵珠限制智能体 ID 不超过 20 字符。"""
+    return secrets.token_hex(10)  # 20 hex chars
 
 
 def cache_rokid_credentials(*, api_key: str, agent_id: str, user_id: str) -> dict:
@@ -191,9 +191,19 @@ def cache_rokid_credentials(*, api_key: str, agent_id: str, user_id: str) -> dic
     )
 
 
-def generate_local_rokid_pair(*, user_id: str, reuse_agent_id: str = "") -> dict:
+def generate_local_rokid_pair(
+    *,
+    user_id: str,
+    reuse_agent_id: str = "",
+    force_new_agent_id: bool = False,
+) -> dict:
     """本地生成一对凭证（随后由 Gateway 上传主站）。"""
-    agent_id = (reuse_agent_id or "").strip() or get_rokid_agent_id() or _new_rokid_agent_id()
+    if force_new_agent_id:
+        agent_id = _new_rokid_agent_id()
+    else:
+        raw = (reuse_agent_id or "").strip() or get_rokid_agent_id()
+        # 灵珠限制 ≤20；超长旧 ID 直接换新，避免截断碰撞
+        agent_id = raw if raw and len(raw) <= 20 else _new_rokid_agent_id()
     api_key = _new_rokid_api_key()
     return {
         "api_key": api_key,
