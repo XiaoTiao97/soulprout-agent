@@ -238,7 +238,8 @@ You need to collapse and compress the intermediate process into a brief summary,
 1. tool_calls information and role=tool tool result information must either both be kept or both be removed. Splitting them is prohibited.
 2. Overlaps between different start_id and end_id ranges are not allowed.
 # Output Format
-Output as a string-form list:
+Output as a string-form list, do not start with ```json.
+start_id and end_id must be plain 24-char hex strings copied from message id fields (e.g. '6a54f31628cfeee5658d8033'). Do NOT wrap them as ObjectId(...).
 [{'start_id': 'xxx', 'end_id': 'xxx', 'collapse_content': 'xxx'}, {...}]
 """
 

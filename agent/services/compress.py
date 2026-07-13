@@ -1,5 +1,6 @@
 import json
 import ast
+import re
 from datetime import datetime
 from agent.utils.llm import LLM
 from agent.api.models.message import ModelConfig
@@ -11,6 +12,22 @@ from agent.database.crud.message import (
     get_runtime_history,
     delete_runtime_messages
 )
+
+# 兼容模型返回 ObjectId('xxx') / ObjectId("xxx")，统一成纯 hex 字符串
+_OBJECT_ID_RE = re.compile(
+    r"""^\s*ObjectId\s*\(\s*['"]([0-9a-fA-F]{24})['"]\s*\)\s*$"""
+)
+
+
+def _normalize_message_id(value) -> str:
+    if value is None:
+        return ""
+    s = str(value).strip()
+    m = _OBJECT_ID_RE.match(s)
+    if m:
+        return m.group(1)
+    return s
+
 
 class Compress:
     def __init__(self, config, is_sub_agent, session_id, user_id, conversation_id, model):
@@ -29,7 +46,8 @@ class Compress:
         for item in self.history:
             if item.role != "agent":
                 item_dict = {
-                    'id': item.id,
+                    # 传纯 hex，避免模型照抄 ObjectId('...')
+                    'id': _normalize_message_id(item.id),
                     'role': item.role,
                     'content': item.content,
                     **({'tool_calls': item.tool_calls} if hasattr(item, 'tool_calls') and item.tool_calls is not None else {}),
@@ -65,25 +83,23 @@ class Compress:
 
         try:
             for collapse_dict in collapse_list:
-                start_id = collapse_dict.get('start_id')
-                end_id = collapse_dict.get('end_id')
+                start_id = _normalize_message_id(collapse_dict.get('start_id'))
+                end_id = _normalize_message_id(collapse_dict.get('end_id'))
                 collapse_content = collapse_dict.get('collapse_content')
                 print(f"[compress.collapse] 处理区间 start_id={start_id}, end_id={end_id}, summary_len={len(str(collapse_content or ''))}")
 
                 collapse_state = False
                 created_at = None
                 collapse_id_list = []
-                start_id_str = str(start_id) if start_id is not None else ""
-                end_id_str = str(end_id) if end_id is not None else ""
                 for item in self.history:
                     if item.role != "agent":
-                        item_id_str = str(item.id)
-                        if item_id_str == start_id_str:
+                        item_id_str = _normalize_message_id(item.id)
+                        if item_id_str == start_id:
                             created_at = item.created_at
                             collapse_state = True
                         if collapse_state:
                             collapse_id_list.append(item.id)
-                        if item_id_str == end_id_str:
+                        if item_id_str == end_id:
                             collapse_state = False
 
                 if not collapse_id_list:
