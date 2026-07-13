@@ -113,6 +113,7 @@ main() {
     --ro-bind /bin /bin --ro-bind /usr/bin /usr/bin \\
     --ro-bind /usr/lib /usr/lib --ro-bind /lib /lib --ro-bind /lib64 /lib64 \\
     --ro-bind /etc /etc --ro-bind /usr/share /usr/share \\
+    --ro-bind /run/systemd/resolve /run/systemd/resolve \\
     --ro-bind $ROOT/python /opt/py --ro-bind $ROOT/node /opt/node \\
     --ro-bind $ROOT/node_modules /opt/node_modules \\
     --dev /dev --proc /proc --tmpfs /tmp --tmpfs /workspace \\
@@ -121,7 +122,7 @@ main() {
     --setenv PATH /opt/node/bin:/opt/py/bin:/bin:/usr/bin \\
     --setenv PYTHONPATH /opt/py/lib/python3.12/site-packages \\
     --setenv NODE_PATH /opt/node_modules \\
-    /bin/sh -c 'python -c "import requests; print(requests.__version__)" && node -v'
+    /bin/sh -c 'cat /etc/resolv.conf && python -c "import requests; print(requests.__version__)" && node -v'
 EOF
 }
 

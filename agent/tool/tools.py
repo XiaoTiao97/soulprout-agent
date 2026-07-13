@@ -42,7 +42,11 @@ class SoulproutToolFunction:
         return os.path.join(self.config.local_file_path, conversation_id)
 
     def _build_saas_bwrap_args(self, workspace: str) -> list[str]:
-        """Build bubblewrap args: shared Python/Node ro, conversation workspace rw."""
+        """Build bubblewrap args: shared Python/Node ro, conversation workspace rw.
+
+        Network is intentionally kept (no --unshare-net). Host /etc/resolv.conf is often
+        a symlink into /run/...; those targets must be bound or DNS (and thus pip/npm) fails.
+        """
         sandbox_root = getattr(self.config, "saas_sandbox_root", None) or os.getenv(
             "SAAS_SANDBOX_ROOT", "/opt/soulprout/sandbox"
         )
@@ -60,8 +64,16 @@ class SoulproutToolFunction:
         ]
         if os.path.isdir("/usr/share"):
             args.extend(["--ro-bind", "/usr/share", "/usr/share"])
+        if os.path.isdir("/usr/local/bin"):
+            args.extend(["--ro-bind", "/usr/local/bin", "/usr/local/bin"])
+        if os.path.isdir("/usr/local/lib"):
+            args.extend(["--ro-bind", "/usr/local/lib", "/usr/local/lib"])
         if os.path.isdir("/usr/local/python3.12"):
             args.extend(["--ro-bind", "/usr/local/python3.12", "/usr/local/python3.12"])
+        # /etc/resolv.conf -> /run/resolvconf/... or /run/systemd/resolve/...
+        for dns_dir in ("/run/resolvconf", "/run/systemd/resolve"):
+            if os.path.isdir(dns_dir):
+                args.extend(["--ro-bind", dns_dir, dns_dir])
         if os.path.isdir(shared_py):
             args.extend(["--ro-bind", shared_py, "/opt/py"])
         if os.path.isdir(shared_node):
@@ -69,6 +81,7 @@ class SoulproutToolFunction:
         if os.path.isdir(shared_nm):
             args.extend(["--ro-bind", shared_nm, "/opt/node_modules"])
 
+        # PIP_TARGET (not PIP_USER): avoids PEP 668 + venv --user conflict; packages land in workspace.
         args.extend([
             "--dev", "/dev",
             "--proc", "/proc",
@@ -84,14 +97,25 @@ class SoulproutToolFunction:
             "--clearenv",
             "--setenv", "HOME", "/workspace",
             "--setenv", "PATH",
-            "/opt/node/bin:/opt/py/bin:/usr/local/python3.12/bin:/usr/local/bin:/bin:/usr/bin",
-            "--setenv", "PYTHONUSERBASE", "/workspace/.local",
-            "--setenv", "PIP_USER", "1",
+            "/workspace/.npm-global/bin:/opt/node/bin:/opt/py/bin:"
+            "/usr/local/python3.12/bin:/usr/local/bin:/bin:/usr/bin",
+            "--setenv", "PIP_CACHE_DIR", "/tmp/pip-cache",
+            "--setenv", "PIP_TARGET", "/workspace/site-packages",
+            "--setenv", "PIP_DISABLE_PIP_VERSION_CHECK", "1",
             "--setenv", "PYTHONPATH",
-            "/workspace/.local/lib/python3.12/site-packages:/opt/py/lib/python3.12/site-packages",
+            "/workspace/site-packages:/opt/py/lib/python3.12/site-packages:"
+            "/usr/local/python3.12/lib/python3.12/site-packages",
+            "--setenv", "npm_config_cache", "/tmp/npm-cache",
+            "--setenv", "npm_config_prefix", "/workspace/.npm-global",
             "--setenv", "NODE_PATH",
-            "/workspace/node_modules:/opt/node_modules",
+            "/workspace/node_modules:/workspace/.npm-global/lib/node_modules:/opt/node_modules",
         ])
+        pip_index = os.getenv("PIP_INDEX_URL")
+        if pip_index:
+            args.extend(["--setenv", "PIP_INDEX_URL", pip_index])
+        npm_registry = os.getenv("NPM_CONFIG_REGISTRY") or os.getenv("npm_config_registry")
+        if npm_registry:
+            args.extend(["--setenv", "npm_config_registry", npm_registry])
         return args
 
     async def _get_user_id_by_conversation_id(self, conversation_id):
@@ -196,7 +220,8 @@ class SoulproutToolFunction:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
+                # pip/npm installs need more than a few seconds once network works
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), 600)
             else:
                 proc = await asyncio.create_subprocess_shell(
                     command,
