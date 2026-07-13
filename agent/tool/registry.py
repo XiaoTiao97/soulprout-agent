@@ -4,7 +4,12 @@ import sys
 
 def _bash_description() -> str:
     if os.getenv("DEPLOYMENT_MODE") == "saas":
-        base = "Run shell commands in an isolated sandbox. Only the current conversation directory is accessible. Supports Python, Node, and Bash scripts."
+        base = (
+            "Run shell commands in an isolated sandbox. Only the current conversation directory "
+            "is writable. Common Python and Node libraries are preinstalled from a shared runtime. "
+            "Extra packages: use `pip install` (installs into this conversation via --user) or "
+            "`npm install` (into this conversation's node_modules). Supports Python, Node, and Bash."
+        )
     else:
         base = "Run command-line tools in the current conversation directory."
     if sys.platform.startswith("win"):

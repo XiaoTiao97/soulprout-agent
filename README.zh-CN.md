@@ -160,6 +160,27 @@ npm run dev
 
 ---
 
+## SaaS 模式部署（Linux）
+
+本地私有化用 `DEPLOYMENT_MODE=private` 即可。若部署多用户 SaaS，在完成上方安装后额外完成：
+
+1. **`agent/.env`**
+   - `DEPLOYMENT_MODE=saas`
+   - 配置阿里云邮件推送（邮箱验证码登录）：`ALIYUN_DM_*`、`ALIYUN_ACCESS_KEY_*`
+   - 设置 `FRONTEND_URL`（公网访问地址）、`JWT_SECRET_KEY`（生产务必改为随机串）
+2. **安装 bash 沙盒**（共享 Python/Node 运行时，隔离每个对话目录）  
+   需系统已有 `python3`（含 venv）、`curl`、`bubblewrap`：
+   ```bash
+   # Ubuntu/Debian 示例
+   sudo apt install -y python3 python3-venv curl bubblewrap
+   sudo bash deploy/sandbox.sh
+   ```
+3. 用 `bash deploy/start.sh` 启动服务。
+
+沙盒默认目录：`/opt/soulprout/sandbox`（可用环境变量 `SAAS_SANDBOX_ROOT` 覆盖）。
+
+---
+
 ## 项目结构
 
 ```
@@ -172,6 +193,7 @@ soulprout-agent/
 │   ├── install.sh
 │   ├── start.sh
 │   ├── stop.sh
+│   ├── sandbox.sh  # SaaS bash 沙盒（共享 Python/Node）
 │   └── lib/common.sh
 └── logs/           # 运行日志（自动生成）
 ```

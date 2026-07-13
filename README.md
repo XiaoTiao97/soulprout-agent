@@ -160,6 +160,27 @@ npm run dev
 
 ---
 
+## SaaS Deployment (Linux)
+
+For local/private use, keep `DEPLOYMENT_MODE=private`. For multi-user SaaS, after the install steps above:
+
+1. **`agent/.env`**
+   - Set `DEPLOYMENT_MODE=saas`
+   - Configure Alibaba Cloud DirectMail for email login: `ALIYUN_DM_*`, `ALIYUN_ACCESS_KEY_*`
+   - Set `FRONTEND_URL` (public URL) and `JWT_SECRET_KEY` (use a random secret in production)
+2. **Install the bash sandbox** (shared Python/Node runtime; per-conversation isolation)  
+   Requires `python3` (with venv), `curl`, and `bubblewrap`:
+   ```bash
+   # Ubuntu/Debian example
+   sudo apt install -y python3 python3-venv curl bubblewrap
+   sudo bash deploy/sandbox.sh
+   ```
+3. Start with `bash deploy/start.sh`.
+
+Default sandbox root: `/opt/soulprout/sandbox` (override with `SAAS_SANDBOX_ROOT`).
+
+---
+
 ## Project Structure
 
 ```
@@ -172,6 +193,7 @@ soulprout-agent/
 │   ├── install.sh
 │   ├── start.sh
 │   ├── stop.sh
+│   ├── sandbox.sh  # SaaS bash sandbox (shared Python/Node)
 │   └── lib/common.sh
 └── logs/           # Runtime logs (auto-created)
 ```

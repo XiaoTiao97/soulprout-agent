@@ -41,6 +41,59 @@ class SoulproutToolFunction:
     def _workspace_dir(self, conversation_id):
         return os.path.join(self.config.local_file_path, conversation_id)
 
+    def _build_saas_bwrap_args(self, workspace: str) -> list[str]:
+        """Build bubblewrap args: shared Python/Node ro, conversation workspace rw."""
+        sandbox_root = getattr(self.config, "saas_sandbox_root", None) or os.getenv(
+            "SAAS_SANDBOX_ROOT", "/opt/soulprout/sandbox"
+        )
+        shared_py = os.path.join(sandbox_root, "python")
+        shared_node = os.path.join(sandbox_root, "node")
+        shared_nm = os.path.join(sandbox_root, "node_modules")
+
+        args = [
+            "--ro-bind", "/bin", "/bin",
+            "--ro-bind", "/usr/bin", "/usr/bin",
+            "--ro-bind", "/usr/lib", "/usr/lib",
+            "--ro-bind", "/lib", "/lib",
+            "--ro-bind", "/lib64", "/lib64",
+            "--ro-bind", "/etc", "/etc",
+        ]
+        if os.path.isdir("/usr/share"):
+            args.extend(["--ro-bind", "/usr/share", "/usr/share"])
+        if os.path.isdir("/usr/local/python3.12"):
+            args.extend(["--ro-bind", "/usr/local/python3.12", "/usr/local/python3.12"])
+        if os.path.isdir(shared_py):
+            args.extend(["--ro-bind", shared_py, "/opt/py"])
+        if os.path.isdir(shared_node):
+            args.extend(["--ro-bind", shared_node, "/opt/node"])
+        if os.path.isdir(shared_nm):
+            args.extend(["--ro-bind", shared_nm, "/opt/node_modules"])
+
+        args.extend([
+            "--dev", "/dev",
+            "--proc", "/proc",
+            "--bind", workspace, "/workspace",
+            "--tmpfs", "/tmp",
+            "--unshare-user",
+            "--unshare-pid",
+            "--unshare-ipc",
+            "--unshare-uts",
+            "--uid", "65534",
+            "--gid", "65534",
+            "--chdir", "/workspace",
+            "--clearenv",
+            "--setenv", "HOME", "/workspace",
+            "--setenv", "PATH",
+            "/opt/node/bin:/opt/py/bin:/usr/local/python3.12/bin:/usr/local/bin:/bin:/usr/bin",
+            "--setenv", "PYTHONUSERBASE", "/workspace/.local",
+            "--setenv", "PIP_USER", "1",
+            "--setenv", "PYTHONPATH",
+            "/workspace/.local/lib/python3.12/site-packages:/opt/py/lib/python3.12/site-packages",
+            "--setenv", "NODE_PATH",
+            "/workspace/node_modules:/opt/node_modules",
+        ])
+        return args
+
     async def _get_user_id_by_conversation_id(self, conversation_id):
         row = await self.config.db_conversation.find_one({"conversation_id": conversation_id})
         return row.get("user_id") if row else None
@@ -135,29 +188,10 @@ class SoulproutToolFunction:
         try:
             if self.config.deployment_mode == "saas":
                 workspace = os.path.abspath(root)
+                bwrap_args = self._build_saas_bwrap_args(workspace)
                 proc = await asyncio.create_subprocess_exec(
                     "bwrap",
-                    "--ro-bind", "/bin", "/bin",
-                    "--ro-bind", "/usr/bin", "/usr/bin",
-                    "--ro-bind", "/usr/local/python3.12", "/usr/local/python3.12",
-                    "--ro-bind", "/usr/lib", "/usr/lib",
-                    "--ro-bind", "/lib", "/lib",
-                    "--ro-bind", "/lib64", "/lib64",
-                    "--ro-bind", "/etc", "/etc",
-                    "--dev", "/dev",
-                    "--proc", "/proc",
-                    "--bind", workspace, "/workspace",
-                    "--tmpfs", "/tmp",
-                    "--unshare-user",
-                    "--unshare-pid",
-                    "--unshare-ipc",
-                    "--unshare-uts",
-                    "--uid", "65534",
-                    "--gid", "65534",
-                    "--chdir", "/workspace",
-                    "--clearenv",
-                    "--setenv", "HOME", "/workspace",
-                    "--setenv", "PATH", "/usr/local/python3.12/bin:/usr/local/bin:/bin:/usr/bin",
+                    *bwrap_args,
                     "/bin/sh", "-c", command,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,

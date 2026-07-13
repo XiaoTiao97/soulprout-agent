@@ -50,6 +50,7 @@ class Config:
         self.soulprout_model = os.getenv("SOULPROUT_MODEL")
         self.local_file_path = "/home/soulprout_data/"
         self.deployment_mode = os.getenv("DEPLOYMENT_MODE")
+        self.saas_sandbox_root = os.getenv("SAAS_SANDBOX_ROOT", "/opt/soulprout/sandbox")
         self.nls_app_key = os.getenv("NLS_APP_KEY")
         self.nls_token = os.getenv("NLS_TOKEN")
         self.aliyun_access_key_id = os.getenv("ALIYUN_ACCESS_KEY_ID")
