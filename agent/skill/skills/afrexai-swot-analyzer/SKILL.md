@@ -1,3 +1,10 @@
+---
+name: afrexai-swot-analyzer
+description: >
+  Run a structured SWOT analysis for any business, product, or strategic decision.
+  Use when the user asks for a SWOT analysis, competitive assessment, or strategic evaluation.
+---
+
 # SWOT Analyzer
 
 Run a structured SWOT analysis for any business, product, or strategic decision.

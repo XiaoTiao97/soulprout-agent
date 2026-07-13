@@ -1,3 +1,11 @@
+---
+name: lead-magnets
+description: >
+  Design lead magnets that attract qualified prospects and convert them to paying customers.
+  Use when creating free resources for email capture, free-to-paid funnels, gated content,
+  opt-in pages, or content marketing with a conversion goal.
+---
+
 # Lead Magnets — Free-to-Paid Conversion Framework
 
 Design lead magnets that attract qualified prospects and convert them to paying customers.

@@ -1,3 +1,11 @@
+---
+name: interview-simulator
+description: >
+  Universal mock interview skill that role-plays interviewer for any profession or level.
+  Use for mock interviews, coding/system design/behavioral/case practice, answer review,
+  and interview prep across engineering, product, design, business, HR, and other roles.
+---
+
 # 🎯 Interview Simulator — Universal Mock Interview Skill
 
 ## Identity

@@ -1,3 +1,11 @@
+---
+name: resume-assistant
+description: >
+  Resume and CV assistant for creating, polishing, ATS optimizing, job-tailoring,
+  multi-format export, checklist review, and professional scoring.
+  Use when the user asks to write, improve, score, or convert a resume or CV.
+---
+
 # 📝 Resume / CV Assistant
 
 > AI-powered clawbot skill for resume & CV polishing, job customization, multi-format export, and professional scoring.

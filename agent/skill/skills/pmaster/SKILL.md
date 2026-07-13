@@ -1,4 +1,5 @@
 ---
+name: pmaster
 title: "产品经理综合技能 - PM Master"
 summary: "整合需求分析、PRD撰写、产品策略、用户研究、优先级排序、敏捷执行等全栈产品管理能力"
 description: >
