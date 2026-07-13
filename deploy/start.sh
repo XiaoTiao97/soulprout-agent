@@ -45,8 +45,10 @@ else
 fi
 wait_port 27017 "MongoDB" 60
 
-# ── Step 2: Milvus ────────────────────────────────────────────────
+# ── Step 2: Milvus（v3.0-beta，支持 BM25 稀疏检索）────────────────
 section "Step 2 · Milvus"
+
+EXPECTED_MILVUS_IMAGE="milvusdb/milvus:v3.0-beta"
 
 mkdir -p \
     "$MILVUS_VOLUME_DIR/volumes/etcd" \
@@ -62,11 +64,21 @@ if docker ps -a --format '{{.Names}}' | grep -qx "milvus-standalone"; then
     fi
 fi
 
-if docker ps --format '{{.Names}}' | grep -qx "milvus-standalone" \
-    && port_open 19530; then
-    ok "Milvus 已在运行（:19530）"
-else
-    info "启动 Milvus（etcd + minio + milvus）..."
+need_milvus_up=true
+if docker ps --format '{{.Names}}' | grep -qx "milvus-standalone" && port_open 19530; then
+    current_image=$(docker inspect -f '{{.Config.Image}}' milvus-standalone 2>/dev/null || true)
+    if [[ "$current_image" == *":v3.0-beta"* ]] || [[ "$current_image" == *"milvus:v3.0"* ]]; then
+        ok "Milvus 已在运行（:19530，镜像 $current_image）"
+        need_milvus_up=false
+    else
+        warn "检测到非 v3.0 Milvus 镜像（$current_image），将重建为 $EXPECTED_MILVUS_IMAGE"
+        warn "若此前用过 v2.4 数据卷，可能不兼容 BM25；必要时清空 $MILVUS_VOLUME_DIR/volumes 后重启"
+        milvus_compose down >/dev/null 2>&1 || true
+    fi
+fi
+
+if $need_milvus_up; then
+    info "启动 Milvus（etcd + minio + milvus@$EXPECTED_MILVUS_IMAGE）..."
     milvus_compose up -d
 fi
 wait_port 19530 "Milvus" 180

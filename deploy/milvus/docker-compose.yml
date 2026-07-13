@@ -1,10 +1,13 @@
-# Milvus standalone（etcd + minio + milvus），基于官方 v2.4 模板
+# Milvus standalone（etcd + minio + milvus），基于官方 v3.0-beta 模板
 # 数据目录由 DOCKER_VOLUME_DIRECTORY 指定（默认当前目录）
+# 参考：https://github.com/milvus-io/milvus/releases/tag/v3.0-beta
+
+version: "3.5"
 
 services:
   etcd:
     container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.5.5
+    image: quay.io/coreos/etcd:v3.5.25
     restart: unless-stopped
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
@@ -13,7 +16,7 @@ services:
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 30s
@@ -22,7 +25,7 @@ services:
 
   minio:
     container_name: milvus-minio
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
     restart: unless-stopped
     environment:
       MINIO_ACCESS_KEY: minioadmin
@@ -31,19 +34,20 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "mc", "ready", "local"]
       interval: 30s
       timeout: 20s
       retries: 3
 
   standalone:
     container_name: milvus-standalone
-    image: milvusdb/milvus:v2.4.0
+    image: milvusdb/milvus:v3.0-beta
     restart: unless-stopped
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined
     environment:
+      MINIO_REGION: us-east-1
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     volumes:
