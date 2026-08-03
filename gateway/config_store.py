@@ -35,26 +35,22 @@ _SETTINGS_PATH = _DATA_ROOT / "gateway_data" / "settings.json"
 # 默认值
 # ---------------------------------------------------------------------------
 
-# 中国大陆云服务（默认）。注意：www.mengya.chat 证书主机名不匹配，须用裸域。
-_DEFAULT_AGENT_URL = "https://mengya.chat"
-# 海外云服务
-_OVERSEAS_AGENT_URL = "https://www.soulprout.com"
-# 旧默认 / 错误默认：未登录时迁移到当前中国大陆默认
+# 官方云服务（默认）
+_DEFAULT_AGENT_URL = "https://www.soulprout.com"
+# 旧默认：未登录时迁移到当前云服务默认
 _LEGACY_DEFAULT_AGENT_URLS = (
-    "https://www.soulprout.com",
+    "https://mengya.chat",
     "https://www.mengya.chat",
 )
 
 # 可选官方云域名（登录页域名选择）
 CLOUD_AGENT_URLS: list[dict] = [
-    {"url": _DEFAULT_AGENT_URL, "region": "cn", "label_zh": "中国大陆", "label_en": "Mainland China"},
-    {"url": _OVERSEAS_AGENT_URL, "region": "overseas", "label_zh": "海外", "label_en": "Overseas"},
+    {"url": _DEFAULT_AGENT_URL, "region": "cloud", "label_zh": "云服务", "label_en": "Cloud"},
 ]
 
 _DEFAULTS: dict = {
     # Agent HTTP 服务地址（不含路径），支持：
-    #   https://mengya.chat        → 中国大陆云服务（默认）
-    #   https://www.soulprout.com → 海外云服务
+    #   https://www.soulprout.com → 云服务（默认）
     #   http://localhost:8080    → 本地自部署
     "agent_url": _DEFAULT_AGENT_URL,
 
@@ -89,7 +85,7 @@ def load_settings() -> dict:
         data = json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
         merged = dict(_DEFAULTS)
         merged.update({k: v for k, v in data.items() if k in _DEFAULTS})
-        # 未登录时，把旧默认 / 证书异常的 www 域名迁移为当前中国大陆默认
+        # 未登录时，把旧默认域名迁移为当前云服务默认
         saved_url = normalize_agent_url(merged.get("agent_url", ""))
         legacy_urls = {normalize_agent_url(u) for u in _LEGACY_DEFAULT_AGENT_URLS}
         if saved_url in legacy_urls and not merged.get("agent_token"):

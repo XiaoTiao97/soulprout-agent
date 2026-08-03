@@ -50,9 +50,10 @@
     .btn-back:hover { border-color: var(--accent-border); color: var(--accent); }
     .brand-logo {
       width: 1.75rem; height: 1.75rem;
-      background: linear-gradient(135deg, #4c8bf5 0%, #2563eb 100%);
       border-radius: 0.4rem; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; text-decoration: none;
     }
+    .brand-logo img { width: 100%; height: 100%; object-fit: contain; }
     .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
     .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
     .header-right { display: flex; align-items: center; gap: 0.75rem; }
@@ -154,7 +155,7 @@
 <header class="header">
   <div class="header-left">
     <a href="/" class="btn-back">← <span data-i18n="common.back">返回</span></a>
-    <a href="/" class="brand-logo">🌱</a>
+    <a href="/" class="brand-logo"><img src="/static/soulprout_logo.png" alt="Soulprout" /></a>
     <a href="/" class="brand-name">Soulprout</a>
   </div>
   <div class="header-right">

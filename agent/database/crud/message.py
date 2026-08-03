@@ -10,8 +10,28 @@ async def create_message(data: AgentMessage):
 async def create_sub_agent_message(data: SubAgentMessage):
     return await data.insert()
 
-async def get_message_by_conv_id(conversation_id: str):
-    return await AgentMessage.find(AgentMessage.conversation_id == conversation_id).sort("created_at").to_list()
+def _display_message_query(conversation_id: str, before=None):
+    """查询可展示的消息，排除 content 为数组的图片消息（在 DB 层过滤，避免全量拉取后再丢弃）。"""
+    query: dict = {
+        "conversation_id": conversation_id,
+        "content": {"$not": {"$type": "array"}},
+    }
+    if before is not None:
+        query["created_at"] = {"$lt": before}
+    return query
+
+
+async def get_message_by_conv_id(
+        conversation_id: str,
+        limit: int | None = None,
+        before=None,
+):
+    query = _display_message_query(conversation_id, before)
+    if limit:
+        messages = await AgentMessage.find(query).sort("-created_at").limit(limit).to_list()
+        messages.reverse()
+        return messages
+    return await AgentMessage.find(query).sort("created_at").to_list()
 
 async def get_sub_agent_message_by_conv_id(conversation_id: str):
     return await SubAgentMessage.find(SubAgentMessage.conversation_id == conversation_id).sort("created_at").to_list()

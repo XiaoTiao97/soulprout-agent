@@ -726,7 +726,7 @@ async def api_rokid_ensure_key():
             "bound_user_id": uploaded.get("user_id") or user_id,
             "sse_url": uploaded.get("sse_url"),
             "message": (
-                "已将超长智能体 ID 替换为不超过 20 字符的新 ID，并更新 AK；请同步修改灵珠配置"
+                "已将超长智能体 ID 替换为不超过 20 字符的新 ID，并更新 AK；请同步修改 Rokid 平台配置"
                 if need_fix_id
                 else "API Key 已生成并上传到主站"
             ),
@@ -801,9 +801,9 @@ async def api_rokid_regenerate_key():
             "bound_user_id": uploaded.get("user_id") or user_id,
             "sse_url": uploaded.get("sse_url"),
             "message": (
-                "已覆盖超长智能体 ID 为新 ID，并更新 AK。请到灵珠平台重新配置第三方智能体的 ID 与 AK。"
+                "已覆盖超长智能体 ID 为新 ID，并更新 AK。请到 Rokid 平台重新配置第三方智能体的 ID 与 AK。"
                 if need_fix_id or (old_agent_id and old_agent_id != final_agent_id)
-                else "已生成新的 API Key 并上传主站。请到灵珠平台重新配置第三方智能体的 AK。"
+                else "已生成新的 API Key 并上传主站。请到 Rokid 平台重新配置第三方智能体的 AK。"
             ),
         })
     except Exception as exc:

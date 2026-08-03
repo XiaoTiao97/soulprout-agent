@@ -57,6 +57,8 @@ export function buildGenericToolCallItems(
 ): ToolCallItem[] {
   return buildToolCallItems(toolCalls, fallbackId, messageType)
     .filter((item) => item.toolName !== 'web_search')
+    // 蓝图由 BlueprintBlock 专属展示，避免与工具 pill 重复且过早显示「已完成」
+    .filter((item) => item.toolName !== 'get_action_blueprint')
 }
 
 export function buildToolCallItems(

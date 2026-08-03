@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request, UploadFile, File, Form
+from datetime import datetime, timezone
+from fastapi import APIRouter, Request, UploadFile, File, Form, Query
 from agent.services.auth import get_current_user
 from agent.services.agent import Chat
 from agent.database.crud.message import get_message_by_conv_id
@@ -25,10 +26,16 @@ async def get_models_list():
     return models_dict
 
 @router.get("/message/{conversation_id}")
-async def get_messages(conversation_id: str):
-     messages = await get_message_by_conv_id(conversation_id)
-     messages = [message for message in messages if not isinstance(message.content, list)]
-     return messages
+async def get_messages(
+        conversation_id: str,
+        limit: int | None = Query(None, ge=1, le=500),
+        before: float | None = Query(None, description="Unix timestamp in milliseconds; return messages before this time"),
+):
+    before_dt = None
+    if before is not None:
+        before_dt = datetime.fromtimestamp(before / 1000, tz=timezone.utc).replace(tzinfo=None)
+    messages = await get_message_by_conv_id(conversation_id, limit=limit, before=before_dt)
+    return messages
 
 @router.post("/message/chat", response_class=StreamingResponse)
 async def chat_stream(

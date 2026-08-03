@@ -29,6 +29,8 @@
             :currentStreamingMessage="currentStreamingMessage"
             :isGenerating="isGenerating"
             :planStreamContent="chatPlanStreamForWindow"
+            :planProgressContent="chatPlanProgressForWindow"
+            :blueprintPending="blueprintStreamPending"
             :isLoading="isLoading"
             :timeoutError="timeoutError"
             :model_list="model_list"
@@ -38,6 +40,9 @@
             :welcomeAnimationToken="welcomeAnimationToken"
             :chatMode="chatMode"
             :toolMessages="toolMessages"
+            :soulMessagesHasMore="soulMessagesHasMore"
+            :soulMessagesLoadingMore="soulMessagesLoadingMore"
+            @loadMoreSoulMessages="loadMoreSoulMessages"
             @sendMessage="handleSendMessage"
             @stopGeneration="stopGeneration"
             :class="{ 'compressed': showExtraInfo }"
@@ -131,6 +136,18 @@ const chat_request = ref<Partial<ChatRequest>>({})
 const agent_message_list = ref<AgentMessage[]>([])
 /** 当前聊天模式：'soulprout' 直接对接 user_id 唯一会话；'task' 为常规任务模式 */
 const chatMode = ref<'soulprout' | 'task'>('soulprout')
+/** Soul 模式首次加载条数（分页）；切换模式时优先用缓存，避免重复全量拉取 */
+const SOUL_MESSAGE_PAGE_SIZE = 120
+
+interface SoulMessageCache {
+  userId: string
+  messages: AgentMessage[]
+  hasMore: boolean
+}
+
+const soulMessageCache = ref<SoulMessageCache | null>(null)
+const soulMessagesHasMore = ref(false)
+const soulMessagesLoadingMore = ref(false)
 /** 切换模式且无历史消息时递增，驱动 ChatWindow 重播欢迎页动画 */
 const welcomeAnimationToken = ref(0)
 /** 切到 Soulprout 模式前缓存任务模式的 chat_request，便于切回任务模式时恢复 */
@@ -147,6 +164,14 @@ const isLoading = ref<boolean>(false)
 const isGenerating = ref<boolean>(false)
 /** 当前轮次 plan 流式内容；plan 段结束后清空，由下方 tool result 展示 */
 const chatPlanStreamForWindow = ref('')
+/** 多智能体讨论过程的进度流（灰色渐显渐隐），不进入最终蓝图框 */
+const chatPlanProgressForWindow = ref('')
+/** 已发起 get_action_blueprint 且尚未收到对应 tool result */
+const blueprintAwaitingResult = ref(false)
+/** 当前轮 get_action_blueprint 的 tool_call_id */
+const blueprintToolCallId = ref('')
+/** 蓝图块是否仍处于生成中：仅在正式 tool result 到达前为 true */
+const blueprintStreamPending = computed(() => blueprintAwaitingResult.value)
 /** 当前 SSE 请求内所有分片的 created_at（用于区分本轮与历史 toolMessages，避免跨轮合并 plan） */
 const streamingSessionCreatedAt = ref<number | null>(null)
 /** 收到 reload_history 时递增，驱动 ChatWindow 清空流式块并继续接收后续分片 */
@@ -257,6 +282,9 @@ function createConversation() {
   toolMessages.value = []
   fileMessages.value = []
   chatPlanStreamForWindow.value = ''
+  chatPlanProgressForWindow.value = ''
+  blueprintAwaitingResult.value = false
+  blueprintToolCallId.value = ''
   currentStreamingMessage.value = null
   isGenerating.value = false
   // 重置流状态
@@ -291,6 +319,9 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
     toolMessages.value = []
     fileMessages.value = []
     chatPlanStreamForWindow.value = ''
+    chatPlanProgressForWindow.value = ''
+    blueprintAwaitingResult.value = false
+    blueprintToolCallId.value = ''
     currentStreamingMessage.value = null
     if (chat_request.value.conversation_id) {
       await pickConversation(chat_request.value.conversation_id)
@@ -305,14 +336,9 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
   }
 }
 
-/** Soulprout 唯一会话以 user_id 为 conversation_id：尝试拉取已存在的消息列表，无则置空，由首次发送时后端建会话 */
-async function loadSoulproutConversation() {
+/** Soulprout 唯一会话以 user_id 为 conversation_id：分页拉取最近消息；切换模式时优先用内存缓存 */
+async function loadSoulproutConversation(forceRefresh = false) {
   const userId = currentUserId.value
-  agent_message_list.value = []
-  toolMessages.value = []
-  fileMessages.value = []
-  chatPlanStreamForWindow.value = ''
-  currentStreamingMessage.value = null
   chat_request.value = {
     conversation_id: userId || '',
     agent_use: 'soulprout',
@@ -322,15 +348,77 @@ async function loadSoulproutConversation() {
     skills_use: true,
     kb_use: [],
   }
-  if (!userId) return
+  chatPlanStreamForWindow.value = ''
+  chatPlanProgressForWindow.value = ''
+  blueprintAwaitingResult.value = false
+  blueprintToolCallId.value = ''
+  currentStreamingMessage.value = null
+  if (!userId) {
+    agent_message_list.value = []
+    toolMessages.value = []
+    fileMessages.value = []
+    return
+  }
+
+  if (
+    !forceRefresh &&
+    soulMessageCache.value?.userId === userId &&
+    soulMessageCache.value.messages.length > 0
+  ) {
+    applyMessageListsFromApi([...soulMessageCache.value.messages])
+    soulMessagesHasMore.value = soulMessageCache.value.hasMore
+    return
+  }
+
+  agent_message_list.value = []
+  toolMessages.value = []
+  fileMessages.value = []
+
   try {
-    const response = await axios.get<AgentMessage[]>(`/api/message/${userId}`)
-    agent_message_list.value = normalizeMessagesFromApi(response.data)
-    toolMessages.value = agent_message_list.value.filter(isToolSidebarMessage)
-    fileMessages.value = agent_message_list.value.filter((msg) => msg.role === 'file')
+    const response = await axios.get<AgentMessage[]>(`/api/message/${userId}`, {
+      params: { limit: SOUL_MESSAGE_PAGE_SIZE },
+    })
+    const messages = normalizeMessagesFromApi(response.data)
+    soulMessagesHasMore.value = messages.length >= SOUL_MESSAGE_PAGE_SIZE
+    applyMessageListsFromApi(messages)
+    syncSoulMessageCache()
   } catch (error) {
     // 首次进入 Soulprout 模式时还没有任何会话/消息，忽略即可
     console.debug('Soulprout 会话尚未建立或拉取失败：', error)
+    soulMessagesHasMore.value = false
+  }
+}
+
+async function loadMoreSoulMessages() {
+  const userId = currentUserId.value
+  if (
+    chatMode.value !== 'soulprout' ||
+    !userId ||
+    !soulMessagesHasMore.value ||
+    soulMessagesLoadingMore.value ||
+    agent_message_list.value.length === 0
+  ) {
+    return
+  }
+  const first = agent_message_list.value[0]
+  if (!first) return
+
+  soulMessagesLoadingMore.value = true
+  try {
+    const response = await axios.get<AgentMessage[]>(`/api/message/${userId}`, {
+      params: {
+        limit: SOUL_MESSAGE_PAGE_SIZE,
+        before: messageCreatedAtMs(first),
+      },
+    })
+    const older = normalizeMessagesFromApi(response.data)
+    soulMessagesHasMore.value = older.length >= SOUL_MESSAGE_PAGE_SIZE
+    applyMessageListsFromApi([...older, ...agent_message_list.value])
+    syncSoulMessageCache()
+  } catch (error) {
+    console.error('加载更多 Soul 历史消息失败:', error)
+  } finally {
+    soulMessagesLoadingMore.value = false
   }
 }
 
@@ -405,6 +493,31 @@ function normalizeMessagesFromApi(raw: AgentMessage[]): AgentMessage[] {
   })
 }
 
+function messageCreatedAtMs(msg: AgentMessage): number {
+  const t = msg.created_at as number | string
+  if (typeof t === 'number' && Number.isFinite(t)) return t
+  return new Date(t).getTime()
+}
+
+function applyMessageListsFromApi(messages: AgentMessage[]) {
+  agent_message_list.value = messages
+  toolMessages.value = messages.filter(isToolSidebarMessage)
+  fileMessages.value = messages.filter((msg) => msg.role === 'file')
+}
+
+function syncSoulMessageCache() {
+  if (chatMode.value !== 'soulprout' || !currentUserId.value) return
+  soulMessageCache.value = {
+    userId: currentUserId.value,
+    messages: [...agent_message_list.value],
+    hasMore: soulMessagesHasMore.value,
+  }
+}
+
+function invalidateSoulMessageCache() {
+  soulMessageCache.value = null
+}
+
 /** 侧栏 toolMessages：排除 user_feedback（主对话区单独渲染） */
 function isToolSidebarMessage(msg: AgentMessage): boolean {
   if (msg.role === 'file') return false
@@ -412,16 +525,20 @@ function isToolSidebarMessage(msg: AgentMessage): boolean {
   return msg.role === 'tool' || msg.role === 'agent' || msg.type === 'get_tools' || msg.type === 'get_agents'
 }
 
-/** 会话上缓存的蓝图注入 toolMessages（与原 cot_plan 行为一致；日后可单独改 blueprint 展示样式） */
+/** 会话上缓存的蓝图注入主对话（BlueprintBlock 历史展示） */
 function injectPersistedBlueprintToToolMessages(
   conversationId: string,
   blueprint: string | undefined | null,
 ) {
   if (blueprint == null || String(blueprint).trim() === '') return
-  toolMessages.value.push({
+  const already = agent_message_list.value.some(
+    (m) => m.type === 'plan' && m.content === blueprint,
+  )
+  if (already) return
+  agent_message_list.value.push({
     user_id: agent_message_list.value[0]?.user_id ?? '',
     conversation_id: conversationId,
-    role: 'agent',
+    role: 'assistant',
     created_at: Date.now(),
     type: 'plan',
     content: blueprint,
@@ -433,13 +550,15 @@ async function refreshMessagesFromServer(conversationId: string) {
   try {
     const response = await axios.get<AgentMessage[]>(`/api/message/${conversationId}`)
     const response_conversation = await axios.get(`/api/conversation/${conversationId}`)
-    agent_message_list.value = normalizeMessagesFromApi(response.data)
-    toolMessages.value = agent_message_list.value.filter(isToolSidebarMessage)
-    fileMessages.value = agent_message_list.value.filter((msg) => msg.role === 'file')
+    applyMessageListsFromApi(normalizeMessagesFromApi(response.data))
     injectPersistedBlueprintToToolMessages(
       conversationId,
       response_conversation.data.action_blueprint,
     )
+    if (chatMode.value === 'soulprout') {
+      soulMessagesHasMore.value = false
+      syncSoulMessageCache()
+    }
     reloadStreamingUiToken.value++
   } catch (e) {
     console.error('reload_history 刷新消息失败:', e)
@@ -467,6 +586,9 @@ async function updateConversationAbstract(conversationId: string, abstract: stri
 async function pickConversation(conversationId) {
   try {
     chatPlanStreamForWindow.value = ''
+    chatPlanProgressForWindow.value = ''
+    blueprintAwaitingResult.value = false
+    blueprintToolCallId.value = ''
     const response = await axios.get<AgentMessage[]>(`/api/message/${conversationId}`)
     const response_conversation = await axios.get(`/api/conversation/${conversationId}`)
     agent_message_list.value = normalizeMessagesFromApi(response.data)
@@ -553,7 +675,8 @@ async function processMessageQueue() {
       fileMessages.value.push(fileMessage)
     } else if (chunk_json.type === 'user_feedback') {
       const t = chunk_json.type
-      if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
+      if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init' && t !== 'plan_progress') {
+        commitPlanStreamToHistory()
         chatPlanStreamForWindow.value = ''
       }
       currentStreamingMessage.value = {
@@ -567,6 +690,11 @@ async function processMessageQueue() {
         created_at: chunk_json.created_at,
         table: chunk_json.json_table || chunk_json.table,
       }
+    } else if (chunk_json.type === 'plan_progress') {
+      // 多智能体讨论过程：只进入进度流，绝不写入最终蓝图框
+      blueprintAwaitingResult.value = true
+      chatPlanProgressForWindow.value =
+        (chatPlanProgressForWindow.value || '') + (chunk_json.content || '')
     } else if (chunk_json.role === 'tool' || chunk_json.role === 'agent' || chunk_json.type === 'plan') {
       const canMerge = ['text', 'reasoner_content', 'plan'].includes(chunk_json.type)
       let lastMsg = toolMessages.value[toolMessages.value.length - 1]
@@ -592,6 +720,20 @@ async function processMessageQueue() {
               lastMsg.created_at === chunk_json.created_at
           }
         }
+        // 最终蓝图开始到达：清空讨论进度，避免与正式内容叠加
+        chatPlanProgressForWindow.value = ''
+      }
+
+      // get_action_blueprint 的正式 tool result 到达后才算完成
+      if (
+        chunk_json.role === 'tool' &&
+        blueprintToolCallId.value &&
+        String(chunk_json.tool_call_id || '') === blueprintToolCallId.value
+      ) {
+        blueprintAwaitingResult.value = false
+        chatPlanProgressForWindow.value = ''
+        commitPlanStreamToHistory()
+        chatPlanStreamForWindow.value = ''
       }
 
       if (shouldAppend) {
@@ -617,7 +759,8 @@ async function processMessageQueue() {
       }
     } else {
       const t = chunk_json.type
-      if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init') {
+      if (chatPlanStreamForWindow.value && t !== 'plan' && t !== 'init' && t !== 'plan_progress') {
+        commitPlanStreamToHistory()
         chatPlanStreamForWindow.value = ''
       }
       // 创建新的对象引用，确保Vue能检测到变化
@@ -641,6 +784,16 @@ async function processMessageQueue() {
       const toolCallId =
         chunk_json.tool_call_id ||
         (chunk_json.tool_calls?.[0]?.id ?? '')
+      const hasBlueprintCall = (chunk_json.tool_calls || []).some(
+        (tc: { function?: { name?: string } }) => tc.function?.name === 'get_action_blueprint',
+      )
+      if (hasBlueprintCall) {
+        const bpCall = (chunk_json.tool_calls || []).find(
+          (tc: { function?: { name?: string } }) => tc.function?.name === 'get_action_blueprint',
+        )
+        blueprintToolCallId.value = String(bpCall?.id || toolCallId || '')
+        blueprintAwaitingResult.value = true
+      }
       toolMessages.value.push({
         user_id: chunk_json.user_id || '',
         conversation_id: chunk_json.conversation_id || '',
@@ -673,8 +826,13 @@ async function processMessageQueue() {
   isGenerating.value = false
   isStreamEnded.value = false
   currentStreamingMessage.value = null
+  blueprintAwaitingResult.value = false
+  chatPlanProgressForWindow.value = ''
+  commitPlanStreamToHistory()
+  chatPlanStreamForWindow.value = ''
   delete chat_request.value.input_message_id
   delete chat_request.value.user_feedback
+  syncSoulMessageCache()
   const at = streamingSessionCreatedAt.value
   if (at != null) {
     const last = toolMessages.value[toolMessages.value.length - 1]
@@ -690,10 +848,28 @@ const abortController = ref<AbortController | null>(null)
 const toolMessages = ref<AgentMessage[]>([])
 const fileMessages = ref<AgentMessage[]>([]) // 文件消息列表
 
+/** 将会话流式蓝图提交进主对话历史，避免仅存在于临时流式区 */
+function commitPlanStreamToHistory() {
+  const content = (chatPlanStreamForWindow.value || '').trim()
+  if (!content) return
+  const already = agent_message_list.value.some(
+    (m) => m.type === 'plan' && m.content === content,
+  )
+  if (already) return
+  agent_message_list.value.push({
+    user_id: currentUserId.value || '',
+    conversation_id: chat_request.value.conversation_id || '',
+    role: 'assistant',
+    created_at: Date.now(),
+    type: 'plan',
+    content,
+  })
+}
+
 /** 在 plan 段输出结束后打标，便于下一段 plan 清除本轮旧块而非追加 */
 function applyPlanStreamSegmentEndedMarker(chunk_json: { type?: string }) {
   if (streamingSessionCreatedAt.value == null) return
-  if (chunk_json.type === 'plan') return
+  if (chunk_json.type === 'plan' || chunk_json.type === 'plan_progress') return
   if (chunk_json.type === 'init' || chunk_json.type === 'abstract') return
   const batchAt = streamingSessionCreatedAt.value
   const hasBatchPlan = toolMessages.value.some(
@@ -718,6 +894,9 @@ async function handleSendMessage(
   isGenerating.value = true
   isStreamEnded.value = false  // 重置流结束标志
   chatPlanStreamForWindow.value = ''
+  chatPlanProgressForWindow.value = ''
+  blueprintAwaitingResult.value = false
+  blueprintToolCallId.value = ''
   planStreamSegmentEnded.value = false
   chat_request.value.message = message
   chat_request.value.files = files

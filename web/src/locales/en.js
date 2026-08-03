@@ -162,6 +162,8 @@ export default {
       rokid: 'Rokid AI Glasses',
     },
     createAgent: 'Create agent expert/team',
+    loadMoreHistory: 'Load earlier messages',
+    loadingMoreHistory: 'Loading…',
   },
   messageInput: {
     removeFile: 'Remove',
@@ -236,6 +238,7 @@ export default {
     noTitle: 'Untitled',
     noSearchResults: 'No search results',
     generatingBlueprint: 'Generating blueprint',
+    completedBlueprint: 'Blueprint ready',
     blueprintContent: 'Blueprint',
     resizeResult: 'Drag to resize result area',
   },

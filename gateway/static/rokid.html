@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rokid 灵珠接入 · Soulprout Gateway</title>
+  <title>Rokid AI 眼镜接入 · Soulprout Gateway</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -43,9 +43,10 @@
     .btn-back:hover { border-color: var(--accent-border); color: var(--accent); }
     .brand-logo {
       width: 1.75rem; height: 1.75rem;
-      background: linear-gradient(135deg, #4f8cff 0%, #2f6ae0 100%);
       border-radius: 0.4rem; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; text-decoration: none;
     }
+    .brand-logo img { width: 100%; height: 100%; object-fit: contain; }
     .brand-name { font-size: 0.9375rem; font-weight: 600; color: var(--text); text-decoration: none; }
     .page-tag { font-size: 0.75rem; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 1rem; }
     .header-right { display: flex; align-items: center; gap: 0.75rem; }
@@ -118,26 +119,26 @@
 <header class="header">
   <div class="header-left">
     <a href="/" class="btn-back">← <span data-i18n="common.back">返回</span></a>
-    <a href="/" class="brand-logo">🌱</a>
+    <a href="/" class="brand-logo"><img src="/static/soulprout_logo.png" alt="Soulprout" /></a>
     <a href="/" class="brand-name">Soulprout Gateway</a>
   </div>
   <div class="header-right">
     <button type="button" class="btn-locale" id="btn-locale" onclick="GW_I18N.toggleLocale()">English</button>
-    <span class="page-tag" data-i18n="rokid.pageTag">Rokid 灵珠</span>
+    <span class="page-tag" data-i18n="rokid.pageTag">Rokid AI 眼镜</span>
   </div>
 </header>
 
 <main class="page-main">
   <p class="page-eyebrow" data-i18n="rokid.eyebrow">Gateway · 眼镜接入</p>
-  <h1 class="page-title">👓 <span data-i18n="rokid.title">Rokid 灵珠</span></h1>
+  <h1 class="page-title">👓 <span data-i18n="rokid.title">Rokid AI 眼镜</span></h1>
   <p class="page-desc" data-i18n="rokid.desc">
-    在本地生成 API Key 并自动上传到 Soulprout 主站。灵珠云调用主站 SSE（www.soulprout.com），按 Key 路由到你的 Soul。
+    在本地生成 API Key 并自动上传到 Soulprout 主站。Rokid 云调用主站 SSE（www.soulprout.com），按 Key 路由到你的 Soul。
   </p>
 
   <section class="section-card">
     <p class="section-label" data-i18n="rokid.guideSection">如何配置 Rokid 眼镜</p>
     <div class="note">
-      <p data-i18n-html="rokid.guide1">首先打开灵珠平台首页：<a href="https://rizon.rokid.com/space/home" target="_blank" rel="noopener">https://rizon.rokid.com/space/home</a></p>
+      <p data-i18n-html="rokid.guide1">首先打开 Rokid 平台首页：<a href="https://rizon.rokid.com/space/home" target="_blank" rel="noopener">https://rizon.rokid.com/space/home</a></p>
       <p data-i18n="rokid.guide2">如果是首次登录，需要进行个人认证，待认证通过后，点击左侧：项目开发 - 三方智能体 - 创建。</p>
       <p data-i18n="rokid.guide3">填入：</p>
       <p><strong data-i18n="rokid.guideVendor">三方厂商：</strong><span data-i18n="rokid.guideVendorVal">自定义智能体</span></p>
@@ -174,7 +175,7 @@
         <input id="sse-url" class="input-field" readonly />
         <button class="btn btn-secondary" type="button" onclick="copyField('sse-url')" data-i18n="rokid.copy">复制</button>
       </div>
-      <small data-i18n="rokid.sseUrlHint">固定为主站地址，请直接填入灵珠。</small>
+      <small data-i18n="rokid.sseUrlHint">固定为主站地址，请直接填入 Rokid 平台。</small>
     </div>
 
     <div class="field">
@@ -191,7 +192,7 @@
       <button class="btn btn-danger" type="button" onclick="regenKey()" data-i18n="rokid.regenKey">重新生成 Key</button>
     </div>
     <div class="warn-box" data-i18n="rokid.regenWarn">
-      重新生成后，灵珠平台的第三方智能体必须重新配置新的 AK，否则眼镜将无法调用。
+      重新生成后，Rokid 平台的第三方智能体必须重新配置新的 AK，否则眼镜将无法调用。
     </div>
     <p class="msg" id="msg"></p>
   </section>

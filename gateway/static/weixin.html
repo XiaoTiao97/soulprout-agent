@@ -84,12 +84,12 @@
     }
     .brand-logo {
       width: 1.75rem; height: 1.75rem;
-      background: linear-gradient(135deg, #1eb48c 0%, #0fa06e 100%);
       border-radius: 0.4rem;
       display: flex; align-items: center; justify-content: center;
-      font-size: 0.9rem;
       flex-shrink: 0;
+      overflow: hidden;
     }
+    .brand-logo img { width: 100%; height: 100%; object-fit: contain; }
     .brand-name {
       font-size: 0.9375rem;
       font-weight: 600;
@@ -345,7 +345,7 @@
       <span data-i18n="common.back">返回</span>
     </a>
     <a href="/" class="header-brand">
-      <div class="brand-logo">🌱</div>
+      <div class="brand-logo"><img src="/static/soulprout_logo.png" alt="Soulprout" /></div>
       <span class="brand-name">Soulprout</span>
     </a>
   </div>
@@ -361,9 +361,9 @@
   <div class="page-header">
     <p class="page-eyebrow" data-i18n="weixin.eyebrow">Platform · 接入配置</p>
     <h1 class="page-title">
-      <span>💬</span> <span data-i18n="weixin.title">微信（个人号）</span>
+      <span>💬</span> <span data-i18n="weixin.title">微信</span>
     </h1>
-    <p class="page-desc" data-i18n="weixin.desc">通过微信个人号接入 Soulprout，扫码登录后 Gateway 将自动建立长轮询连接。</p>
+    <p class="page-desc" data-i18n="weixin.desc">通过微信接入 Soulprout，扫码登录后 Gateway 将自动建立长轮询连接。</p>
   </div>
 
   <!-- 连接状态 -->
@@ -503,7 +503,7 @@ async function startQR() {
   try {
     const d = await api('/api/weixin/login/start', { method: 'POST' });
     if (!d.success) { setBusy(false, d.error || t('weixin.getFailed'), true); return; }
-    renderQR(d.qrcode_url, d.qrcode_value);
+    renderQR(d.qrcode_url, d.scan_url || d.qrcode_value);
     setPollMsg(t('common.waitingScan'), '');
     document.getElementById('btn-cancel').style.display = '';
     document.getElementById('btn-qr').style.display = 'none';
@@ -513,13 +513,14 @@ async function startQR() {
   }
 }
 
-function renderQR(url, value) {
+function renderQR(imageUrl, scanUrl) {
   const box = document.getElementById('qr-frame');
   const link = document.getElementById('qr-link');
-  if (url && url.startsWith('http')) {
+  if (imageUrl && imageUrl.startsWith('http')) {
     box.innerHTML = '';
     const img = document.createElement('img');
-    img.src = url;
+    img.src = imageUrl;
+    img.alt = 'WeChat QR';
     img.onerror = () => {
       box.innerHTML = '<div class="qr-placeholder">' + t('weixin.qrShowFailed') + '</div>';
     };
@@ -527,11 +528,12 @@ function renderQR(url, value) {
   } else {
     box.innerHTML = '<div class="qr-placeholder">' + t('weixin.qrLinkFallback') + '</div>';
   }
-  const scanUrl = url || value || '';
   if (scanUrl) {
     link.href = scanUrl;
     link.textContent = scanUrl;
     link.style.display = '';
+  } else {
+    link.style.display = 'none';
   }
 }
 
@@ -543,7 +545,7 @@ async function pollQR() {
     else if (s === 'scaned')  setPollMsg(t('weixin.scanned'), '');
     else if (s === 'refreshed') {
       setPollMsg(t('weixin.refreshed'), '');
-      renderQR(d.qrcode_url, d.qrcode_value);
+      renderQR(d.qrcode_url, d.scan_url || d.qrcode_value);
     } else if (s === 'confirmed') {
       clearInterval(_pollTimer); _pollTimer = null;
       setPollMsg(t('weixin.success'), 'ok');

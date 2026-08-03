@@ -162,6 +162,8 @@ export default {
       rokid: 'Rokid AI 眼镜',
     },
     createAgent: '创建Agent专家/团队',
+    loadMoreHistory: '加载更早的消息',
+    loadingMoreHistory: '加载中…',
   },
   messageInput: {
     removeFile: '删除',
@@ -236,6 +238,7 @@ export default {
     noTitle: '无标题',
     noSearchResults: '暂无检索结果',
     generatingBlueprint: '正在生成蓝图',
+    completedBlueprint: '已完成行动蓝图',
     blueprintContent: '蓝图内容',
     resizeResult: '拖拽调整结果区域高度',
   },

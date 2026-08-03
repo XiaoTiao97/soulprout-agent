@@ -2,7 +2,16 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A lightweight yet full-featured Agent framework.
+## Introduction
+
+**No technical background needed**: A personal agent assistant that works out of the box in the browser.
+**Multi-device connectivity**: Chat on WeChat, talk through AR glasses, connect Xiao Ai speakers.
+**Thinks with you**: No need to craft perfect prompts — the AI guides you to express your full idea.
+**Professional work capacity**: Train your everyday work into reusable experts.
+
+## Try It Now
+
+No local setup required — use it directly in the browser: [Visit here](https://www.soulprout.com)
 
 ## Core Capabilities
 
@@ -32,8 +41,6 @@ A polished visual interface makes agent workflows accessible to non-technical us
 3. **Gateway client**: Connect WeChat, Feishu, Xiao Ai, and other channels by downloading the Gateway client and scanning to bind — no extra software to deploy on your PC.
 
 ## Notes
-
-By the end of June, this project will be deployed on a public website for free use. URL: (TBD)
 
 Built by an independent developer over two and a half years of continuous work, with three major refactors — now open source.
 

@@ -97,7 +97,7 @@ async def upload_rokid_credentials(request: Request, body: RokidUploadRequest):
     payload = _cred_payload(cred)
     payload["configured"] = True
     payload["message"] = (
-        "已更新 API Key，请同步修改灵珠三方智能体配置"
+        "已更新 API Key，请同步修改 Rokid 平台三方智能体配置"
         if body.force_new_key
         else "凭证已保存到主站"
     )

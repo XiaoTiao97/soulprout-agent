@@ -30,6 +30,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,25 @@ EP_SEND_TYPING = "ilink/bot/sendtyping"
 EP_GET_CONFIG = "ilink/bot/getconfig"
 EP_GET_BOT_QR = "ilink/bot/get_bot_qrcode"
 EP_GET_QR_STATUS = "ilink/bot/get_qrcode_status"
+
+_QR_IMAGE_API = "https://api.qrserver.com/v1/create-qr-code/?size=192x192&data={data}"
+
+
+def _build_qrcode_image_url(scan_url: str) -> str:
+    """将微信扫码链接编码为可嵌入页面的二维码图片 URL。
+
+    iLink 返回的 ``qrcode_img_content`` 是待扫码的 weixin.qq.com 链接，
+    并非图片地址；与企业微信/飞书一致，用第三方服务生成二维码图。
+    """
+    return _QR_IMAGE_API.format(data=quote(scan_url, safe=""))
+
+
+def _qr_login_payload(qrcode_value: str, scan_url: str) -> Dict[str, str]:
+    return {
+        "qrcode_url": _build_qrcode_image_url(scan_url) if scan_url else "",
+        "qrcode_value": qrcode_value,
+        "scan_url": scan_url,
+    }
 
 LONG_POLL_TIMEOUT_MS = 35_000
 API_TIMEOUT_MS = 15_000
@@ -500,6 +520,7 @@ class QRLoginSession:
 
     def __init__(self):
         self.qrcode_value: str = ""
+        self.scan_url: str = ""
         self.qrcode_url: str = ""
         self.status: str = self.STATUS_WAIT
         self.current_base_url: str = ILINK_BASE_URL
@@ -532,17 +553,17 @@ class QRLoginSession:
             return {"error": f"获取二维码失败: {exc}"}
 
         self.qrcode_value = str(qr_resp.get("qrcode") or "")
-        self.qrcode_url = str(qr_resp.get("qrcode_img_content") or "")
+        self.scan_url = str(qr_resp.get("qrcode_img_content") or "")
+        self.qrcode_url = _build_qrcode_image_url(self.scan_url) if self.scan_url else ""
 
         if not self.qrcode_value:
             return {"error": "iLink 返回的二维码数据为空"}
+        if not self.scan_url:
+            return {"error": "iLink 返回的扫码链接为空"}
 
         self.status = self.STATUS_WAIT
         logger.info("weixin: 二维码已获取，请扫码")
-        return {
-            "qrcode_url": self.qrcode_url or self.qrcode_value,
-            "qrcode_value": self.qrcode_value,
-        }
+        return _qr_login_payload(self.qrcode_value, self.scan_url)
 
     async def poll(self) -> Dict[str, Any]:
         """
@@ -587,14 +608,11 @@ class QRLoginSession:
                     timeout_ms=QR_TIMEOUT_MS,
                 )
                 self.qrcode_value = str(qr_resp.get("qrcode") or "")
-                self.qrcode_url = str(qr_resp.get("qrcode_img_content") or "")
+                self.scan_url = str(qr_resp.get("qrcode_img_content") or "")
+                self.qrcode_url = _build_qrcode_image_url(self.scan_url) if self.scan_url else ""
                 self.status = self.STATUS_WAIT
                 self.current_base_url = ILINK_BASE_URL
-                return {
-                    "status": "refreshed",
-                    "qrcode_url": self.qrcode_url or self.qrcode_value,
-                    "qrcode_value": self.qrcode_value,
-                }
+                return {"status": "refreshed", **_qr_login_payload(self.qrcode_value, self.scan_url)}
             except Exception as exc:
                 return {"status": self.STATUS_ERROR, "error": f"二维码刷新失败: {exc}"}
 

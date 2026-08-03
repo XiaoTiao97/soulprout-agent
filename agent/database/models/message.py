@@ -1,6 +1,7 @@
 from beanie import Document
 from typing import Optional, Union
 from datetime import datetime
+from pymongo import IndexModel, ASCENDING
 
 class AgentMessage(Document):
     user_id: str
@@ -17,6 +18,12 @@ class AgentMessage(Document):
 
     class Settings:
         name = "agent_messages"
+        indexes = [
+            IndexModel(
+                [("conversation_id", ASCENDING), ("created_at", ASCENDING)],
+                name="conversation_id_created_at",
+            ),
+        ]
 
 class SubAgentMessage(Document):
     user_id: str

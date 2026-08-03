@@ -201,7 +201,13 @@ function getRawResult(toolCallId: string): string {
   const id = String(toolCallId)
   const sources = [...(props.toolMessages || []), ...(props.agentMessageList || [])]
   for (const m of sources) {
-    if (m.role === 'tool' && String(m.tool_call_id || '') === id && m.content) {
+    // 仅承认正式 tool 结果；plan / plan_progress 不算完成
+    if (
+      m.role === 'tool' &&
+      (m.type === 'tool' || !m.type || m.type === '') &&
+      String(m.tool_call_id || '') === id &&
+      m.content
+    ) {
       return m.content
     }
   }
@@ -217,11 +223,18 @@ function getLabel(item: ToolCallItem): string {
     return getToolSummaryLabel(item.toolName, item.arguments, true)
   }
   const result = getRawResult(item.toolCallId)
+  // 蓝图工具：生成过程中即使出现其它消息，也保持「正在生成」直到正式 tool result
+  if (item.toolName === 'get_action_blueprint' && props.pending && !result) {
+    return getToolSummaryLabel(item.toolName, item.arguments, false)
+  }
   return getToolSummaryLabel(item.toolName, item.arguments, !!result, result)
 }
 
 function isPending(item: ToolCallItem): boolean {
   if (props.showResults === false) return false
+  if (item.toolName === 'get_action_blueprint') {
+    return !!props.pending && !getRawResult(item.toolCallId)
+  }
   return !!props.pending && !getRawResult(item.toolCallId)
 }
 </script>

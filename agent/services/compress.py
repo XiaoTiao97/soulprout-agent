@@ -123,6 +123,9 @@ class Compress:
 
     async def compact(self):
         print(f"[compress.compact] 开始, 历史消息数={len(self.history or [])}, context_window={self.context_window}")
+        if not self.context_window:
+            print("[compress.compact] 跳过: context_window 未知")
+            return False
         tokens = 0
         compact_point = False
         _id_list = []
@@ -215,18 +218,42 @@ class Compress:
         except Exception as e:
             print(f"sync memory after compress error: {e}")
 
+    def _resolve_context_window(self):
+        """
+        从 models_info_list 解析当前模型的 context_window。
+        支持精确匹配，以及去掉/补上 -thinking 后缀的回退；都找不到则用默认值。
+        """
+        default_window = 128000
+        model_name = (self.model or "").strip()
+        if not model_name:
+            return default_window
+
+        candidates = [model_name]
+        if model_name.endswith("-thinking"):
+            candidates.append(model_name[: -len("-thinking")])
+        else:
+            candidates.append(f"{model_name}-thinking")
+
+        for candidate in candidates:
+            for source in self.config.models_info_list or []:
+                for model in source.get("models") or []:
+                    if model.get("name") != candidate:
+                        continue
+                    window = model.get("context_window")
+                    if isinstance(window, (int, float)) and window > 0:
+                        return int(window)
+        print(
+            f"[compress] 未找到模型 {model_name!r} 的 context_window，"
+            f"使用默认值 {default_window}"
+        )
+        return default_window
+
     async def run(self, force=False):
         print(f"[compress.run] 开始 force={force}, conversation_id={self.conversation_id}, model={self.model}")
-        self.context_window = next(
-            (model.get("context_window")
-             for source in self.config.models_info_list
-             for model in source.get("models", [])
-             if model.get("name") == self.model),
-             None  # 默认值
-        )
+        self.context_window = self._resolve_context_window()
         print(f"[compress.run] 模型最大长度(context_window)={self.context_window}")
         history_token = await self.history_token_check()
-        print(f"[compress.run] token估计={history_token}, 80%阈值={0.8 * self.context_window if self.context_window else None}")
+        print(f"[compress.run] token估计={history_token}, 80%阈值={0.8 * self.context_window}")
         if not force and history_token <= 0.8 * self.context_window:
             print("[compress.run] 跳过压缩: 未达 80% 阈值且 force=False, 直接返回 True")
             return True
@@ -239,7 +266,7 @@ class Compress:
 
         # 重新检查collapse折叠情况
         history_token = await self.history_token_check()
-        print(f"[compress.run] collapse 后 token估计={history_token}, 60%阈值={0.6 * self.context_window if self.context_window else None}")
+        print(f"[compress.run] collapse 后 token估计={history_token}, 60%阈值={0.6 * self.context_window}")
 
         # collapse 成功且总上下文小于60%：直接结束，并同步 memory_loaded
         if collapse_ok and history_token < 0.6 * self.context_window:

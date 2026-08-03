@@ -4,6 +4,19 @@
       <div class="answer-container" :class="{'no-history': !groupedMessages.length && !streamingBlocks.length && !showPlanInStreamingRow}" ref="answerContainer" @scroll="handleScroll">
         <!-- 有对话消息时显示消息列表 -->
         <template v-if="groupedMessages.length || streamingBlocks.length || showPlanInStreamingRow">
+          <div
+            v-if="chatMode === 'soulprout' && soulMessagesHasMore"
+            class="soul-load-more-wrap"
+          >
+            <button
+              type="button"
+              class="soul-load-more-btn"
+              :disabled="soulMessagesLoadingMore"
+              @click="emit('loadMoreSoulMessages')"
+            >
+              {{ soulMessagesLoadingMore ? t('chatWindow.loadingMoreHistory') : t('chatWindow.loadMoreHistory') }}
+            </button>
+          </div>
           <template v-for="(group, index) in groupedMessages" :key="index">
             <!-- 用户消息 -->
             <div v-if="group.role === 'user'" class="answer-single-me-agent">
@@ -142,6 +155,13 @@
                     </div>
                   </div>
 
+                  <div v-else-if="message.type === 'plan'" class="answer-robot-tool">
+                    <BlueprintBlock
+                      :content="message.content || ''"
+                      :pending="false"
+                    />
+                  </div>
+
                   <div v-else-if="message.type === 'user_feedback' && message.table" class="user-feedback-wrapper">
                     <UserFeedbackBlock
                       :payload="(message.table as unknown as UserFeedbackPayload)"
@@ -190,7 +210,8 @@
               <BlueprintBlock
                 v-if="showPlanInStreamingRow"
                 :content="planStreamContent"
-                pending
+                :progress-text="planProgressContent"
+                :pending="blueprintPending"
               />
               <!-- Loading状态显示 -->
               <div v-if="isLoading" class="answer-robot-loading">
@@ -421,6 +442,8 @@ interface Props {
   currentStreamingMessage: AgentMessage | null;
   isGenerating?: boolean;
   planStreamContent?: string;
+  planProgressContent?: string;
+  blueprintPending?: boolean;
   isLoading: boolean;           // 新增
   timeoutError: string;         // 新增
   model_list: Record<string, string[]>;
@@ -434,6 +457,10 @@ interface Props {
   chatMode?: 'soulprout' | 'task';
   /** 工具消息（含工具调用结果），用于 web_search 展示 */
   toolMessages?: AgentMessage[];
+  /** Soul 模式是否还有更早的历史消息 */
+  soulMessagesHasMore?: boolean;
+  /** Soul 模式正在加载更早历史 */
+  soulMessagesLoadingMore?: boolean;
 }
 
 interface StreamBlock {
@@ -454,10 +481,14 @@ interface MessageGroup {
 const props = withDefaults(defineProps<Props>(), {
   isGenerating: false,
   planStreamContent: '',
+  planProgressContent: '',
+  blueprintPending: false,
   reloadStreamingUiToken: 0,
   welcomeAnimationToken: 0,
   chatMode: 'soulprout',
   toolMessages: () => [],
+  soulMessagesHasMore: false,
+  soulMessagesLoadingMore: false,
 })
 
 // ─── web_search 独立展示；其余工具由 ToolCallsBlock 负责 ─────────────────
@@ -488,6 +519,7 @@ const emit = defineEmits<{
   scrollTo: [id: string]
   openWebPreview: [url: string]
   openFilePreview: [filePath: string]
+  loadMoreSoulMessages: []
 }>()
 
 // 从消息中获取 tool_call_id（优先使用 tool_calls[0].id，否则使用 tool_call_id，最后使用 created_at）
@@ -587,6 +619,13 @@ function handleFeedbackSubmitFromBlock(block: StreamBlock, answer: string) {
 /** 工具结果走侧栏 toolMessages；主对话流中「未完成」= 仍在生成且当前最后一块仍是工具调用 */
 const isStreamingToolBlockPending = (block: StreamBlock, index: number) => {
   if (!props.isGenerating) return false
+  const hasBlueprint = (block.tool_calls || []).some(
+    (tc) => tc.function?.name === 'get_action_blueprint',
+  )
+  if (hasBlueprint && (block.type === 'get_tools' || block.type === 'get_agents')) {
+    // 蓝图工具：只要还在生成且尚无正式 tool result，就保持 pending（不要求是最后一块）
+    return props.blueprintPending !== false
+  }
   if (index !== streamingBlocks.value.length - 1) return false
   return block.type === 'get_tools' || block.type === 'get_agents'
 }
@@ -662,9 +701,12 @@ function adjustUserEditTextareaHeight() {
   })
 }
 
-/** 蓝图流式区：仅在 plan 段生成中展示，结束后由 tool result 承接 */
+/** 蓝图区：进度流 / 最终蓝图 / 等待生成 任一成立即展示 */
 const showPlanInStreamingRow = computed(
-  () => props.isGenerating && !!props.planStreamContent
+  () =>
+    !!props.planStreamContent ||
+    !!props.planProgressContent ||
+    !!props.blueprintPending,
 )
 
 watch(
@@ -920,13 +962,17 @@ const renderMarkdown = (content: string | undefined) => {
   return html
 }
 
-// 显示消息列表（只包含历史消息；user_feedback 类型的用户消息不在对话区展示）
+// 显示消息列表（只包含历史消息）
+// - 用户提交的反馈内容（role=user + type=user_feedback）不展示
+// - 反馈表单本身（type=user_feedback，后端 role=tool）需在主对话区展示
 const displayMessages = computed(() => {
-  return props.agent_message_list.filter(
-    (msg) =>
-      msg.type !== 'init' &&
-      !(msg.role === 'user' && msg.type === 'user_feedback'),
-  )
+  return props.agent_message_list.filter((msg) => {
+    if (msg.type === 'init') return false
+    if (msg.role === 'user' && msg.type === 'user_feedback') return false
+    if (msg.type === 'user_feedback') return true
+    if (msg.role === 'tool' || msg.role === 'agent') return false
+    return true
+  })
 })
 
 // 将连续的相同角色消息分组（user_feedback 归入 assistant 区展示）
@@ -1126,12 +1172,17 @@ watch(() => props.currentStreamingMessage, (newMessage, oldMessage) => {
   })
 }, { deep: true })
 
-// 监听消息列表变化，自动滚动到底部
-watch(() => props.agent_message_list, () => {
-  nextTick(() => {
-    scrollToBottom()
-  })
-}, { deep: true, immediate: true })
+// 监听消息列表变化，自动滚动到底部（仅在新消息追加时，避免加载历史时反复滚动）
+watch(
+  () => props.agent_message_list.length,
+  (len, prevLen) => {
+    if (len > (prevLen ?? 0)) {
+      nextTick(() => {
+        scrollToBottom()
+      })
+    }
+  },
+)
 
 let welcomeAnimationTimers: ReturnType<typeof setTimeout>[] = []
 
@@ -1843,6 +1894,33 @@ const handleCreateAgentClick = () => {
   color: rgba(100, 116, 139, 0.75);
   font-size: 12px;
   line-height: 12px;
+}
+
+.soul-load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 16px;
+}
+
+.soul-load-more-btn {
+  border: 1px solid rgba(30, 180, 140, 0.35);
+  background: rgba(30, 180, 140, 0.08);
+  color: #0f766e;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.soul-load-more-btn:hover:not(:disabled) {
+  background: rgba(30, 180, 140, 0.14);
+  border-color: rgba(30, 180, 140, 0.55);
+}
+
+.soul-load-more-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 </style>
