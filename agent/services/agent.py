@@ -978,27 +978,80 @@ class Chat:
         memory = Memory(self.config, self.is_sub_agent, self.session_id, self.user_id, self.conversation_id, self.input_text)
         return await memory.recall()
 
+    @staticmethod
+    def _extract_tool_call_ids(tool_calls):
+        ids = set()
+        if not tool_calls:
+            return ids
+        for tc in tool_calls:
+            if isinstance(tc, dict):
+                tc_id = tc.get("id")
+            else:
+                tc_id = getattr(tc, "id", None)
+            if tc_id:
+                ids.add(tc_id)
+        return ids
+
     async def history_check(self):
+        """清理非法 tool 对话结构，避免发给 LLM 时 400。
+
+        覆盖场景：
+        1. 孤立 tool（前面没有带 tool_calls 的 assistant）
+        2. tool_call_id 与 pending tool_calls 不匹配
+        3. tool_calls 序列未完成就被其它消息打断
+        4. 历史末尾残留未完成的 tool_calls 序列
+        """
         history = await self.get_runtime_history()
-        del_id_list = []
-        tool_calls_num = 0
+        to_delete = []
+        sequence_ids = []
+        pending_tool_call_ids = set()
+
         for message in history:
-            if message.role != "agent":
-                if message.tool_calls:
-                    del_id_list = []
-                    tool_calls_num = len(message.tool_calls)
-                    del_id_list.append(message.id)
-                elif len(del_id_list) > 0:
-                    if message.role == "tool":
-                        tool_calls_num -= 1
-                        del_id_list.append(message.id)
-                    elif message.role != "tool" and tool_calls_num != 0:
-                        await self.delete_runtime_messages(del_id_list)
-                        del_id_list = []
-                        tool_calls_num = 0
-                    else:
-                        del_id_list = []
-                        tool_calls_num = 0
+            if message.role == "agent":
+                continue
+
+            if message.tool_calls:
+                # 上一段 tool_calls 尚未收齐，整段作废
+                if pending_tool_call_ids:
+                    to_delete.extend(sequence_ids)
+                sequence_ids = [message.id]
+                pending_tool_call_ids = self._extract_tool_call_ids(message.tool_calls)
+                # 异常数据：有 tool_calls 字段但抽不出 id，直接删掉这条
+                if not pending_tool_call_ids:
+                    to_delete.append(message.id)
+                    sequence_ids = []
+            elif message.role == "tool":
+                tool_call_id = getattr(message, "tool_call_id", None)
+                if not pending_tool_call_ids or tool_call_id not in pending_tool_call_ids:
+                    # 孤立 / 错配的 tool
+                    to_delete.append(message.id)
+                else:
+                    pending_tool_call_ids.discard(tool_call_id)
+                    sequence_ids.append(message.id)
+                    if not pending_tool_call_ids:
+                        # 配对完成，保留该段
+                        sequence_ids = []
+            else:
+                if pending_tool_call_ids:
+                    # 被 user/assistant 等打断的未完成序列
+                    to_delete.extend(sequence_ids)
+                    sequence_ids = []
+                    pending_tool_call_ids = set()
+
+        # 历史末尾仍有未完成的 tool_calls
+        if pending_tool_call_ids and sequence_ids:
+            to_delete.extend(sequence_ids)
+
+        if to_delete:
+            # 去重且保持稳定顺序
+            seen = set()
+            unique_ids = []
+            for mid in to_delete:
+                if mid not in seen:
+                    seen.add(mid)
+                    unique_ids.append(mid)
+            print(f"[history_check] 清理非法消息数={len(unique_ids)}")
+            await self.delete_runtime_messages(unique_ids)
 
     async def edit_message_process(self):
         history = await get_message_by_conv_id(self.conversation_id)
@@ -1101,6 +1154,8 @@ class Chat:
             reasoning_content_total = ""
             await self.history_check()
             memory_process_result = await self.compress_process()
+            # compress 可能截断 tool 配对，压缩后再校验一次
+            await self.history_check()
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
             if self.agent_card and self.agent_card.supervisor_history:
@@ -1258,6 +1313,8 @@ class Chat:
             reasoning_content_total = ""
             await self.history_check()
             memory_process_result = await self.compress_process()     # 上下文压缩（成功后内部会同步 memory_loaded）
+            # compress 可能截断 tool 配对，压缩后再校验一次
+            await self.history_check()
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
             self.messages = history
