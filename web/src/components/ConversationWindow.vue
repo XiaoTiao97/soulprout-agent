@@ -74,7 +74,7 @@
                     <path d="M8 7.5c0-2.2 1.7-4 4-4 0 2.2-1.8 4-4 4z" />
                     <path d="M8 8.5c0-1.8-1.5-3.3-3.3-3.3 0 1.8 1.5 3.3 3.3 3.3z" />
                   </svg>
-                  <span class="chat-mode-option-label">Soul</span>
+                  <span class="chat-mode-option-label">{{ t('conversation.soulLabel') }}</span>
                 </button>
                 <button
                   type="button"
@@ -90,7 +90,7 @@
                     <path d="M3 4.5h7M3 8h7M3 11.5h4.5" />
                     <path d="m11.5 10.5 1.6 1.6L15.5 9.5" />
                   </svg>
-                  <span class="chat-mode-option-label">Task</span>
+                  <span class="chat-mode-option-label">{{ t('conversation.taskLabel') }}</span>
                 </button>
               </div>
             </div>

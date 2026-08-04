@@ -38,7 +38,7 @@ export default {
     footerContact: '联系我们',
     features: [
       {
-        title: 'Soul 模式',
+        title: '灵芽模式',
         desc: '越用越懂你的个性化 Agent 助理，拥有记忆和持续对话能力，支持接入微信、飞书、小爱音箱、AI 眼镜等，成为你又能聊天又能干活的 AI 搭子。',
       },
       {
@@ -107,10 +107,12 @@ export default {
     viewAgents: '查看专家库',
     generatingDisabled: '正在生成中，无法操作',
     chatMode: '对话模式',
+    soulLabel: '灵芽',
+    taskLabel: '任务',
     soulHint: '越用越懂你',
     taskHint: '专业打工人',
     switchMode: '对话模式切换',
-    soulTip: 'Soul 模式：越用越懂你的AI伙伴',
+    soulTip: '灵芽模式：越用越懂你的AI伙伴',
     taskTip: '任务模式：专心做好一件事',
     newTask: '新任务',
     unnamedConversation: '未命名对话',
@@ -138,7 +140,7 @@ export default {
     channelDownload: '下载应用，体验多渠道接入：',
     taskWelcome: '你好{username}，需要我做些什么？🌱',
     viewHint: '👈 查看这里',
-    generalMode: '通用模式',
+    generalMode: '任务模式',
     expertMode: '专家模式',
     expertModeDesc: '5分钟',
     expertModeDescSub: '定制你的Agent专家/团队',
@@ -434,5 +436,9 @@ export default {
     readDocxFailed: '读取 DOCX 文件失败',
     cannotReadContent: '无法读取文件内容',
     cannotPreviewType: '无法显示该文件类型',
+  },
+  productDocs: {
+    title: '产品文档',
+    notLoaded: '(未加载)',
   },
 }

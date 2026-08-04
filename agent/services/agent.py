@@ -916,6 +916,24 @@ class Chat:
         # 并行处理所有生成器，实时产生结果
         async for result in self.merge_async_generators(tasks):
             yield result
+
+        # clear 与其它工具并行时，其它工具可能在首次清理之后才落库；此处再清一次兜底
+        if self.stop_after_conversation_clear:
+            history = await self.get_runtime_history()
+            ids = [item.id for item in history]
+            if ids:
+                await self.delete_runtime_messages(ids)
+            self.messages = [{"role": "system", "content": self.system_prompt}]
+            self.picture_base64_result = []
+            yield ChatResponse(
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                type="reload_history",
+                role="assistant",
+                content="",
+            ).model_dump_json()
+            return
+
         # 处理所有读取图片的情况
         if len(self.picture_base64_result) > 0:
             for picture_base64 in self.picture_base64_result:

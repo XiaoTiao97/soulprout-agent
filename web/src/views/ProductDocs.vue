@@ -6,7 +6,8 @@
           <img :src="logo" alt="Soulprout" width="40" height="36" />
           <span class="logo-text">Soulprout</span>
         </router-link>
-        <h1 class="docs-title">产品文档</h1>
+        <h1 class="docs-title">{{ t('productDocs.title') }}</h1>
+        <LocaleSwitcher class="docs-locale" />
       </div>
     </header>
 
@@ -15,7 +16,7 @@
         <nav class="toc-nav">
           <div
             v-for="(part, partIndex) in toc"
-            :key="partIndex"
+            :key="`${locale}-${partIndex}`"
             class="toc-part"
           >
             <div
@@ -28,7 +29,7 @@
             <div class="toc-sections">
               <div
                 v-for="(section, sectionIndex) in part.sections"
-                :key="sectionIndex"
+                :key="`${locale}-${partIndex}-${sectionIndex}`"
                 class="toc-section"
                 :class="{ active: activeSection === `${partIndex}-${sectionIndex}` }"
                 @click="scrollToSection(partIndex, sectionIndex)"
@@ -43,7 +44,7 @@
       <main class="docs-content">
         <article
           v-for="(part, partIndex) in docParts"
-          :key="partIndex"
+          :key="`${locale}-${partIndex}`"
           :ref="el => setPartRef(el, partIndex)"
           class="doc-part"
         >
@@ -55,18 +56,34 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import logo from '@/assets/images/soulprout_logo.png'
+import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
-import part1Raw from '@/utils/docs/第一部分_认识Soulprout.md?raw'
-import part2Raw from '@/utils/docs/第二部分_快速上手.md?raw'
-import part3Raw from '@/utils/docs/第三部分_四大功能库详解.md?raw'
-import part4Raw from '@/utils/docs/第四部分_专家模式实战.md?raw'
-import part5Raw from '@/utils/docs/第五部分_Soul模式.md?raw'
-import part6Raw from '@/utils/docs/第六部分_开源与私有化部署.md?raw'
+import zhPart1 from '@/utils/docs/zh-CN/01-meet-soulprout.md?raw'
+import zhPart2 from '@/utils/docs/zh-CN/02-quick-start.md?raw'
+import zhPart3 from '@/utils/docs/zh-CN/03-four-libraries.md?raw'
+import zhPart4 from '@/utils/docs/zh-CN/04-soul-mode.md?raw'
+import zhPart5 from '@/utils/docs/zh-CN/05-expert-mode.md?raw'
+import zhPart6 from '@/utils/docs/zh-CN/06-open-source.md?raw'
+
+import enPart1 from '@/utils/docs/en/01-meet-soulprout.md?raw'
+import enPart2 from '@/utils/docs/en/02-quick-start.md?raw'
+import enPart3 from '@/utils/docs/en/03-four-libraries.md?raw'
+import enPart4 from '@/utils/docs/en/04-soul-mode.md?raw'
+import enPart5 from '@/utils/docs/en/05-expert-mode.md?raw'
+import enPart6 from '@/utils/docs/en/06-open-source.md?raw'
+
+const { t, locale } = useI18n()
+
+const docsByLocale = {
+  'zh-CN': [zhPart1, zhPart2, zhPart3, zhPart4, zhPart5, zhPart6],
+  en: [enPart1, enPart2, enPart3, enPart4, enPart5, enPart6],
+}
 
 // 文档图片：用 import 方式加载，打包进 assets，确保生产环境一定能访问到
 const docImageModules = import.meta.glob('@/assets/docs-images/*.png', { eager: true, as: 'url' })
@@ -108,7 +125,6 @@ md.renderer.rules.fence = (tokens, idx, options, env, slf) => {
 const renderMarkdown = (content) => {
   let html = md.render(content)
   html = html.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ')
-  // 用构建时导入的图片 URL 替换，确保本地和生产环境都能正确加载
   html = html.replace(/src="\/docs-images\/([^"]+)"/g, (_, filename) => {
     const url = docImageMap[filename]
     return url ? `src="${url}"` : `src="/docs-images/${filename}"`
@@ -118,7 +134,7 @@ const renderMarkdown = (content) => {
 
 function extractToc(markdown) {
   if (!markdown || typeof markdown !== 'string') {
-    return { title: '(未加载)', sections: [] }
+    return { title: t('productDocs.notLoaded'), sections: [] }
   }
   const lines = markdown.split('\n')
   const result = { title: '', sections: [] }
@@ -132,14 +148,14 @@ function extractToc(markdown) {
   return result
 }
 
-const rawDocs = [part1Raw, part2Raw, part3Raw, part4Raw, part5Raw, part6Raw]
+const rawDocs = computed(() => docsByLocale[locale.value] || docsByLocale['zh-CN'])
 
 const toc = computed(() =>
-  rawDocs.map((raw) => extractToc(raw))
+  rawDocs.value.map((raw) => extractToc(raw))
 )
 
 const docParts = computed(() =>
-  rawDocs.map((raw) => ({ html: renderMarkdown(raw || '') }))
+  rawDocs.value.map((raw) => ({ html: renderMarkdown(raw || '') }))
 )
 
 const partRefs = ref({})
@@ -151,6 +167,13 @@ const activePart = ref(0)
 const activeSection = ref('0-0')
 
 const HEADER_OFFSET = 80
+
+watch(locale, () => {
+  partRefs.value = {}
+  activePart.value = 0
+  activeSection.value = '0-0'
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+})
 
 const scrollToPart = (partIndex) => {
   const el = partRefs.value[partIndex]
@@ -238,6 +261,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 2rem;
+}
+
+.docs-locale {
+  margin-left: auto;
 }
 
 .logo-link {

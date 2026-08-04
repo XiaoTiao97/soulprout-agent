@@ -107,6 +107,8 @@ export default {
     viewAgents: 'View expert library',
     generatingDisabled: 'Generating — actions disabled',
     chatMode: 'Chat mode',
+    soulLabel: 'Soul',
+    taskLabel: 'Task',
     soulHint: 'Knows you better over time',
     taskHint: 'Gets work done',
     switchMode: 'Switch chat mode',
@@ -138,7 +140,7 @@ export default {
     channelDownload: 'Download the app for multi-channel access:',
     taskWelcome: 'Hi {username}, what can I help you with? 🌱',
     viewHint: '👈 Check this out',
-    generalMode: 'General mode',
+    generalMode: 'Task mode',
     expertMode: 'Expert mode',
     expertModeDesc: '5 minutes',
     expertModeDescSub: 'to build your agent expert/team',
@@ -434,5 +436,9 @@ export default {
     readDocxFailed: 'Failed to read DOCX file',
     cannotReadContent: 'Unable to read file content',
     cannotPreviewType: 'Unable to preview this file type',
+  },
+  productDocs: {
+    title: 'Documentation',
+    notLoaded: '(Not loaded)',
   },
 }
