@@ -588,6 +588,7 @@ class Chat:
             f"{self.capabilities_prompt}\n"
             f"{prompt.AGENT_INFO}\n"
             f"{agent_info_section}\n"
+            f"Current Date: {datetime.now().strftime('%Y-%m-%d')}\n"
         )
 
         tools = await self.mcp_list_tools()
