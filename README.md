@@ -4,9 +4,9 @@ English | [简体中文](README.zh-CN.md)
 
 ## Introduction
 
-**No technical background needed**: A personal agent assistant that works out of the box in the browser.
-**Multi-device connectivity**: Chat on WeChat, talk through AR glasses, connect Xiao Ai speakers.
-**Thinks with you**: No need to craft perfect prompts — the AI guides you to express your full idea.
+**No technical background needed**: A personal agent assistant that works out of the box in the browser.  
+**Multi-device connectivity**: Chat on WeChat, talk through AR glasses, connect Xiao Ai speakers.  
+**Thinks with you**: No need to craft perfect prompts — the AI guides you to express your full idea.  
 **Professional work capacity**: Train your everyday work into reusable experts.
 
 ## Try It Now
