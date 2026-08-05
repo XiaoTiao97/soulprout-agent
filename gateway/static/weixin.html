@@ -489,10 +489,27 @@ async function reloadAdapter() {
   try {
     await api('/api/weixin/reload', { method: 'POST' });
     setPollMsg(t('common.reconnecting'), '');
-    setTimeout(refreshStatus, 1800);
+    waitUntilConnected();
   } catch(e) {
     setPollMsg(t('common.reconnectFailed') + e.message, 'err');
   }
+}
+
+async function waitUntilConnected() {
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 800));
+    try {
+      const d = await api('/api/status');
+      await refreshStatus();
+      if (d.connected) {
+        setPollMsg(t('weixin.connectedOk') + (d.account_id ? ' · ' + d.account_id : ''), 'ok');
+        return;
+      }
+    } catch (_) { /* keep waiting */ }
+  }
+  await refreshStatus();
+  setPollMsg(t('weixin.connectFailed'), 'err');
 }
 
 /* ─── QR Login ─── */
@@ -550,7 +567,7 @@ async function pollQR() {
       clearInterval(_pollTimer); _pollTimer = null;
       setPollMsg(t('weixin.success'), 'ok');
       resetQRUI();
-      setTimeout(refreshStatus, 2000);
+      waitUntilConnected();
     } else if (s === 'error') {
       clearInterval(_pollTimer); _pollTimer = null;
       setPollMsg(t('weixin.failed') + (d.error || t('weixin.unknown')), 'err');

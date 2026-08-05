@@ -176,6 +176,7 @@ class WecomQRSession:
         self._scode = ""
         self._expire_at = 0.0
         self._closed = False
+        self.result: Optional[Dict[str, Any]] = None
 
     async def start(self) -> Dict[str, Any]:
         try:
@@ -184,6 +185,7 @@ class WecomQRSession:
             return {"error": str(exc)}
         self._scode = begin["scode"]
         self._expire_at = time.monotonic() + _QR_POLL_TIMEOUT
+        self.result = None
         return {
             "qr_url": begin["page_url"],
             "auth_url": begin["auth_url"],
@@ -192,6 +194,9 @@ class WecomQRSession:
         }
 
     async def poll(self) -> Dict[str, Any]:
+        if self.result:
+            return {**self.result, "already_confirmed": True}
+
         if self._closed or not self._scode:
             return {"status": "not_started"}
         if time.monotonic() >= self._expire_at:
@@ -211,11 +216,12 @@ class WecomQRSession:
             if bot_id and secret:
                 bot_name = str(bot_info.get("name") or bot_info.get("bot_name") or "").strip()
                 save_wecom_config(bot_id=bot_id, secret=secret, bot_name=bot_name)
-                return {
+                self.result = {
                     "status": "confirmed",
                     "bot_id": bot_id,
                     "bot_name": bot_name,
                 }
+                return dict(self.result)
             return {"status": "error", "error": "扫码成功但未返回 Bot 凭证"}
 
         return {"status": "wait"}
@@ -263,8 +269,9 @@ class WecomAdapter(BasePlatformAdapter):
         cfg = load_wecom_config()
         if not cfg:
             return
-        self._bot_id = str(cfg.get("bot_id") or self._bot_id).strip()
-        self._secret = str(cfg.get("secret") or self._secret).strip()
+        # 磁盘配置整份覆盖内存，避免换号后仍粘住旧 bot_id/secret
+        self._bot_id = str(cfg.get("bot_id") or "").strip()
+        self._secret = str(cfg.get("secret") or "").strip()
         self._bot_name = str(cfg.get("bot_name") or "").strip()
 
     def reload_credentials(self) -> bool:

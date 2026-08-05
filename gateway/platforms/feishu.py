@@ -303,6 +303,7 @@ class FeishuQRSession:
         self._expire_at = 0.0
         self._qr_url = ""
         self._closed = False
+        self.result: Optional[Dict[str, Any]] = None
 
     async def start(self) -> Dict[str, Any]:
         try:
@@ -315,6 +316,7 @@ class FeishuQRSession:
         self._interval = begin["interval"]
         self._expire_at = time.monotonic() + begin["expire_in"]
         self._qr_url = begin["qr_url"]
+        self.result = None
         qrcode_url = (
             f"https://api.qrserver.com/v1/create-qr-code/?size=192x192&data={quote(self._qr_url)}"
             if self._qr_url
@@ -327,6 +329,9 @@ class FeishuQRSession:
         }
 
     async def poll(self) -> Dict[str, Any]:
+        if self.result:
+            return {**self.result, "already_confirmed": True}
+
         if self._closed or not self._device_code:
             return {"status": "not_started"}
         if time.monotonic() >= self._expire_at:
@@ -359,12 +364,13 @@ class FeishuQRSession:
                 bot_open_id=str(bot_info.get("bot_open_id") or ""),
                 open_id=str(user_info.get("open_id") or ""),
             )
-            return {
+            self.result = {
                 "status": "confirmed",
                 "app_id": app_id,
                 "domain": current_domain,
                 "bot_name": bot_info.get("bot_name") or "",
             }
+            return dict(self.result)
 
         error = res.get("error", "")
         if error in {"access_denied", "expired_token"}:
@@ -417,11 +423,12 @@ class FeishuAdapter(BasePlatformAdapter):
         cfg = load_feishu_config()
         if not cfg:
             return
-        self._app_id = str(cfg.get("app_id") or self._app_id).strip()
-        self._app_secret = str(cfg.get("app_secret") or self._app_secret).strip()
-        self._domain_name = str(cfg.get("domain") or self._domain_name).strip() or "feishu"
+        # 磁盘配置整份覆盖内存，避免换号后仍粘住旧 app_id/secret
+        self._app_id = str(cfg.get("app_id") or "").strip()
+        self._app_secret = str(cfg.get("app_secret") or "").strip()
+        self._domain_name = str(cfg.get("domain") or "feishu").strip() or "feishu"
         self._bot_name = str(cfg.get("bot_name") or "").strip()
-        self._bot_open_id = str(cfg.get("bot_open_id") or self._bot_open_id).strip()
+        self._bot_open_id = str(cfg.get("bot_open_id") or "").strip()
 
     def reload_credentials(self) -> bool:
         self._reload_from_disk()

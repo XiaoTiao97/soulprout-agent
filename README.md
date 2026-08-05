@@ -13,6 +13,19 @@ English | [简体中文](README.zh-CN.md)
 
 No local setup required — use it directly in the browser: [Visit here](https://www.soulprout.com)
 
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/rokid.gif" alt="Rokid AI Glasses demo" width="100%" /><br/>
+      <b>Rokid AI Glasses</b>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/wechatclaw.gif" alt="WeChat Claw demo" width="100%" /><br/>
+      <b>WeChat Claw</b>
+    </td>
+  </tr>
+</table>
+
 ## Core Capabilities
 
 1. **Harness engineering**: User personalization, agent personalization, memory, context compression, tools, skills, blueprint planning, and more.

@@ -13,6 +13,19 @@
 
 不需本地部署，直接通过网页端使用：[点这里访问](https://www.soulprout.com)
 
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/rokid.gif" alt="Rokid AI 眼镜演示" width="100%" /><br/>
+      <b>Rokid AI 眼镜</b>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/wechatclaw.gif" alt="微信 Claw 演示" width="100%" /><br/>
+      <b>微信 Claw</b>
+    </td>
+  </tr>
+</table>
+
 ## 核心能力
 
 1. **Harness 工程能力**：拥有用户个性化、Agent 个性化、记忆系统、上下文压缩、工具、技能、蓝图规划等能力。

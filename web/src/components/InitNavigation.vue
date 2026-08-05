@@ -11,6 +11,7 @@
         <button class="sp-nav-link" @click="scrollTo('capabilities')">{{ t('nav.capabilities') }}</button>
         <button class="sp-nav-link" @click="scrollTo('connectivity')">{{ t('nav.connectivity') }}</button>
         <button class="sp-nav-link" @click="scrollTo('intelligence')">{{ t('nav.openSource') }}</button>
+        <button class="sp-nav-link" @click="openDocs">{{ t('nav.docs') }}</button>
       </div>
 
       <div class="sp-nav-actions">
@@ -48,6 +49,9 @@ function handleStart() {
 const scrollTo = (id) => {
   const el = document.getElementById(id)
   if (el) el.scrollIntoView({ behavior: 'smooth' })
+}
+function openDocs() {
+  window.open('/docs', '_blank', 'noopener,noreferrer')
 }
 </script>
 

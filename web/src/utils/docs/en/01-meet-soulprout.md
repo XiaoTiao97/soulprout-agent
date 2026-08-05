@@ -1,4 +1,4 @@
-# Meet Soulprout
+# 1. Meet Soulprout
 
 ## Introduction
 
@@ -22,4 +22,4 @@ Try it now (no local setup): [https://www.soulprout.com](https://www.soulprout.c
 
 ---
 
-*Next: [Quick Start](02-quick-start.md)*
+*Next: [2. Quick Start](02-quick-start.md)*

@@ -1,4 +1,4 @@
-# Open Source & Private Deployment
+# 6. Open Source & Private Deployment
 
 Soulprout is **fully open source under the MIT license** — free to use, modify, and distribute. Two deployment modes cover personal users through enterprise teams.
 
@@ -13,7 +13,7 @@ Under MIT you can:
 - **Distribute freely**: Build your own products on Soulprout
 - **No commercial lock-in**: Commercial use is free; no license fee
 
-Source: see the project README
+Source: [https://github.com/XiaoTiao97/soulprout-agent](https://github.com/XiaoTiao97/soulprout-agent)
 
 Openness makes better products. Issues and PRs are welcome — let’s improve Soulprout together.
 
@@ -108,3 +108,7 @@ Every company has unique workflows, jargon, and norms. Private deploy supports c
 - Companies with many internal systems to integrate
 - Teams that want centralized AI governance
 - Vertical scenarios where generic agents fall short
+
+---
+
+*Next: [7. Contact Me](07-contact.md)*

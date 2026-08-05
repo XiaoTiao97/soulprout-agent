@@ -1,4 +1,4 @@
-# 全面开源与私有化部署
+# 6. 开源与私有化部署
 
 Soulprout 以 **MIT 协议完全开源**，任何人都可以自由使用、修改和分发。在此基础上提供两种部署模式，满足从个人用户到企业团队的不同需求。
 
@@ -13,7 +13,7 @@ Soulprout 采用 MIT 开源协议，这意味着：
 - **自由分发**：可以基于 Soulprout 构建自己的产品
 - **无商业限制**：商业使用同样免费，无需授权
 
-开源地址：见项目 README
+开源地址：[https://github.com/XiaoTiao97/soulprout-agent](https://github.com/XiaoTiao97/soulprout-agent)
 
 我们相信开放带来更好的产品。欢迎提 Issue、提 PR，一起让 Soulprout 变得更好。
 
@@ -108,3 +108,7 @@ Soulprout 采用 MIT 开源协议，这意味着：
 - 有大量内部系统需要 Agent 整合的企业
 - 希望统一管控全公司 AI 使用的团队
 - 通用 Agent 无法满足行业特定需求的垂直场景
+
+---
+
+*下一步：[7. 联系我](07-contact.md)*

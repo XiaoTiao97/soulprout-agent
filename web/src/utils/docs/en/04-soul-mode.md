@@ -1,4 +1,4 @@
-# Soul Mode
+# 4. Soul Mode
 
 Soul mode is the full Soulprout experience: long-term memory, context compression, multi-channel access, and deep collaboration — so AI stays with you as a lasting partner.
 
@@ -49,4 +49,4 @@ Open AI-generated files in the right-hand file library and edit them directly. T
 
 ---
 
-*Next: [Expert Mode](05-expert-mode.md)*
+*Next: [5. Expert Mode](05-expert-mode.md)*

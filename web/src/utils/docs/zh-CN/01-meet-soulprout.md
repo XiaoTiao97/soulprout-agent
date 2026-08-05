@@ -1,4 +1,4 @@
-# 认识 Soulprout
+# 1. 认识 Soulprout
 
 ## 简介
 
@@ -22,4 +22,4 @@
 
 ---
 
-*下一步：[快速上手](02-quick-start.md)*
+*下一步：[2. 快速上手](02-quick-start.md)*

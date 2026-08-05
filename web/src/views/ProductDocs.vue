@@ -70,6 +70,7 @@ import zhPart3 from '@/utils/docs/zh-CN/03-four-libraries.md?raw'
 import zhPart4 from '@/utils/docs/zh-CN/04-soul-mode.md?raw'
 import zhPart5 from '@/utils/docs/zh-CN/05-expert-mode.md?raw'
 import zhPart6 from '@/utils/docs/zh-CN/06-open-source.md?raw'
+import zhPart7 from '@/utils/docs/zh-CN/07-contact.md?raw'
 
 import enPart1 from '@/utils/docs/en/01-meet-soulprout.md?raw'
 import enPart2 from '@/utils/docs/en/02-quick-start.md?raw'
@@ -77,16 +78,21 @@ import enPart3 from '@/utils/docs/en/03-four-libraries.md?raw'
 import enPart4 from '@/utils/docs/en/04-soul-mode.md?raw'
 import enPart5 from '@/utils/docs/en/05-expert-mode.md?raw'
 import enPart6 from '@/utils/docs/en/06-open-source.md?raw'
+import enPart7 from '@/utils/docs/en/07-contact.md?raw'
 
 const { t, locale } = useI18n()
 
 const docsByLocale = {
-  'zh-CN': [zhPart1, zhPart2, zhPart3, zhPart4, zhPart5, zhPart6],
-  en: [enPart1, enPart2, enPart3, enPart4, enPart5, enPart6],
+  'zh-CN': [zhPart1, zhPart2, zhPart3, zhPart4, zhPart5, zhPart6, zhPart7],
+  en: [enPart1, enPart2, enPart3, enPart4, enPart5, enPart6, enPart7],
 }
 
 // 文档图片：用 import 方式加载，打包进 assets，确保生产环境一定能访问到
-const docImageModules = import.meta.glob('@/assets/docs-images/*.png', { eager: true, as: 'url' })
+const docImageModules = {
+  ...import.meta.glob('@/assets/docs-images/*.png', { eager: true, as: 'url' }),
+  ...import.meta.glob('@/assets/docs-images/*.jpg', { eager: true, as: 'url' }),
+  ...import.meta.glob('@/assets/docs-images/*.jpeg', { eager: true, as: 'url' }),
+}
 const docImageMap = {}
 for (const path in docImageModules) {
   const filename = path.split('/').pop()

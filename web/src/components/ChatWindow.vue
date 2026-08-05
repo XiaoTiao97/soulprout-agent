@@ -655,7 +655,7 @@ const soulChannels = computed(() => [
   { name: t('chatWindow.channels.feishu'), supported: true },
   { name: t('chatWindow.channels.wework'), supported: true },
   { name: t('chatWindow.channels.xiaoai'), supported: true },
-  { name: t('chatWindow.channels.rokid'), supported: false },
+  { name: t('chatWindow.channels.rokid'), supported: true },
 ])
 
 function copyTitle(createdAt: number) {

@@ -55,6 +55,29 @@ _xiaoai_adapter: Optional["XiaoaiAdapter"] = None
 _qr_session: Optional["QRLoginSession"] = None
 _feishu_qr_session: Optional["FeishuQRSession"] = None
 _wecom_qr_session: Optional["WecomQRSession"] = None
+_weixin_reconnect_lock: Optional[asyncio.Lock] = None
+_feishu_reconnect_lock: Optional[asyncio.Lock] = None
+_wecom_reconnect_lock: Optional[asyncio.Lock] = None
+_xiaoai_reconnect_lock: Optional[asyncio.Lock] = None
+_weixin_reconnect_scheduled_for: Optional[str] = None
+_feishu_reconnect_scheduled_for: Optional[str] = None
+_wecom_reconnect_scheduled_for: Optional[str] = None
+
+
+def _get_lock(holder_name: str) -> asyncio.Lock:
+    """Lazy asyncio.Lock，避免在无事件循环时于模块导入阶段创建。"""
+    locks = {
+        "weixin": "_weixin_reconnect_lock",
+        "feishu": "_feishu_reconnect_lock",
+        "wecom": "_wecom_reconnect_lock",
+        "xiaoai": "_xiaoai_reconnect_lock",
+    }
+    attr = locks[holder_name]
+    lock = globals()[attr]
+    if lock is None:
+        lock = asyncio.Lock()
+        globals()[attr] = lock
+    return lock
 
 
 def set_weixin_adapter(adapter: "WeixinAdapter") -> None:
@@ -259,12 +282,13 @@ async def _wecom_status_payload() -> Dict[str, Any]:
 
 @app.post("/api/weixin/login/start")
 async def api_weixin_login_start():
-    global _qr_session
+    global _qr_session, _weixin_reconnect_scheduled_for
     try:
         from gateway.platforms.weixin import QRLoginSession
         if _qr_session:
             await _qr_session.close()
         _qr_session = QRLoginSession()
+        _weixin_reconnect_scheduled_for = None
         result = await _qr_session.start()
         if "error" in result:
             return JSONResponse({"success": False, "error": result["error"]}, status_code=500)
@@ -276,13 +300,21 @@ async def api_weixin_login_start():
 
 @app.get("/api/weixin/login/poll")
 async def api_weixin_login_poll():
-    global _qr_session
+    global _qr_session, _weixin_reconnect_scheduled_for
     if _qr_session is None:
         return JSONResponse({"status": "not_started"})
     try:
         result = await _qr_session.poll()
-        if result.get("status") == "confirmed" and _weixin_adapter is not None:
-            asyncio.create_task(_reconnect_weixin())
+        if (
+            result.get("status") == "confirmed"
+            and _weixin_adapter is not None
+            and not result.get("already_confirmed")
+        ):
+            account_id = str(result.get("account_id") or "").strip()
+            # 同一账号只调度一次重连，避免前端轮询风暴反复 disconnect/connect
+            if account_id and account_id != _weixin_reconnect_scheduled_for:
+                _weixin_reconnect_scheduled_for = account_id
+                asyncio.create_task(_reconnect_weixin(account_id))
         return JSONResponse(result)
     except Exception as exc:
         logger.error("weixin login poll error: %s", exc)
@@ -306,7 +338,7 @@ async def api_weixin_reload():
 
 @app.post("/api/feishu/login/start")
 async def api_feishu_login_start(request: Request):
-    global _feishu_qr_session
+    global _feishu_qr_session, _feishu_reconnect_scheduled_for
     domain = "feishu"
     try:
         body = await request.json()
@@ -318,6 +350,7 @@ async def api_feishu_login_start(request: Request):
         if _feishu_qr_session:
             await _feishu_qr_session.close()
         _feishu_qr_session = FeishuQRSession(domain=domain)
+        _feishu_reconnect_scheduled_for = None
         result = await _feishu_qr_session.start()
         if "error" in result:
             return JSONResponse({"success": False, "error": result["error"]}, status_code=500)
@@ -329,13 +362,20 @@ async def api_feishu_login_start(request: Request):
 
 @app.get("/api/feishu/login/poll")
 async def api_feishu_login_poll():
-    global _feishu_qr_session
+    global _feishu_qr_session, _feishu_reconnect_scheduled_for
     if _feishu_qr_session is None:
         return JSONResponse({"status": "not_started"})
     try:
         result = await _feishu_qr_session.poll()
-        if result.get("status") == "confirmed" and _feishu_adapter is not None:
-            asyncio.create_task(_reconnect_feishu())
+        if (
+            result.get("status") == "confirmed"
+            and _feishu_adapter is not None
+            and not result.get("already_confirmed")
+        ):
+            app_id = str(result.get("app_id") or "").strip()
+            if app_id and app_id != _feishu_reconnect_scheduled_for:
+                _feishu_reconnect_scheduled_for = app_id
+                asyncio.create_task(_reconnect_feishu())
         return JSONResponse(result)
     except Exception as exc:
         logger.error("feishu login poll error: %s", exc)
@@ -397,12 +437,13 @@ async def api_feishu_reload():
 
 @app.post("/api/wecom/login/start")
 async def api_wecom_login_start():
-    global _wecom_qr_session
+    global _wecom_qr_session, _wecom_reconnect_scheduled_for
     try:
         from gateway.platforms.wecom import WecomQRSession
         if _wecom_qr_session:
             await _wecom_qr_session.close()
         _wecom_qr_session = WecomQRSession()
+        _wecom_reconnect_scheduled_for = None
         result = await _wecom_qr_session.start()
         if "error" in result:
             return JSONResponse({"success": False, "error": result["error"]}, status_code=500)
@@ -414,13 +455,20 @@ async def api_wecom_login_start():
 
 @app.get("/api/wecom/login/poll")
 async def api_wecom_login_poll():
-    global _wecom_qr_session
+    global _wecom_qr_session, _wecom_reconnect_scheduled_for
     if _wecom_qr_session is None:
         return JSONResponse({"status": "not_started"})
     try:
         result = await _wecom_qr_session.poll()
-        if result.get("status") == "confirmed" and _wecom_adapter is not None:
-            asyncio.create_task(_reconnect_wecom())
+        if (
+            result.get("status") == "confirmed"
+            and _wecom_adapter is not None
+            and not result.get("already_confirmed")
+        ):
+            bot_id = str(result.get("bot_id") or "").strip()
+            if bot_id and bot_id != _wecom_reconnect_scheduled_for:
+                _wecom_reconnect_scheduled_for = bot_id
+                asyncio.create_task(_reconnect_wecom())
         return JSONResponse(result)
     except Exception as exc:
         logger.error("wecom login poll error: %s", exc)
@@ -1111,80 +1159,90 @@ def _mask_token(token: str) -> str:
     return f"{token[:6]}…{token[-4:]}"
 
 
-async def _reconnect_weixin() -> None:
+async def _reconnect_weixin(account_id: Optional[str] = None) -> None:
     if _weixin_adapter is None:
         return
-    try:
-        if _weixin_adapter.is_connected:
-            await _weixin_adapter.disconnect()
-        loaded = _weixin_adapter.reload_credentials()
-        if not loaded:
-            logger.warning("[web] 重新加载微信凭证失败，无法重连")
-            return
-        ok = await _weixin_adapter.connect()
-        if ok:
-            logger.info("[web] 微信 adapter 已重新连接")
-        else:
-            logger.warning("[web] 微信 adapter 重连失败")
-    except Exception as exc:
-        logger.error("[web] 微信重连异常: %s", exc, exc_info=True)
+    async with _get_lock("weixin"):
+        try:
+            if _weixin_adapter.is_connected:
+                await _weixin_adapter.disconnect()
+            loaded = _weixin_adapter.reload_credentials(account_id)
+            if not loaded:
+                logger.warning(
+                    "[web] 重新加载微信凭证失败，无法重连 (account=%s)",
+                    account_id or "",
+                )
+                return
+            ok = await _weixin_adapter.connect()
+            if ok:
+                logger.info(
+                    "[web] 微信 adapter 已重新连接 account=%s",
+                    getattr(_weixin_adapter, "_account_id", "") or "",
+                )
+            else:
+                logger.warning("[web] 微信 adapter 重连失败")
+        except Exception as exc:
+            logger.error("[web] 微信重连异常: %s", exc, exc_info=True)
 
 
 async def _reconnect_feishu() -> None:
     if _feishu_adapter is None:
         return
-    try:
-        if _feishu_adapter.is_connected:
-            await _feishu_adapter.disconnect()
-        loaded = _feishu_adapter.reload_credentials()
-        if not loaded:
-            logger.warning("[web] 重新加载飞书凭证失败，无法重连")
-            return
-        ok = await _feishu_adapter.connect()
-        if ok:
-            logger.info("[web] 飞书 adapter 已重新连接")
-        else:
-            logger.warning("[web] 飞书 adapter 重连失败")
-    except Exception as exc:
-        logger.error("[web] 飞书重连异常: %s", exc, exc_info=True)
+    async with _get_lock("feishu"):
+        try:
+            if _feishu_adapter.is_connected:
+                await _feishu_adapter.disconnect()
+            loaded = _feishu_adapter.reload_credentials()
+            if not loaded:
+                logger.warning("[web] 重新加载飞书凭证失败，无法重连")
+                return
+            ok = await _feishu_adapter.connect()
+            if ok:
+                logger.info("[web] 飞书 adapter 已重新连接")
+            else:
+                logger.warning("[web] 飞书 adapter 重连失败")
+        except Exception as exc:
+            logger.error("[web] 飞书重连异常: %s", exc, exc_info=True)
 
 
 async def _reconnect_wecom() -> None:
     if _wecom_adapter is None:
         return
-    try:
-        if _wecom_adapter.is_connected:
-            await _wecom_adapter.disconnect()
-        loaded = _wecom_adapter.reload_credentials()
-        if not loaded:
-            logger.warning("[web] 重新加载企业微信凭证失败，无法重连")
-            return
-        ok = await _wecom_adapter.connect()
-        if ok:
-            logger.info("[web] 企业微信 adapter 已重新连接")
-        else:
-            logger.warning("[web] 企业微信 adapter 重连失败")
-    except Exception as exc:
-        logger.error("[web] 企业微信重连异常: %s", exc, exc_info=True)
+    async with _get_lock("wecom"):
+        try:
+            if _wecom_adapter.is_connected:
+                await _wecom_adapter.disconnect()
+            loaded = _wecom_adapter.reload_credentials()
+            if not loaded:
+                logger.warning("[web] 重新加载企业微信凭证失败，无法重连")
+                return
+            ok = await _wecom_adapter.connect()
+            if ok:
+                logger.info("[web] 企业微信 adapter 已重新连接")
+            else:
+                logger.warning("[web] 企业微信 adapter 重连失败")
+        except Exception as exc:
+            logger.error("[web] 企业微信重连异常: %s", exc, exc_info=True)
 
 
 async def _reconnect_xiaoai() -> None:
     if _xiaoai_adapter is None:
         return
-    try:
-        if _xiaoai_adapter.is_connected:
-            await _xiaoai_adapter.disconnect()
-        loaded = _xiaoai_adapter.reload_credentials()
-        if not loaded:
-            logger.warning("[web] 重新加载小爱配置失败，无法重连")
-            return
-        ok = await _xiaoai_adapter.connect()
-        if ok:
-            logger.info("[web] 小爱音箱 adapter 已重新连接")
-        else:
-            logger.warning("[web] 小爱音箱 adapter 重连失败")
-    except Exception as exc:
-        logger.error("[web] 小爱音箱重连异常: %s", exc, exc_info=True)
+    async with _get_lock("xiaoai"):
+        try:
+            if _xiaoai_adapter.is_connected:
+                await _xiaoai_adapter.disconnect()
+            loaded = _xiaoai_adapter.reload_credentials()
+            if not loaded:
+                logger.warning("[web] 重新加载小爱配置失败，无法重连")
+                return
+            ok = await _xiaoai_adapter.connect()
+            if ok:
+                logger.info("[web] 小爱音箱 adapter 已重新连接")
+            else:
+                logger.warning("[web] 小爱音箱 adapter 重连失败")
+        except Exception as exc:
+            logger.error("[web] 小爱音箱重连异常: %s", exc, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

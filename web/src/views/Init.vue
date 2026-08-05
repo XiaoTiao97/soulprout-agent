@@ -302,7 +302,7 @@ const connectPlatforms = [
   { key: 'feishu', status: 'live' },
   { key: 'wework', status: 'live' },
   { key: 'xiaoai', status: 'live' },
-  { key: 'rokid', status: 'dev' },
+  { key: 'rokid', status: 'live' },
 ]
 
 const connectPlatformNames = computed(() => ({

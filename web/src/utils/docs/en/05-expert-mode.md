@@ -1,4 +1,4 @@
-# Expert Mode
+# 5. Expert Mode
 
 Expert mode is for complex business work — multi-agent collaboration to deliver high-quality results.
 
@@ -100,4 +100,4 @@ Teams stay in the expert library permanently — call them anytime and keep iter
 
 ---
 
-*Next: [Open Source & Private Deployment](06-open-source.md)*
+*Next: [6. Open Source & Private Deployment](06-open-source.md)*

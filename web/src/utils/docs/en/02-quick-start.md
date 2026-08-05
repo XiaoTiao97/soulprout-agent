@@ -1,4 +1,4 @@
-# Quick Start
+# 2. Quick Start
 
 Soulprout offers three core ways to work — from everyday companionship to professional workflows.
 
@@ -29,4 +29,4 @@ Expert mode is for complex business and professional scenarios. An expert librar
 
 ---
 
-*Next: [Four Libraries](03-four-libraries.md)*
+*Next: [3. Four Libraries](03-four-libraries.md)*

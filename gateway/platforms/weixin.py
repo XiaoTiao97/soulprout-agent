@@ -184,12 +184,14 @@ def load_weixin_account(account_id: str) -> Optional[Dict[str, Any]]:
 
 
 def list_weixin_accounts() -> List[str]:
-    """返回所有已保存的 account_id 列表。"""
+    """返回所有已保存的 account_id 列表（按修改时间倒序，最新在前）。"""
     d = _account_dir()
-    return [
-        p.stem for p in d.glob("*.json")
+    files = [
+        p for p in d.glob("*.json")
         if not p.name.endswith((".context-tokens.json", ".sync.json"))
     ]
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return [p.stem for p in files]
 
 
 # ---------------------------------------------------------------------------
@@ -570,6 +572,15 @@ class QRLoginSession:
         轮询一次 iLink 的二维码扫描状态。
         返回 {"status": ..., "result": ...（仅 confirmed 时）}
         """
+        # 已确认过则直接返回缓存，避免前端轮询重复触发保存 / 重连
+        if self.result:
+            return {
+                "status": self.STATUS_CONFIRMED,
+                "account_id": self.result.get("account_id", ""),
+                "user_id": self.result.get("user_id", ""),
+                "already_confirmed": True,
+            }
+
         if not self._session or self._session.closed:
             return {"status": self.STATUS_ERROR, "error": "会话未启动，请先调用 start()"}
         if not self.qrcode_value:
@@ -736,17 +747,31 @@ class WeixinAdapter(BasePlatformAdapter):
     def is_connected(self) -> bool:
         return self._running and bool(self._token)
 
-    def reload_credentials(self) -> bool:
+    def reload_credentials(self, account_id: Optional[str] = None) -> bool:
         """
-        尝试从磁盘重新加载最新的账号凭证。
+        尝试从磁盘重新加载账号凭证。
         用于 QR 扫码登录成功后，让已运行的 adapter 刷新 token。
+
+        优先使用显式传入的 account_id（刚扫码确认的账号）；
+        否则按修改时间取最新凭证。不再粘滞旧的 self._account_id，
+        避免换号登录后仍连到过期会话。
         返回 True 表示成功加载。
         """
         accounts = list_weixin_accounts()
-        if not accounts:
+        if not accounts and not account_id:
             return False
-        # 默认加载第一个（或已配置的 account_id 对应的）
-        target = self._account_id or accounts[0]
+
+        preferred = (account_id or "").strip()
+        if preferred and preferred in accounts:
+            target = preferred
+        elif preferred:
+            # 刚写入但 list 偶发未扫到时仍尝试直接加载
+            target = preferred
+        elif accounts:
+            target = accounts[0]
+        else:
+            return False
+
         data = load_weixin_account(target)
         if not data:
             return False

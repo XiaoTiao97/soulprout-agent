@@ -1,4 +1,4 @@
-# Four Libraries
+# 3. Four Libraries
 
 The four libraries are the capability foundation that sets Soulprout apart from ordinary AI tools.
 
@@ -79,4 +79,4 @@ The system ships with about **60** built-in skills across documents, data analys
 
 ---
 
-*Next: [Soul Mode](04-soul-mode.md)*
+*Next: [4. Soul Mode](04-soul-mode.md)*
