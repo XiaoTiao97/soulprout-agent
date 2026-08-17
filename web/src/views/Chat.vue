@@ -136,16 +136,9 @@ const chat_request = ref<Partial<ChatRequest>>({})
 const agent_message_list = ref<AgentMessage[]>([])
 /** 当前聊天模式：'soulprout' 直接对接 user_id 唯一会话；'task' 为常规任务模式 */
 const chatMode = ref<'soulprout' | 'task'>('soulprout')
-/** Soul 模式首次加载条数（分页）；切换模式时优先用缓存，避免重复全量拉取 */
+/** Soul 模式首次加载条数（分页）；每次进入均重新从服务端拉取 */
 const SOUL_MESSAGE_PAGE_SIZE = 120
 
-interface SoulMessageCache {
-  userId: string
-  messages: AgentMessage[]
-  hasMore: boolean
-}
-
-const soulMessageCache = ref<SoulMessageCache | null>(null)
 const soulMessagesHasMore = ref(false)
 const soulMessagesLoadingMore = ref(false)
 /** 切换模式且无历史消息时递增，驱动 ChatWindow 重播欢迎页动画 */
@@ -336,8 +329,8 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
   }
 }
 
-/** Soulprout 唯一会话以 user_id 为 conversation_id：分页拉取最近消息；切换模式时优先用内存缓存 */
-async function loadSoulproutConversation(forceRefresh = false) {
+/** Soulprout 唯一会话以 user_id 为 conversation_id：分页拉取最近消息（与任务模式一样每次重读） */
+async function loadSoulproutConversation() {
   const userId = currentUserId.value
   chat_request.value = {
     conversation_id: userId || '',
@@ -360,16 +353,6 @@ async function loadSoulproutConversation(forceRefresh = false) {
     return
   }
 
-  if (
-    !forceRefresh &&
-    soulMessageCache.value?.userId === userId &&
-    soulMessageCache.value.messages.length > 0
-  ) {
-    applyMessageListsFromApi([...soulMessageCache.value.messages])
-    soulMessagesHasMore.value = soulMessageCache.value.hasMore
-    return
-  }
-
   agent_message_list.value = []
   toolMessages.value = []
   fileMessages.value = []
@@ -381,7 +364,6 @@ async function loadSoulproutConversation(forceRefresh = false) {
     const messages = normalizeMessagesFromApi(response.data)
     soulMessagesHasMore.value = messages.length >= SOUL_MESSAGE_PAGE_SIZE
     applyMessageListsFromApi(messages)
-    syncSoulMessageCache()
   } catch (error) {
     // 首次进入 Soulprout 模式时还没有任何会话/消息，忽略即可
     console.debug('Soulprout 会话尚未建立或拉取失败：', error)
@@ -414,7 +396,6 @@ async function loadMoreSoulMessages() {
     const older = normalizeMessagesFromApi(response.data)
     soulMessagesHasMore.value = older.length >= SOUL_MESSAGE_PAGE_SIZE
     applyMessageListsFromApi([...older, ...agent_message_list.value])
-    syncSoulMessageCache()
   } catch (error) {
     console.error('加载更多 Soul 历史消息失败:', error)
   } finally {
@@ -505,19 +486,6 @@ function applyMessageListsFromApi(messages: AgentMessage[]) {
   fileMessages.value = messages.filter((msg) => msg.role === 'file')
 }
 
-function syncSoulMessageCache() {
-  if (chatMode.value !== 'soulprout' || !currentUserId.value) return
-  soulMessageCache.value = {
-    userId: currentUserId.value,
-    messages: [...agent_message_list.value],
-    hasMore: soulMessagesHasMore.value,
-  }
-}
-
-function invalidateSoulMessageCache() {
-  soulMessageCache.value = null
-}
-
 /** 侧栏 toolMessages：排除 user_feedback（主对话区单独渲染） */
 function isToolSidebarMessage(msg: AgentMessage): boolean {
   if (msg.role === 'file') return false
@@ -557,7 +525,6 @@ async function refreshMessagesFromServer(conversationId: string) {
     )
     if (chatMode.value === 'soulprout') {
       soulMessagesHasMore.value = false
-      syncSoulMessageCache()
     }
     reloadStreamingUiToken.value++
   } catch (e) {
@@ -832,7 +799,6 @@ async function processMessageQueue() {
   chatPlanStreamForWindow.value = ''
   delete chat_request.value.input_message_id
   delete chat_request.value.user_feedback
-  syncSoulMessageCache()
   const at = streamingSessionCreatedAt.value
   if (at != null) {
     const last = toolMessages.value[toolMessages.value.length - 1]

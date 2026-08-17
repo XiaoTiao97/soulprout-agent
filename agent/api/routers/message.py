@@ -6,12 +6,17 @@ from agent.database.crud.message import get_message_by_conv_id
 from agent.api.models.message import ChatRequest, ChatResponse
 from fastapi.responses import StreamingResponse
 from agent.core.config import Config
+import asyncio
 import traceback
 import json
 import os
 import aiofiles.os as aio_os
 import aiofiles
 import time
+
+# 工具（如 web_search）执行期间可能长时间无业务事件；定期发 SSE comment 保活，
+# 避免 Cloudflare/Nginx 等因空闲断开 Gateway 到 Agent 的长连接。
+_SSE_HEARTBEAT_INTERVAL_S = 15.0
 
 config = Config()
 models_info_list = config.models_info_list
@@ -80,21 +85,53 @@ async def chat_stream(
     ai_service = Chat(chat_request)
 
     async def generate_stream():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def _produce():
+            try:
+                async for chunk in ai_service.run():
+                    await queue.put(("chunk", chunk))
+            except Exception:
+                await queue.put(("error", traceback.format_exc()))
+            finally:
+                await queue.put(("done", None))
+
+        producer = asyncio.create_task(_produce())
         try:
-            async for chunk in ai_service.run():
-                if await request.is_disconnected():
+            while True:
+                try:
+                    kind, payload = await asyncio.wait_for(
+                        queue.get(),
+                        timeout=_SSE_HEARTBEAT_INTERVAL_S,
+                    )
+                except asyncio.TimeoutError:
+                    # SSE comment：客户端应忽略；用于穿透代理空闲超时
+                    yield ": ping\n\n"
+                    if await request.is_disconnected():
+                        producer.cancel()
+                        break
+                    continue
+
+                if kind == "done":
                     break
-                # 确保每个chunk都立即发送
-                yield f"data: {chunk}\n\n"
-                # 添加小延迟，确保数据被发送
-                # await asyncio.sleep(0.05)
-        except Exception as e:
-            error_resp = ChatResponse(
-                conversation_id=chat_request.conversation_id,
-                user_id=chat_request.user_id,
-                type="error",
-                # content=f"回复异常，原因：{e}",
-                content=f"回复异常，原因：{traceback.format_exc()}",
-            ).model_dump_json()
-            yield f"data: {error_resp}\n\n"
+                if kind == "error":
+                    error_resp = ChatResponse(
+                        conversation_id=chat_request.conversation_id,
+                        user_id=chat_request.user_id,
+                        type="error",
+                        content=f"回复异常，原因：{payload}",
+                    ).model_dump_json()
+                    yield f"data: {error_resp}\n\n"
+                    break
+                if await request.is_disconnected():
+                    producer.cancel()
+                    break
+                yield f"data: {payload}\n\n"
+        finally:
+            if not producer.done():
+                producer.cancel()
+                try:
+                    await producer
+                except (asyncio.CancelledError, Exception):
+                    pass
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
