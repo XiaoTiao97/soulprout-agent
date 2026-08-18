@@ -75,13 +75,19 @@ async def ensure_agent_login(*, force: bool = False) -> bool:
 
     _println("\n── Soulprout 账号登录（邮箱验证码）──")
     _println("验证码将发送到您的邮箱；未注册的邮箱会自动创建账号。")
-    _println("也可在 gateway/.env 中设置 AGENT_URL 指定 Agent 地址（默认云服务）。")
 
-    default_url = get_agent_url() or get_default_agent_url()
-    custom = await _ask_yes_no("是否使用自定义 Agent 地址", default_yes=False)
-    agent_url = default_url
-    if custom:
-        agent_url = await _ask("Agent 地址", default=default_url)
+    official_url = get_default_agent_url()
+    use_official = await _ask_yes_no(
+        f"是否使用官网服务（{official_url}）",
+        default_yes=True,
+    )
+    if use_official:
+        agent_url = official_url
+        _println(f"  使用官网：{agent_url}")
+    else:
+        _println("  将连接自部署 Agent；也可在 gateway/.env 中设置 AGENT_URL。")
+        agent_url = await _ask("自部署 Agent 地址", default=get_agent_url() or "http://localhost:8080")
+        agent_url = agent_url.rstrip("/")
 
     email = await _prompt_or_env("邮箱", "AGENT_EMAIL")
     if not email:
