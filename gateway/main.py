@@ -18,7 +18,11 @@ Soulprout Gateway 是除 Web 端以外所有平台接入 Agent 核心功能的�
 
 启动方式
 --------
-    python gateway/main.py
+    python gateway/main.py            # Web 管理界面模式（默认）
+    python gateway/main.py --cli      # 命令行交互配置
+    python gateway/main.py --daemon   # 后台常驻（无 Web / 无 CLI）
+    bash gateway/run.sh config        # 第一步：交互配置（推荐）
+    bash gateway/run.sh start         # 第二步：后台启动
 """
 
 from __future__ import annotations
@@ -208,20 +212,40 @@ def build_xiaoai_adapter() -> XiaoaiAdapter:
 # 主流程
 # ---------------------------------------------------------------------------
 
-async def _connect_adapter_bg(name: str, adapter: "BasePlatformAdapter", web_port: int) -> None:
+async def _connect_adapter_bg(
+    name: str,
+    adapter: "BasePlatformAdapter",
+    *,
+    web_port: int | None = None,
+    cli_mode: bool = False,
+    daemon_mode: bool = False,
+) -> None:
     """后台尝试连接单个平台 adapter，失败不阻塞启动。"""
     try:
         connected = await adapter.connect()
         if connected:
             logger.info("[Gateway] %s adapter 已连接", name)
+        elif cli_mode:
+            logger.info("[Gateway] %s 未连接，请在 CLI 菜单中选择平台进行配置", name)
+        elif daemon_mode:
+            logger.info("[Gateway] %s 未连接，请运行 bash gateway/run.sh config 完成配置", name)
         else:
-            logger.info("[Gateway] %s 未连接，可在管理界面 http://localhost:%d/%s 配置", name, web_port, name)
+            logger.info(
+                "[Gateway] %s 未连接，可在管理界面 http://localhost:%d/%s 配置",
+                name,
+                web_port or 8082,
+                name,
+            )
     except Exception as exc:
         logger.error("[Gateway] %s adapter 连接异常: %s", name, exc, exc_info=True)
 
 
-async def run() -> None:
+async def run(*, cli_mode: bool = False, daemon_mode: bool = False) -> None:
     global _weixin_adapter, _feishu_adapter, _wecom_adapter, _xiaoai_adapter
+
+    from gateway.env_loader import load_gateway_env
+
+    load_gateway_env()
 
     web_host = os.getenv("GATEWAY_WEB_HOST", "0.0.0.0")
     web_port = int(os.getenv("GATEWAY_WEB_PORT", "8082"))
@@ -258,20 +282,62 @@ async def run() -> None:
         logger.info("[Gateway] 已启用父进程看门狗，父进程 pid=%d", parent_pid)
         asyncio.create_task(_watch_parent_process(parent_pid), name="parent-watchdog")
 
-    # Web 服务优先启动，保证 Tauri 能立刻加载管理界面
-    web_task = asyncio.create_task(
-        start_web_server(host=web_host, port=web_port),
-        name="gateway-web",
-    )
+    web_task: asyncio.Task | None = None
+    if cli_mode:
+        from gateway.cli_app import run_interactive_menu
 
-    logger.info("[Gateway] 管理界面启动中 http://localhost:%d …", web_port)
+        asyncio.create_task(run_interactive_menu(stop_event), name="gateway-cli")
+        logger.info("[Gateway] CLI 配置模式已启动")
+    elif daemon_mode:
+        from gateway.agent_auth import verify_agent_session
 
-    # 各平台 adapter 在后台并发连接，不阻塞 web 服务开启
+        check = await verify_agent_session()
+        if check.get("ok"):
+            logger.info(
+                "[Gateway] 后台模式已启动（账号：%s）",
+                check.get("email") or check.get("user_id") or "已登录",
+            )
+        else:
+            logger.warning(
+                "[Gateway] 后台模式已启动，但 Soulprout 账号未登录或已过期；"
+                "请先运行 bash gateway/run.sh config"
+            )
+    else:
+        web_task = asyncio.create_task(
+            start_web_server(host=web_host, port=web_port),
+            name="gateway-web",
+        )
+        logger.info("[Gateway] 管理界面启动中 http://localhost:%d …", web_port)
+
     connect_tasks = [
-        asyncio.create_task(_connect_adapter_bg("weixin", _weixin_adapter, web_port), name="connect-weixin"),
-        asyncio.create_task(_connect_adapter_bg("feishu", _feishu_adapter, web_port), name="connect-feishu"),
-        asyncio.create_task(_connect_adapter_bg("wecom", _wecom_adapter, web_port), name="connect-wecom"),
-        asyncio.create_task(_connect_adapter_bg("xiaoai", _xiaoai_adapter, web_port), name="connect-xiaoai"),
+        asyncio.create_task(
+            _connect_adapter_bg(
+                "weixin", _weixin_adapter,
+                web_port=web_port, cli_mode=cli_mode, daemon_mode=daemon_mode,
+            ),
+            name="connect-weixin",
+        ),
+        asyncio.create_task(
+            _connect_adapter_bg(
+                "feishu", _feishu_adapter,
+                web_port=web_port, cli_mode=cli_mode, daemon_mode=daemon_mode,
+            ),
+            name="connect-feishu",
+        ),
+        asyncio.create_task(
+            _connect_adapter_bg(
+                "wecom", _wecom_adapter,
+                web_port=web_port, cli_mode=cli_mode, daemon_mode=daemon_mode,
+            ),
+            name="connect-wecom",
+        ),
+        asyncio.create_task(
+            _connect_adapter_bg(
+                "xiaoai", _xiaoai_adapter,
+                web_port=web_port, cli_mode=cli_mode, daemon_mode=daemon_mode,
+            ),
+            name="connect-xiaoai",
+        ),
     ]
 
     try:
@@ -282,11 +348,12 @@ async def run() -> None:
         for t in connect_tasks:
             t.cancel()
 
-        web_task.cancel()
-        try:
-            await web_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        if web_task is not None:
+            web_task.cancel()
+            try:
+                await web_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
         for name, adapter in _adapters.items():
             if adapter.is_connected:
@@ -297,4 +364,19 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Soulprout Gateway")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--cli",
+        action="store_true",
+        help="命令行交互配置（邮箱登录 + 选择平台 + 终端扫码）",
+    )
+    mode.add_argument(
+        "--daemon",
+        action="store_true",
+        help="后台常驻模式（无 Web / 无 CLI，按已保存凭证连接平台）",
+    )
+    args = parser.parse_args()
+    asyncio.run(run(cli_mode=args.cli, daemon_mode=args.daemon))

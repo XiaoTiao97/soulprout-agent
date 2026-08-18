@@ -201,6 +201,21 @@ Default sandbox root: `/opt/soulprout/sandbox` (override with `SAAS_SANDBOX_ROOT
 
 ---
 
+## Gateway (Multi-Platform Bridge)
+
+**Gateway** connects your Soulprout agent to WeChat, Feishu, WeCom, Xiao Ai speakers, Rokid AI glasses, and more — no coding required.
+
+- **Windows (recommended for personal use)**: Download the Gateway desktop app from [soulprout.com](https://www.soulprout.com), sign in with email verification code, and scan to bind channels.
+- **Linux (long-running server)**: One script handles configure and run — interactive setup, then optional background daemon (safe to close SSH):
+
+```bash
+bash gateway/run.sh
+```
+
+Run it again to change settings (stops the running instance first). Use `bash gateway/run.sh start` to start without re-configuring. Credentials live in `gateway_data/`; optional presets in `gateway/.env`.
+
+---
+
 ## Project Structure
 
 ```

@@ -201,6 +201,21 @@ npm run dev
 
 ---
 
+## Gateway 多端互联
+
+**Gateway** 用于将 Soulprout Agent 接入微信、飞书、企业微信、小爱音箱、Rokid AI 眼镜等渠道，**无需编写代码**。
+
+- **Windows（个人使用推荐）**：在 [官网 soulprout.com](https://www.soulprout.com) 下载 Gateway 桌面端，邮箱验证码登录后扫码绑定即可。
+- **Linux（长期部署）**：同一个 `run.sh` 完成配置与运行——先交互配置，退出后询问是否后台启动（可安全关闭 SSH）：
+
+```bash
+bash gateway/run.sh
+```
+
+需要改配置时再次运行即可（会自动停掉旧进程）。已有配置、只想启动时用 `bash gateway/run.sh start`。凭证保存在 `gateway_data/`；也可在 `gateway/.env` 中预设。
+
+---
+
 ## 项目结构
 
 ```
