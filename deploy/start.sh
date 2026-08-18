@@ -18,8 +18,10 @@ echo "║   Soulprout Agent — 启动脚本         ║"
 echo "╚══════════════════════════════════════╝"
 echo -e "${RESET}"
 
-resolve_python
+resolve_python --runtime
+cd "$PROJECT_ROOT"
 mkdir -p "$LOG_DIR" "$PID_DIR"
+info "使用 Python：$PYTHON（$($PYTHON --version 2>&1)）"
 
 # ── Step 1: MongoDB ───────────────────────────────────────────────
 section "Step 1 · MongoDB"
@@ -84,41 +86,16 @@ wait_port 19530 "Milvus" 180
 
 # ── Step 3: vdb ───────────────────────────────────────────────────
 section "Step 3 · VDB 服务"
-
-if port_open 8888; then
-    ok "vdb 已在运行（:8888）"
-else
-    info "启动 vdb（端口 8888）..."
-    nohup "$PYTHON" "$PROJECT_ROOT/vdb/main.py" \
-        > "$LOG_DIR/vdb.log" 2>&1 &
-    save_pid $! "vdb"
-    wait_port 8888 "vdb" 30
-fi
+start_python_svc "vdb" 8888 60 "$PROJECT_ROOT/vdb/main.py"
 
 # ── Step 4: agent ─────────────────────────────────────────────────
 section "Step 4 · Agent 服务"
-if port_open 8080; then
-    ok "agent 已在运行（:8080）"
-else
-    info "启动 agent（端口 8080）..."
-    nohup "$PYTHON" "$PROJECT_ROOT/agent/main.py" \
-        > "$LOG_DIR/agent.log" 2>&1 &
-    save_pid $! "agent"
-    wait_port 8080 "agent" 60
-fi
+start_python_svc "agent" 8080 60 "$PROJECT_ROOT/agent/main.py"
 
 # ── Step 5: gateway（可选）────────────────────────────────────────
 if $START_GATEWAY; then
     section "Step 5 · Gateway"
-    if port_open 8082; then
-        ok "gateway 已在运行（:8082）"
-    else
-        info "启动 gateway（端口 8082）..."
-        nohup "$PYTHON" "$PROJECT_ROOT/gateway/main.py" \
-            > "$LOG_DIR/gateway.log" 2>&1 &
-        save_pid $! "gateway"
-        wait_port 8082 "gateway" 30
-    fi
+    start_python_svc "gateway" 8082 30 "$PROJECT_ROOT/gateway/main.py"
 else
     warn "跳过 gateway（--no-gateway）"
 fi
@@ -133,7 +110,7 @@ if $START_WEB; then
         nohup npm run dev --prefix "$PROJECT_ROOT/web" \
             > "$LOG_DIR/web.log" 2>&1 &
         save_pid $! "web"
-        wait_port 5173 "Web" 30
+        wait_port 5173 "Web" 30 "$LOG_DIR/web.log"
     fi
 else
     warn "跳过 Web 前端（--no-web）"

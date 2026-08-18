@@ -5,7 +5,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from agent.api.models.agent_card import AgentCard
-load_dotenv()
+
+# 固定加载 agent/.env，不依赖启动时的工作目录（start.sh 从仓库根启动）
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 class Config:
     def __init__(self):

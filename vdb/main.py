@@ -43,7 +43,7 @@ app.include_router(api_router)
 
 if __name__ == "__main__":
     uvicorn.run(
-        "vdb.main:app",
+        app,
         host=config.host,
         port=config.port,
         reload=False,

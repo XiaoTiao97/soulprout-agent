@@ -81,7 +81,10 @@ section "Step 3 · Python 依赖"
 if $SKIP_PYTHON; then
     warn "跳过 Python 安装（--skip-python）"
 else
+    PYTHON=""
     resolve_python
+    ensure_project_venv
+    ok "将安装到：$PYTHON（$($PYTHON --version 2>&1)）"
     "$PYTHON" -m pip install --upgrade pip -q
 
     info "安装 agent 依赖..."

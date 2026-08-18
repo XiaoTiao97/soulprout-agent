@@ -1,7 +1,10 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# 固定加载 vdb/.env，不依赖启动时的工作目录（start.sh 从仓库根启动）
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 class VDBConfig:
