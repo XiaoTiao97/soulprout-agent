@@ -564,7 +564,9 @@ TOOL_SCHEMAS = [
             "description": (
                 "Manage the current user's scheduled tasks. Switch sub-actions via module:\n"
                 "- module=create: create a task. Convert the user's time into YYYY-MM-DD HH:MM "
-                "(default timezone Asia/Shanghai). schedule_type=once is one-shot; daily repeats every day "
+                "(default timezone Asia/Shanghai). Call conversation_option module=now first when the user "
+                "gives relative time such as 明天八点 / 今晚. "
+                "schedule_type=once is one-shot; daily repeats every day "
                 "at that clock time; weekly repeats on selected weekdays (weekdays required, 1=Monday ... 7=Sunday, multi-select). "
                 "channel is filled from the current message source when omitted "
                 "(WeChat/Feishu/web). If the user asks to remind on another channel "
@@ -644,9 +646,11 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "conversation_option",
             "description": (
-                "Conversation context management tool.\n"
+                "Conversation context and session utilities.\n"
                 "- module=clear: completely clear the current conversation context\n"
-                "- module=compress: immediately perform one context compression"
+                "- module=compress: immediately perform one context compression\n"
+                "- module=now: get the current Beijing time (Asia/Shanghai, UTC+8). "
+                "Use this before creating or interpreting scheduled tasks, reminders, or any time-sensitive request."
             ),
             "parameters": {
                 "type": "object",
@@ -654,8 +658,8 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "module": {
                         "type": "string",
-                        "enum": ["clear", "compress"],
-                        "description": "clear clears context / compress compresses context",
+                        "enum": ["clear", "compress", "now"],
+                        "description": "clear / compress / now (current Beijing time)",
                     }
                 },
             },

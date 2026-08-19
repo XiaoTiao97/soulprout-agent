@@ -31,7 +31,7 @@ from agent.services.blueprint import Blueprint
 from agent.services.compress import Compress
 from agent.services.memory import Memory
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import json
 import asyncio
 import aioshutil
@@ -857,8 +857,17 @@ class Chat:
                 ).run(force=True)
                 content = "上下文压缩成功" if ok else "上下文压缩失败或无内容可压缩"
                 reload = ok
+            elif module == "now":
+                beijing = timezone(timedelta(hours=8))
+                now = datetime.now(beijing)
+                weekday = "一二三四五六日"[now.weekday()]
+                content = (
+                    f"当前北京时间：{now.strftime('%Y-%m-%d %H:%M:%S')} 星期{weekday} "
+                    f"(Asia/Shanghai, UTC+8)"
+                )
+                reload = False
             else:
-                content = "错误：module 必须为 clear 或 compress"
+                content = "错误：module 必须为 clear、compress 或 now"
                 reload = False
 
             self.messages.append({"role": "tool", "content": content, "tool_call_id": tool_call_id})
