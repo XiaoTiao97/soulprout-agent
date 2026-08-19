@@ -67,6 +67,9 @@ class Chat:
         self.file_name_list = request.file_name_list
         self.user_feedback = getattr(request, "user_feedback", False)
         self.temp_sub_agent = getattr(request, "temp_sub_agent", False)
+        self.runtime_mode = getattr(request, "runtime_mode", "main") or "main"
+        self.source_channel = (getattr(request, "channel", None) or "").strip() or None
+        self.source_chat_id = (getattr(request, "chat_id", None) or "").strip() or None
 
         self.time_now = f"""{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} {datetime.now().strftime("%A")}"""
         self.capabilities_prompt = prompt.CAPABILITIES_PROMPT
@@ -96,6 +99,7 @@ class Chat:
             "knowledge_base",
             "call_sub_agent",
             "user_option",
+            "schedule_task",
             "base_memory",
             "create_memory",
             "edit_memory",
@@ -136,6 +140,21 @@ class Chat:
             return {"system": list(skills)} if skills else None
         return None
 
+
+    def _inject_tool_runtime_args(self, arguments: dict, tool_name: str = "") -> None:
+        arguments["conversation_id"] = self.conversation_id
+        if tool_name != "schedule_task":
+            return
+        module = (arguments.get("module") or "").strip().lower()
+        if module != "create":
+            return
+        chosen = (arguments.get("channel") or "").strip().lower()
+        if not chosen and self.source_channel:
+            arguments["channel"] = self.source_channel
+            chosen = self.source_channel
+        if not arguments.get("chat_id") and self.source_chat_id:
+            if not chosen or chosen == self.source_channel:
+                arguments["chat_id"] = self.source_chat_id
 
     def normalize_sub_agent_string_list(self, value):
         """将 tools/kbs/files 等参数规范为字符串列表。"""
@@ -596,6 +615,12 @@ class Chat:
             tool for tool in tools
             if tool.get("function", {}).get("name") in self.soulprout_tools
         ]
+        if self.runtime_mode == "scheduled":
+            blocked = {"schedule_task", "ask_user_feedback"}
+            tools_use_final = [
+                tool for tool in tools_use_final
+                if tool.get("function", {}).get("name") not in blocked
+            ]
         if len(tools_use_final) > 0:
             self.tools_use = True
         return tools_use_final
@@ -1205,8 +1230,8 @@ class Chat:
                     try:
                         name_list = [tool_call.function.name for tool_call in message.tool_calls]
                         arguments_list = [json.loads(tool_call.function.arguments) for tool_call in message.tool_calls]
-                        for arguments in arguments_list:
-                            arguments["conversation_id"] = self.conversation_id
+                        for name, arguments in zip(name_list, arguments_list):
+                            self._inject_tool_runtime_args(arguments, name)
                         async for agents_and_tools_response in self.agents_and_tools_call(message, name_list, arguments_list):
                             yield agents_and_tools_response
                     except Exception as e:
@@ -1368,8 +1393,8 @@ class Chat:
                         print(message.tool_calls)
                         name_list = [tool_call.function.name for tool_call in message.tool_calls]
                         arguments_list = [json.loads(tool_call.function.arguments) for tool_call in message.tool_calls]
-                        for arguments in arguments_list:
-                            arguments["conversation_id"] = self.conversation_id
+                        for name, arguments in zip(name_list, arguments_list):
+                            self._inject_tool_runtime_args(arguments, name)
                         # 处理multi-agents和tools逻辑
                         async for agents_and_tools_response in self.agents_and_tools_call(message, name_list, arguments_list):
                             yield agents_and_tools_response

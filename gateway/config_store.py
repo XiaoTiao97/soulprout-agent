@@ -268,6 +268,16 @@ def api_path(url: str, path: str) -> str:
     return f"{base}/api{suffix}"
 
 
+def ws_path(url: str, path: str) -> str:
+    """将 Agent HTTP 地址转为 WebSocket 地址。"""
+    http_url = api_path(url, path)
+    if http_url.startswith("https://"):
+        return "wss://" + http_url[len("https://"):]
+    if http_url.startswith("http://"):
+        return "ws://" + http_url[len("http://"):]
+    return http_url
+
+
 # ---------------------------------------------------------------------------
 # 兼容旧调用（chat_caller 之前从这里获取密码）
 # ---------------------------------------------------------------------------

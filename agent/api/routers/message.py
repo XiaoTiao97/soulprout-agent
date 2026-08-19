@@ -56,6 +56,15 @@ async def chat_stream(
     chat_req_dict = json.loads(chat_request)
     chat_request = ChatRequest(**chat_req_dict)
     chat_request.user_id = user.user_id
+    try:
+        from agent.database.crud.user_channel_binding import upsert_channel_binding
+        await upsert_channel_binding(
+            user.user_id,
+            getattr(chat_request, "channel", None) or "",
+            getattr(chat_request, "chat_id", None) or "",
+        )
+    except Exception:
+        pass
 
     # 临时保存文件到临时目录
     temp_file_paths = []

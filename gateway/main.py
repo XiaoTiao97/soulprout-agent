@@ -160,6 +160,8 @@ async def on_message(event: MessageEvent) -> None:
             message=event.text,
             user_id=configured_user_id or user_id,
             conversation_id=configured_user_id or user_id,
+            channel=platform,
+            chat_id=chat_id,
         )
         logger.info("[Gateway] Agent 回复 platform=%s chat=%s: %r", platform, chat_id, reply[:80])
     except Exception as exc:
@@ -339,12 +341,22 @@ async def run(*, cli_mode: bool = False, daemon_mode: bool = False) -> None:
             name="connect-xiaoai",
         ),
     ]
+    from gateway.outbound import run_outbound_loop
+    outbound_task = asyncio.create_task(
+        run_outbound_loop(stop_event),
+        name="gateway-outbound",
+    )
 
     try:
         await stop_event.wait()
     except KeyboardInterrupt:
         pass
     finally:
+        outbound_task.cancel()
+        try:
+            await outbound_task
+        except (asyncio.CancelledError, Exception):
+            pass
         for t in connect_tasks:
             t.cancel()
 

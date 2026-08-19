@@ -10,6 +10,21 @@ import requests
 from datetime import datetime
 from zai import ZhipuAiClient
 
+from agent.database.crud.scheduled_task import (
+    ALLOWED_CHANNELS,
+    ALLOWED_SCHEDULE_TYPES,
+    create_scheduled_task,
+    delete_scheduled_task,
+    list_scheduled_tasks,
+    parse_weekdays,
+    set_scheduled_task_enabled,
+    task_to_dict,
+    update_scheduled_task,
+)
+from agent.database.crud.user_channel_binding import (
+    CHANNEL_LABELS,
+    get_channel_chat_id,
+)
 from agent.database.models.user import UserInfo
 from agent.tool.file_process import AsyncFileProcess
 from agent.tool.registry import get_all_tool_schemas, get_registered_tool_names
@@ -993,6 +1008,159 @@ class SoulproutToolFunction:
             "questions": normalized_questions,
         }
         return {"ok": True, "content": content_str, "json_table": json_table}
+
+    async def _resolve_schedule_channel(self, user_id, channel, chat_id):
+        channel_value = (channel or "web").strip().lower()
+        if channel_value not in ALLOWED_CHANNELS:
+            return None, None, f"错误：channel 不支持 {channel_value}"
+        chat_value = (chat_id or "").strip() or None
+        if channel_value != "web" and not chat_value:
+            chat_value = await get_channel_chat_id(user_id, channel_value)
+        if channel_value != "web" and not chat_value:
+            label = CHANNEL_LABELS.get(channel_value, channel_value)
+            return None, None, (
+                f"错误：还不知道该把消息发到{label}的哪个会话。"
+                f"请先用{label}跟我说过至少一句话，或在当前{label}对话里创建这个定时任务。"
+            )
+        return channel_value, chat_value, None
+
+    async def schedule_task(
+        self,
+        module,
+        conversation_id,
+        task_id=None,
+        title=None,
+        run_at=None,
+        instruction=None,
+        notify_text=None,
+        schedule_type=None,
+        timezone=None,
+        channel=None,
+        chat_id=None,
+        weekdays=None,
+    ):
+        """当前用户的定时任务：create / list / update / delete / stop / start。"""
+        user_id = await self._get_user_id_by_conversation_id(conversation_id)
+        if not user_id:
+            user_id = conversation_id
+        if not user_id:
+            return "错误：无法获取用户信息"
+
+        try:
+            if module == "list":
+                tasks = await list_scheduled_tasks(user_id)
+                return json.dumps(
+                    {"count": len(tasks), "tasks": [task_to_dict(item) for item in tasks]},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
+            if module == "create":
+                if not title or not str(title).strip():
+                    return "错误：module=create 时 title 必填"
+                if not run_at or not str(run_at).strip():
+                    return "错误：module=create 时 run_at 必填，格式 YYYY-MM-DD HH:MM"
+                if not (instruction or notify_text):
+                    return "错误：instruction 与 notify_text 至少填写一项"
+                type_value = (schedule_type or "once").strip().lower()
+                if type_value not in ALLOWED_SCHEDULE_TYPES:
+                    return "错误：schedule_type 仅支持 once / daily / weekly"
+                weekday_values = None
+                if type_value == "weekly" or weekdays is not None:
+                    try:
+                        weekday_values = parse_weekdays(weekdays)
+                    except ValueError as exc:
+                        return f"错误：{exc}"
+                    if type_value == "weekly" and not weekday_values:
+                        return "错误：schedule_type=weekly 时必须填写 weekdays，例如 [1,3,5] 表示周一三五"
+                channel_value, chat_value, channel_error = await self._resolve_schedule_channel(
+                    user_id, channel, chat_id
+                )
+                if channel_error:
+                    return channel_error
+                task = await create_scheduled_task(
+                    user_id=user_id,
+                    title=title,
+                    run_at_local=str(run_at),
+                    instruction=instruction or "",
+                    notify_text=notify_text or "",
+                    timezone_name=(timezone or "Asia/Shanghai"),
+                    schedule_type=type_value,
+                    weekdays=weekday_values,
+                    channel=channel_value,
+                    chat_id=chat_value,
+                    conversation_id=conversation_id,
+                )
+                return json.dumps(
+                    {"ok": True, "message": "已创建定时任务", "task": task_to_dict(task)},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
+            if module == "update":
+                if not task_id:
+                    return "错误：module=update 时 task_id 必填"
+                type_value = None
+                if schedule_type is not None:
+                    type_value = str(schedule_type).strip().lower()
+                    if type_value not in ALLOWED_SCHEDULE_TYPES:
+                        return "错误：schedule_type 仅支持 once / daily / weekly"
+                channel_value = None
+                chat_value = chat_id
+                if channel is not None:
+                    channel_value, chat_value, channel_error = await self._resolve_schedule_channel(
+                        user_id, channel, chat_id
+                    )
+                    if channel_error:
+                        return channel_error
+                weekday_values = weekdays if weekdays is not None else None
+                task = await update_scheduled_task(
+                    user_id=user_id,
+                    task_id=str(task_id).strip(),
+                    title=title,
+                    instruction=instruction,
+                    notify_text=notify_text,
+                    timezone_name=timezone,
+                    schedule_type=type_value,
+                    weekdays=weekday_values,
+                    run_at_local=str(run_at).strip() if run_at else None,
+                    channel=channel_value,
+                    chat_id=chat_value,
+                )
+                return json.dumps(
+                    {"ok": True, "message": "已更新定时任务", "task": task_to_dict(task)},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
+            if module in ("stop", "start"):
+                if not task_id:
+                    return f"错误：module={module} 时 task_id 必填"
+                enabled = module == "start"
+                task = await set_scheduled_task_enabled(user_id, str(task_id).strip(), enabled)
+                message = "已开启定时任务" if enabled else "已停止定时任务，再次 start 前不会触发"
+                return json.dumps(
+                    {"ok": True, "message": message, "task": task_to_dict(task)},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
+            if module == "delete":
+                if not task_id:
+                    return "错误：module=delete 时 task_id 必填"
+                deleted = await delete_scheduled_task(user_id, str(task_id).strip())
+                if not deleted:
+                    return "错误：任务不存在，或无权删除"
+                return json.dumps(
+                    {"ok": True, "message": "已删除定时任务", "task_id": str(task_id).strip()},
+                    ensure_ascii=False,
+                )
+
+            return "错误：module 仅支持 create / list / update / delete / stop / start"
+        except ValueError as exc:
+            return f"错误：{exc}"
+        except Exception as exc:
+            return f"错误：定时任务操作失败，失败原因：{exc}"
 
     async def user_option(self, info_type, module, conversation_id, content=None, old_text=None):
         if info_type not in ("userinfo", "agentinfo"):

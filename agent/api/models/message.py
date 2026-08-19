@@ -32,6 +32,8 @@ class ChatRequest(BaseModel):
     file_name_list: Union[None, List] = None
     user_feedback: Optional[bool] = False
     temp_sub_agent: Optional[TempSubAgent] = None
+    channel: Optional[str] = None
+    chat_id: Optional[str] = None
     class Config:
         extra = "allow"
 

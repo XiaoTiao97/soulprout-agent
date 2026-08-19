@@ -35,6 +35,8 @@ async def call_agent_chat(
     conversation_id: str = "",
     model_source: Optional[str] = None,
     model: Optional[str] = None,
+    channel: Optional[str] = None,
+    chat_id: Optional[str] = None,
 ) -> str:
     """
     调用 Agent ``/message/chat``，返回完整的 assistant 回复文本（非流式）。
@@ -67,6 +69,8 @@ async def call_agent_chat(
         token=token,
         model_source=model_source,
         model=model,
+        channel=channel,
+        chat_id=chat_id,
     )
 
 
@@ -136,6 +140,8 @@ def _build_chat_request(
     conversation_id: str,
     model_source: Optional[str],
     model: Optional[str],
+    channel: Optional[str] = None,
+    chat_id: Optional[str] = None,
 ) -> dict:
     chat_req: dict = {
         "message": message,
@@ -153,6 +159,10 @@ def _build_chat_request(
         chat_req["model_source"] = model_source
     if model:
         chat_req["model"] = model
+    if channel:
+        chat_req["channel"] = channel
+    if chat_id:
+        chat_req["chat_id"] = chat_id
     return chat_req
 
 
@@ -235,6 +245,8 @@ async def _call_http(
     token: str,
     model_source: Optional[str],
     model: Optional[str],
+    channel: Optional[str] = None,
+    chat_id: Optional[str] = None,
 ) -> str:
     """
     POST ``/message/chat``，逐行读取 SSE 流，拼接 assistant 正文与 user_feedback 提示文本。
@@ -247,7 +259,9 @@ async def _call_http(
     from gateway.config_store import api_path
 
     endpoint = api_path(agent_url, "/message/chat")
-    chat_req = _build_chat_request(message, user_id, conversation_id, model_source, model)
+    chat_req = _build_chat_request(
+        message, user_id, conversation_id, model_source, model, channel, chat_id
+    )
 
     headers: dict = {}
     cookies: dict = {}

@@ -560,6 +560,88 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "schedule_task",
+            "description": (
+                "Manage the current user's scheduled tasks. Switch sub-actions via module:\n"
+                "- module=create: create a task. Convert the user's time into YYYY-MM-DD HH:MM "
+                "(default timezone Asia/Shanghai). schedule_type=once is one-shot; daily repeats every day "
+                "at that clock time; weekly repeats on selected weekdays (weekdays required, 1=Monday ... 7=Sunday, multi-select). "
+                "channel is filled from the current message source when omitted "
+                "(WeChat/Feishu/web). If the user asks to remind on another channel "
+                "(e.g. WeChat while chatting on the web), set channel to weixin/feishu/wecom/xiaoai. "
+                "chat_id is optional when that user has already talked on the target channel. "
+                "Provide instruction (what the agent should do when it fires) and/or notify_text. channel defaults to web.\n"
+                "- module=list: return all scheduled tasks of the current user.\n"
+                "- module=update: update a task by task_id (time, weekdays, instruction, channel, etc.).\n"
+                "- module=stop: pause a task by task_id. The record is kept but will not fire until start.\n"
+                "- module=start: resume a paused task by task_id.\n"
+                "- module=delete: permanently delete a task by task_id; it will never fire again."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["module"],
+                "properties": {
+                    "module": {
+                        "type": "string",
+                        "enum": ["create", "list", "update", "delete", "stop", "start"],
+                        "description": "create / list / update / delete / stop / start",
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "description": "[Required for update/delete/stop/start] Task ID returned by create or list",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "[Required for create] Short title, e.g. morning meeting reminder",
+                    },
+                    "run_at": {
+                        "type": "string",
+                        "description": (
+                            "[Required for create] Local time YYYY-MM-DD HH:MM, e.g. 2026-08-20 08:00. "
+                            "For daily/weekly the clock time is used; also used by update to change the time."
+                        ),
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "description": "What the agent should do when the task fires",
+                    },
+                    "notify_text": {
+                        "type": "string",
+                        "description": "Optional reminder text to send as-is without running the agent",
+                    },
+                    "schedule_type": {
+                        "type": "string",
+                        "enum": ["once", "daily", "weekly"],
+                        "description": "once (default) / daily / weekly",
+                    },
+                    "weekdays": {
+                        "type": "array",
+                        "items": {"type": "integer", "minimum": 1, "maximum": 7},
+                        "description": (
+                            "[Required for weekly] Weekdays to run, 1=Monday ... 7=Sunday, multi-select. "
+                            "Example: [1,3,5] for Mon/Wed/Fri"
+                        ),
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "IANA timezone, default Asia/Shanghai",
+                    },
+                    "channel": {
+                        "type": "string",
+                        "enum": ["web", "weixin", "feishu", "wecom", "xiaoai", "rokid"],
+                        "description": "Delivery channel, default web",
+                    },
+                    "chat_id": {
+                        "type": "string",
+                        "description": "Gateway chat id when channel is not web",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "conversation_option",
             "description": (
                 "Conversation context management tool.\n"

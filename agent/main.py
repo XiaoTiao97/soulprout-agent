@@ -17,11 +17,15 @@ from agent.database.models.agent_subscription import AgentSub
 from agent.database.models.conversation import Conversation, COTConversation, SubAgentConversation
 from agent.database.models.message import AgentMessage, COTMessage, SubAgentMessage
 from agent.database.models.rokid_credential import RokidCredential
+from agent.database.models.scheduled_task import ScheduledTask
+from agent.database.models.outbound_delivery import OutboundDelivery
+from agent.database.models.user_channel_binding import UserChannelBinding
 from agent.core.config import Config
 from agent.skill.skill_indexer import init_skill_collection
 from agent.utils.vdb_client import VDBClient
 from contextlib import asynccontextmanager
 from agent.api.routers import router as api_router
+import asyncio
 
 config = Config()
 
@@ -43,6 +47,9 @@ async def lifespan(app: FastAPI):
             AgentCard,
             AgentSub,
             RokidCredential,
+            ScheduledTask,
+            OutboundDelivery,
+            UserChannelBinding,
         ],
     )
     for agent_card in [config.kb_agent_card(), *config.default_agent_cards()]:
@@ -62,9 +69,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"知识库向量 collection 初始化失败: {e}")
 
+    scheduler_task = asyncio.create_task(
+        _run_scheduler(),
+        name="scheduled-task-loop",
+    )
+
     yield  # Keep the app running
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
     # Shutdown event (if needed, you can add cleanup here)
     client.close()
+
+
+async def _run_scheduler():
+    from agent.services.scheduler import run_scheduler_loop
+    await run_scheduler_loop()
 
 # Set the lifespan for the app
 app = FastAPI(lifespan=lifespan)
