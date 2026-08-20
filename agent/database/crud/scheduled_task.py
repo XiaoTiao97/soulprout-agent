@@ -37,33 +37,16 @@ def _parse_local_run_at(run_at_local: str, tz_name: str) -> datetime:
     raw = (run_at_local or "").strip()
     if not raw:
         raise ValueError("run_at 不能为空")
-    tz = _local_tz(tz_name)
     iso = raw.replace("Z", "+00:00")
+    if "T" not in iso[:19] and " " in iso:
+        iso = iso.replace(" ", "T", 1)
     try:
-        parsed = datetime.fromisoformat(iso.replace(" ", "T") if "T" not in iso[:19] and " " in iso else iso)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=tz)
-        return parsed
-    except ValueError:
-        pass
-    raw_naive = raw.replace("T", " ")
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-        try:
-            naive = datetime.strptime(raw_naive, fmt)
-            return naive.replace(tzinfo=tz)
-        except ValueError:
-            continue
-    if len(raw) <= 8:
-        try:
-            clock = datetime.strptime(raw, "%H:%M:%S" if raw.count(":") == 2 else "%H:%M")
-        except ValueError:
-            clock = None
-        if clock is not None:
-            now_local = datetime.now(tz)
-            return now_local.replace(
-                hour=clock.hour, minute=clock.minute, second=clock.second, microsecond=0
-            )
-    raise ValueError("run_at 格式无效，请使用 YYYY-MM-DD HH:MM，例如 2026-08-20 08:00")
+        parsed = datetime.fromisoformat(iso)
+    except ValueError as exc:
+        raise ValueError("run_at 格式无效，请使用 YYYY-MM-DD HH:MM，例如 2026-08-20 08:00") from exc
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=_local_tz(tz_name))
+    return parsed
 
 
 def _naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
@@ -84,7 +67,11 @@ def resolve_task_kind(kind: Optional[str], instruction: str = "", notify_text: s
     value = (kind or "").strip().lower()
     if value in ALLOWED_KINDS:
         return value
-    if (instruction or "").strip():
+    instruction = (instruction or "").strip()
+    notify_text = (notify_text or "").strip()
+    if notify_text and instruction == notify_text:
+        return "notify"
+    if instruction:
         return "agent"
     return "notify"
 
@@ -364,29 +351,6 @@ async def delete_scheduled_task(user_id: str, task_id: str) -> bool:
         return False
     await task.delete()
     return True
-
-
-async def backfill_task_kind() -> int:
-    """给旧任务补上 kind，避免提醒和 Agent 任务混在一起。"""
-    tasks = await ScheduledTask.find(
-        {"$or": [{"kind": {"$exists": False}}, {"kind": ""}, {"kind": None}]}
-    ).to_list()
-    updated = 0
-    for task in tasks:
-        kind_value = resolve_task_kind(
-            getattr(task, "kind", None),
-            task.instruction or "",
-            task.notify_text or "",
-        )
-        if (task.notify_text or "").strip() and (task.instruction or "").strip() == (task.notify_text or "").strip():
-            kind_value = "notify"
-        if getattr(task, "kind", None) == kind_value:
-            continue
-        task.kind = kind_value
-        task.updated_at = datetime.utcnow()
-        await task.save()
-        updated += 1
-    return updated
 
 
 async def claim_due_tasks(limit: int = 10) -> list[ScheduledTask]:

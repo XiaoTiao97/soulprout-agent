@@ -39,8 +39,13 @@ _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from gateway.base import BasePlatformAdapter, MessageEvent
+from gateway.base import MessageEvent
 from gateway.chat_caller import call_agent_chat
+from gateway.platform_registry import (
+    get_platform_adapter,
+    iter_platform_adapters,
+    set_platform_adapter,
+)
 from gateway.platforms.feishu import FeishuAdapter
 from gateway.platforms.wecom import WecomAdapter
 from gateway.platforms.weixin import WeixinAdapter
@@ -112,19 +117,10 @@ async def _watch_parent_process(parent_pid: int, interval: float = 3.0) -> None:
             os._exit(0)
 
 
-# ---------------------------------------------------------------------------
-# 平台适配器注册表
-# ---------------------------------------------------------------------------
-
-_adapters: dict[str, BasePlatformAdapter] = {}
 _weixin_adapter: WeixinAdapter | None = None
 _feishu_adapter: FeishuAdapter | None = None
 _wecom_adapter: WecomAdapter | None = None
 _xiaoai_adapter: XiaoaiAdapter | None = None
-
-
-def get_platform_adapter(platform: str) -> BasePlatformAdapter | None:
-    return _adapters.get(platform)
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +168,7 @@ async def on_message(event: MessageEvent) -> None:
         logger.warning("[Gateway] chat_id 为空，无法发送回复")
         return
 
-    adapter = _adapters.get(platform)
+    adapter = get_platform_adapter(platform)
     if adapter is None:
         logger.warning("[Gateway] 无对应 adapter 可发送，platform=%s", platform)
         return
@@ -256,10 +252,10 @@ async def run(*, cli_mode: bool = False, daemon_mode: bool = False) -> None:
     _feishu_adapter = build_feishu_adapter()
     _wecom_adapter = build_wecom_adapter()
     _xiaoai_adapter = build_xiaoai_adapter()
-    _adapters["weixin"] = _weixin_adapter
-    _adapters["feishu"] = _feishu_adapter
-    _adapters["wecom"] = _wecom_adapter
-    _adapters["xiaoai"] = _xiaoai_adapter
+    set_platform_adapter("weixin", _weixin_adapter)
+    set_platform_adapter("feishu", _feishu_adapter)
+    set_platform_adapter("wecom", _wecom_adapter)
+    set_platform_adapter("xiaoai", _xiaoai_adapter)
     set_weixin_adapter(_weixin_adapter)
     set_feishu_adapter(_feishu_adapter)
     set_wecom_adapter(_wecom_adapter)
@@ -367,7 +363,7 @@ async def run(*, cli_mode: bool = False, daemon_mode: bool = False) -> None:
             except (asyncio.CancelledError, Exception):
                 pass
 
-        for name, adapter in _adapters.items():
+        for name, adapter in iter_platform_adapters():
             if adapter.is_connected:
                 logger.info("[Gateway] 断开 %s adapter…", name)
                 await adapter.disconnect()

@@ -33,6 +33,14 @@ async def list_pending_deliveries(user_id: str, limit: int = 50) -> List[Outboun
     ).sort("+create_at").limit(limit).to_list()
 
 
+async def list_pending_for_users(user_ids: list[str], limit: int = 200) -> List[OutboundDelivery]:
+    if not user_ids:
+        return []
+    return await OutboundDelivery.find(
+        {"user_id": {"$in": list(user_ids)}, "status": "pending"}
+    ).sort("+create_at").limit(limit).to_list()
+
+
 async def mark_delivery_sent(delivery_id: str) -> Optional[OutboundDelivery]:
     item = await OutboundDelivery.find_one(OutboundDelivery.delivery_id == delivery_id)
     if not item:

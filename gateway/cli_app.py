@@ -333,7 +333,7 @@ async def setup_rokid() -> bool:
 
 
 def _platform_status_line(platform: str, label: str) -> str:
-    from gateway.main import get_platform_adapter
+    from gateway.platform_registry import get_platform_adapter
     from gateway.platforms.feishu import has_feishu_config
     from gateway.platforms.wecom import has_wecom_config
     from gateway.platforms.weixin import list_weixin_accounts

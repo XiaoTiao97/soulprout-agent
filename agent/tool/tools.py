@@ -1044,10 +1044,6 @@ class SoulproutToolFunction:
         **kwargs,
     ):
         """当前用户的定时任务：create / list / update / delete / stop / start。"""
-        notify_text = notify_text or kwargs.get("notifyText") or kwargs.get("notify-text")
-        instruction = instruction or kwargs.get("task") or kwargs.get("prompt")
-        run_at = run_at or kwargs.get("runAt") or kwargs.get("run_at_local")
-        kind = kind or kwargs.get("task_kind") or kwargs.get("mode")
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         if not user_id:
             user_id = conversation_id

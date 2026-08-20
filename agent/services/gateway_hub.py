@@ -1,4 +1,4 @@
-"""Gateway 长连接登记：user_id -> 当前 WebSocket 集合。"""
+"""Gateway 在线连接：user_id → WebSocket。空闲连接不跑业务，只在投递时写一帧。"""
 
 from __future__ import annotations
 
@@ -19,9 +19,6 @@ class GatewayHub:
     async def register(self, user_id: str, ws: WebSocket) -> None:
         async with self._lock:
             self._conns.setdefault(user_id, set()).add(ws)
-        n = len(self._conns.get(user_id, ()))
-        logger.info("[GatewayHub] 已连接 user=%s 当前连接数=%d", user_id, n)
-        print(f"[GatewayHub] 已连接 user={user_id} 当前连接数={n}", flush=True)
 
     async def unregister(self, user_id: str, ws: WebSocket) -> None:
         async with self._lock:
@@ -31,7 +28,6 @@ class GatewayHub:
             conns.discard(ws)
             if not conns:
                 self._conns.pop(user_id, None)
-        logger.info("[GatewayHub] 已断开 user=%s", user_id)
 
     def online_user_ids(self) -> list[str]:
         return [user_id for user_id, conns in self._conns.items() if conns]
