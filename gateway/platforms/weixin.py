@@ -97,6 +97,12 @@ def _qr_login_payload(qrcode_value: str, scan_url: str) -> Dict[str, str]:
     }
 
 LONG_POLL_TIMEOUT_MS = 35_000
+# 客户端总超时必须比服务端长轮询时长更长，否则每轮都在同一刻被客户端掐断，
+# 无法区分「服务端没有新消息」和「socket 已经死了」。
+LONG_POLL_CLIENT_MARGIN_MS = 10_000
+# 连续多少轮客户端超时后重建 session：休眠/断网唤醒后连接池里可能全是半开的死连接，
+# 复用它们会一直静默超时，看起来在跑但永远收不到消息。
+MAX_SILENT_POLLS = 2
 API_TIMEOUT_MS = 15_000
 CONFIG_TIMEOUT_MS = 10_000
 QR_TIMEOUT_MS = 35_000
@@ -309,7 +315,11 @@ def _make_ssl_connector() -> Optional["aiohttp.TCPConnector"]:
         import ssl
         import certifi
         ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-        return aiohttp.TCPConnector(ssl=ssl_ctx)
+        return aiohttp.TCPConnector(
+            ssl=ssl_ctx,
+            enable_cleanup_closed=True,
+            keepalive_timeout=30,
+        )
     except Exception:
         return None
 
@@ -374,10 +384,11 @@ async def _get_updates(
             endpoint=EP_GET_UPDATES,
             payload={"get_updates_buf": sync_buf},
             token=token,
-            timeout_ms=timeout_ms,
+            timeout_ms=timeout_ms + LONG_POLL_CLIENT_MARGIN_MS,
         )
     except asyncio.TimeoutError:
-        return {"ret": 0, "msgs": [], "get_updates_buf": sync_buf}
+        # 服务端本该在 timeout_ms 内回包；走到这里说明连接很可能已经失效
+        return {"ret": 0, "msgs": [], "get_updates_buf": sync_buf, "client_timeout": True}
 
 
 async def _send_message(
@@ -834,11 +845,24 @@ class WeixinAdapter(BasePlatformAdapter):
     # 长轮询主循环
     # ------------------------------------------------------------------
 
+    async def _reset_poll_session(self) -> None:
+        """丢弃当前连接池并新建 session，用于摆脱休眠/断网留下的半开连接。"""
+        old = self._poll_session
+        self._poll_session = aiohttp.ClientSession(
+            trust_env=True, connector=_make_ssl_connector()
+        )
+        if old and not old.closed:
+            try:
+                await old.close()
+            except Exception:
+                pass
+
     async def _poll_loop(self) -> None:
         assert self._poll_session is not None
         sync_buf = _load_sync_buf(self._account_id)
         timeout_ms = LONG_POLL_TIMEOUT_MS
         failures = 0
+        silent_polls = 0
 
         while self._running:
             try:
@@ -852,6 +876,18 @@ class WeixinAdapter(BasePlatformAdapter):
                 suggested = response.get("longpolling_timeout_ms")
                 if isinstance(suggested, int) and suggested > 0:
                     timeout_ms = suggested
+
+                if response.get("client_timeout"):
+                    silent_polls += 1
+                    logger.warning(
+                        "[weixin] 长轮询无响应 (%d/%d)", silent_polls, MAX_SILENT_POLLS
+                    )
+                    if silent_polls >= MAX_SILENT_POLLS:
+                        logger.warning("[weixin] 连接疑似失效，重建轮询会话")
+                        await self._reset_poll_session()
+                        silent_polls = 0
+                    continue
+                silent_polls = 0
 
                 ret = response.get("ret", 0)
                 errcode = response.get("errcode", 0)
@@ -889,6 +925,8 @@ class WeixinAdapter(BasePlatformAdapter):
             except Exception as exc:
                 failures += 1
                 logger.error("[weixin] 轮询错误 (%d/%d): %s", failures, MAX_CONSECUTIVE_FAILURES, exc)
+                # 网络被本地中止（休眠唤醒、切网、VPN 重连）后连接池里的 socket 已不可用
+                await self._reset_poll_session()
                 await asyncio.sleep(
                     BACKOFF_DELAY_SECONDS if failures >= MAX_CONSECUTIVE_FAILURES
                     else RETRY_DELAY_SECONDS

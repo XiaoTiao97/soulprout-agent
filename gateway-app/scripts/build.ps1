@@ -1,7 +1,12 @@
-# Soulprout Gateway build script (Windows PowerShell)
+﻿# Soulprout Gateway build script (Windows PowerShell)
 # Run from project root: .\gateway-app\scripts\build.ps1
 
 param(
+    # 发布版本号 X.Y.Z。传入时会写回 tauri.conf.json / Cargo.toml；
+    # 省略则沿用 tauri.conf.json 里的当前版本。
+    [string]$Version,
+    # 更新说明，会显示在客户端的「发现新版本」弹窗里。
+    [string]$Notes,
     [switch]$SkipDeps,
     [switch]$SkipPyInstaller,
     [switch]$SkipTauri,
@@ -23,9 +28,57 @@ $GatewayDir  = Join-Path $ProjectRoot 'gateway'
 $SpecFile    = Join-Path $GatewayDir 'gateway.spec'
 $DistDir     = Join-Path $ProjectRoot 'dist'
 $BinariesDir = Join-Path $AppDir 'src-tauri\binaries'
+$ConfPath    = Join-Path $AppDir 'src-tauri\tauri.conf.json'
+$CargoPath   = Join-Path $AppDir 'src-tauri\Cargo.toml'
+$ReleaseDir  = Join-Path $AppDir 'release'
+
+# latest.json 里安装包 URL 的前缀，需与 tauri.conf.json 的 updater.endpoints 同源
+$UpdateBaseUrl = if ($env:GATEWAY_UPDATE_BASE_URL) {
+    $env:GATEWAY_UPDATE_BASE_URL.TrimEnd('/')
+} else {
+    'https://soulprout-gateway-app.oss-cn-hongkong.aliyuncs.com'
+}
 
 Info "Project root: $ProjectRoot"
 Info "Gateway dir:  $GatewayDir"
+
+function Write-Utf8NoBom($Path, $Text) {
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+# 调用外部命令（python / npm / pyinstaller）。
+# 这些工具会把普通日志写到 stderr，而在 $ErrorActionPreference = 'Stop' 下
+# PowerShell 5.1 会把 stderr 输出当成致命错误中断脚本，所以这里临时放宽，
+# 改用退出码判断成败。
+function Invoke-External([scriptblock]$Command, [string]$ErrorMessage) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command } finally { $ErrorActionPreference = $previous }
+    if ($LASTEXITCODE -ne 0) { Fail $ErrorMessage }
+}
+
+if ($Version) {
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "Version must be X.Y.Z, got: $Version" }
+
+    $conf = Get-Content $ConfPath -Raw
+    $confRe = [regex]'("version"\s*:\s*")[^"]*(")'
+    if (-not $confRe.IsMatch($conf)) { Fail "No version field in tauri.conf.json" }
+    Write-Utf8NoBom $ConfPath $confRe.Replace($conf, "`${1}$Version`${2}", 1)
+
+    $cargo = Get-Content $CargoPath -Raw
+    $cargoRe = [regex]'(?m)^(version\s*=\s*")[^"]*(")'
+    if (-not $cargoRe.IsMatch($cargo)) { Fail "No version field in Cargo.toml" }
+    Write-Utf8NoBom $CargoPath $cargoRe.Replace($cargo, "`${1}$Version`${2}", 1)
+
+    Success "Version set to $Version"
+} else {
+    $verMatch = [regex]::Match((Get-Content $ConfPath -Raw), '"version"\s*:\s*"([^"]+)"')
+    if (-not $verMatch.Success) { Fail "Cannot read version from tauri.conf.json" }
+    $Version = $verMatch.Groups[1].Value
+    Info "Version: $Version (from tauri.conf.json)"
+}
+
+if (-not $Notes) { $Notes = "Soulprout Gateway $Version" }
 
 $IconIco = Join-Path $AppDir 'src-tauri\icons\icon.ico'
 if ($SkipIcons) {
@@ -34,8 +87,7 @@ if ($SkipIcons) {
     Success "Icons already exist, skipping generation ($IconIco)"
 } else {
     Info "Generating app icons..."
-    python (Join-Path $ScriptDir 'generate-icons.py')
-    if ($LASTEXITCODE -ne 0) { Fail "Icon generation failed" }
+    Invoke-External { python (Join-Path $ScriptDir 'generate-icons.py') } "Icon generation failed"
 }
 
 $RustTarget = $null
@@ -57,10 +109,9 @@ $SidecarPath = Join-Path $BinariesDir $SidecarName
 if (-not $SkipDeps) {
     Info "Step 1 - Installing Python dependencies..."
     $ReqFile = Join-Path $GatewayDir 'requirements.txt'
-    python -m pip install --upgrade pip | Out-Null
-    python -m pip install pyinstaller | Out-Null
-    python -m pip install -r $ReqFile
-    if ($LASTEXITCODE -ne 0) { Fail "pip install failed" }
+    Invoke-External { python -m pip install --upgrade pip | Out-Null } "pip upgrade failed"
+    Invoke-External { python -m pip install pyinstaller | Out-Null } "pyinstaller install failed"
+    Invoke-External { python -m pip install -r $ReqFile } "pip install failed"
     Success "Python dependencies installed"
 } else {
     Warn "Step 1 skipped (-SkipDeps)"
@@ -77,8 +128,9 @@ if (-not $SkipPyInstaller) {
             Remove-Item -Force (Join-Path $DistDir 'gateway.exe')
         }
 
-        python -m PyInstaller $SpecFile --distpath $DistDir --workpath (Join-Path $ProjectRoot 'build')
-        if ($LASTEXITCODE -ne 0) { Fail "PyInstaller build failed" }
+        Invoke-External {
+            python -m PyInstaller $SpecFile --distpath $DistDir --workpath (Join-Path $ProjectRoot 'build')
+        } "PyInstaller build failed"
     } finally {
         Pop-Location
     }
@@ -101,30 +153,50 @@ if (-not $SkipTauri) {
     Info "Step 4 - npm install..."
     Push-Location $AppDir
     try {
-        npm install
-        if ($LASTEXITCODE -ne 0) { Fail "npm install failed" }
+        Invoke-External { npm install } "npm install failed"
         Success "npm install done"
 
         Info "Step 5 - tauri build..."
-        npm run build
-        if ($LASTEXITCODE -ne 0) { Fail "tauri build failed" }
+        Invoke-External { npm run build } "tauri build failed"
     } finally {
         Pop-Location
     }
 
-    $InstallerDir = Join-Path $AppDir 'src-tauri\target\release\bundle'
-    $NsisDir = Join-Path $InstallerDir 'nsis'
-    if (Test-Path $NsisDir) {
-        $NsisExe = Get-ChildItem (Join-Path $NsisDir '*.exe') |
-            Where-Object { $_.Name -ne 'Soulprout-Gateway-setup.exe' } |
-            Select-Object -First 1
-        if ($NsisExe) {
-            $StableInstaller = Join-Path $NsisDir 'Soulprout-Gateway-setup.exe'
-            Copy-Item -Path $NsisExe.FullName -Destination $StableInstaller -Force
-            Success "Stable installer: $StableInstaller"
-        }
+    Info "Step 6 - Collecting release artifacts..."
+    $NsisDir = Join-Path $AppDir 'src-tauri\target\release\bundle\nsis'
+    if (-not (Test-Path $NsisDir)) { Fail "NSIS output dir not found: $NsisDir" }
+
+    # 按版本号精确匹配，避免拿到上一次构建残留的安装包
+    $Installer = Get-ChildItem -Path $NsisDir -Filter "*_${Version}_*-setup.exe" |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if (-not $Installer) { Fail "No installer matching *_${Version}_*-setup.exe in $NsisDir" }
+
+    if (Test-Path $ReleaseDir) { Remove-Item -Recurse -Force $ReleaseDir }
+    New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
+
+    # Tauri 产出的文件名带空格（"Soulprout Gateway_0.1.1_x64-setup.exe"），
+    # 写进下载 URL 得转义，容易出错，所以统一改成无空格的名字
+    $VersionedName = "Soulprout-Gateway-$Version-setup.exe"
+
+    # 版本化文件名：自动更新下载用，内容固定可长期缓存
+    Copy-Item $Installer.FullName (Join-Path $ReleaseDir $VersionedName) -Force
+    # 固定文件名：前端下载按钮用，OSS 上覆盖同名对象，前端无需改代码
+    Copy-Item $Installer.FullName (Join-Path $ReleaseDir 'Soulprout-Gateway-setup.exe') -Force
+    Success "Installer: $VersionedName"
+
+    # 客户端启动时读这个文件判断有没有新版本
+    $manifest = [ordered]@{
+        version  = $Version
+        notes    = $Notes
+        url      = "$UpdateBaseUrl/updates/$Version/$VersionedName"
+        pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     }
-    Success "Build complete. Installers at: $InstallerDir"
+    # 必须无 BOM：客户端的 JSON 解析器不接受 BOM，否则检查更新会失败
+    Write-Utf8NoBom (Join-Path $ReleaseDir 'version.json') ($manifest | ConvertTo-Json -Depth 3)
+    Success "Manifest: version.json (version $Version)"
+
+    Success "Release artifacts at: $ReleaseDir"
 } else {
     Warn "Step 4/5 skipped (-SkipTauri). Sidecar ready at: $SidecarPath"
 }

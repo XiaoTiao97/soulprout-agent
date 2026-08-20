@@ -214,6 +214,13 @@ gateway_data/
 gateway-app/src-tauri/binaries/*.exe
 gw-*.txt
 
+# 发布产物汇总目录（安装包 + version.json，由 build.ps1 生成后上传 OSS）
+gateway-app/release/
+
+# 发版用的阿里云 AccessKey，以及自动下载的 ossutil
+gateway-app/.release.local.json
+gateway-app/scripts/.tools/
+
 # gateway-app/dist 是手写的 Tauri 开屏页源码（非构建产物），需纳入版本控制，
 # 排除通用 `dist/` 规则的误伤
 !gateway-app/dist/
