@@ -1,4 +1,4 @@
-"""云端定时任务调度：扫描到期任务、执行、再推给在线 Gateway。"""
+"""云端定时任务调度：扫描到期任务、写入对话上下文、再推给 Gateway。"""
 
 from __future__ import annotations
 
@@ -13,10 +13,11 @@ from agent.database.crud.outbound_delivery import (
     list_pending_deliveries,
 )
 from agent.database.crud.scheduled_task import (
-    backfill_empty_notify_text,
+    backfill_task_kind,
     claim_due_tasks,
     finish_scheduled_task,
     recover_stale_running_tasks,
+    resolve_task_kind,
 )
 from agent.database.models.message import AgentMessage
 from agent.database.models.scheduled_task import ScheduledTask
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL_S = 60.0
 _GATEWAY_CHANNELS = {"weixin", "feishu", "wecom", "xiaoai", "rokid"}
+scheduler_started_at: str | None = None
+scheduler_last_tick: str | None = None
+scheduler_last_claimed: int = 0
 
 
 def _parse_sse_chunk(raw) -> dict:
@@ -40,20 +44,46 @@ def _parse_sse_chunk(raw) -> dict:
         return {}
 
 
+def _conversation_id(task: ScheduledTask) -> str:
+    return (task.conversation_id or task.user_id or "").strip() or task.user_id
+
+
+def _task_kind(task: ScheduledTask) -> str:
+    kind = getattr(task, "kind", None)
+    inferred = resolve_task_kind(kind, task.instruction or "", task.notify_text or "")
+    if (
+        (task.notify_text or "").strip()
+        and (task.instruction or "").strip() == (task.notify_text or "").strip()
+    ):
+        return "notify"
+    return inferred
+
+
+async def _save_context_message(task: ScheduledTask, role: str, content: str) -> None:
+    text = (content or "").strip()
+    if not text:
+        return
+    await AgentMessage(
+        user_id=task.user_id,
+        conversation_id=_conversation_id(task),
+        type="text",
+        role=role,
+        content=text,
+        created_at=datetime.utcnow(),
+    ).insert()
+
+
 async def _run_instruction(task: ScheduledTask) -> str:
+    """把 instruction 当作用户消息写入对话并跑一轮 Soul。"""
     from agent.core.config import Config
     from agent.services.agent import Chat
 
     config = Config()
-    prompt = (
-        f"【定时任务】{task.title}\n"
-        f"{task.instruction.strip()}\n"
-        "请直接执行并给出给用户看的最终结果。不要再创建或修改定时任务。"
-    )
+    instruction = (task.instruction or "").strip()
     request = ChatRequest(
-        message=prompt,
+        message=instruction,
         user_id=task.user_id,
-        conversation_id=task.user_id,
+        conversation_id=_conversation_id(task),
         agent_use="soulprout",
         tools_use=True,
         skills_use=True,
@@ -79,33 +109,12 @@ async def _run_instruction(task: ScheduledTask) -> str:
     return "".join(parts).strip()
 
 
-async def _save_web_message(user_id: str, content: str) -> None:
-    await AgentMessage(
-        user_id=user_id,
-        conversation_id=user_id,
-        type="text",
-        role="assistant",
-        content=content,
-        created_at=datetime.utcnow(),
-    ).insert()
-
-
 async def push_delivery(delivery) -> bool:
-    if delivery.channel == "web" or not delivery.channel:
-        try:
-            await _save_web_message(delivery.user_id, delivery.content)
-            from agent.database.crud.outbound_delivery import mark_delivery_sent
-            await mark_delivery_sent(delivery.delivery_id)
-            return True
-        except Exception as exc:
-            logger.error("[Scheduler] 写入网页对话失败 user=%s: %s", delivery.user_id, exc)
-            return False
-
     payload = delivery_to_payload(delivery)
     return await hub.send_json(delivery.user_id, payload)
 
 
-async def dispatch_task_result(task: ScheduledTask, content: str) -> None:
+async def dispatch_to_channel(task: ScheduledTask, content: str) -> None:
     channel = (task.channel or "web").strip().lower() or "web"
     chat_id = (task.chat_id or "").strip() or None
     if channel in _GATEWAY_CHANNELS and not chat_id:
@@ -114,6 +123,17 @@ async def dispatch_task_result(task: ScheduledTask, content: str) -> None:
         if chat_id and not task.chat_id:
             task.chat_id = chat_id
             await task.save()
+    if channel not in _GATEWAY_CHANNELS:
+        print(
+            f"[Scheduler] 网页渠道已写入对话 task={task.task_id} user={task.user_id}",
+            flush=True,
+        )
+        return
+    if not chat_id:
+        msg = f"[Scheduler] 无 chat_id，无法投递到 {channel} task={task.task_id}"
+        print(msg, flush=True)
+        logger.warning(msg)
+        return
     delivery = await enqueue_delivery(
         user_id=task.user_id,
         channel=channel,
@@ -123,55 +143,49 @@ async def dispatch_task_result(task: ScheduledTask, content: str) -> None:
     )
     pushed = await push_delivery(delivery)
     if pushed:
-        msg = f"[Scheduler] 已投递 task={task.task_id} user={task.user_id} channel={channel}"
+        msg = f"[Scheduler] 已推给 Gateway task={task.task_id} user={task.user_id} channel={channel}"
         print(msg, flush=True)
         logger.info(msg)
-    elif channel in _GATEWAY_CHANNELS:
+    else:
         msg = (
-            f"[Scheduler] Gateway 不在线，任务结果已入队 task={task.task_id} "
-            f"user={task.user_id} channel={channel}"
+            f"[Scheduler] Gateway WebSocket 不在线，已入队等 HTTP/WS 拉取 "
+            f"task={task.task_id} user={task.user_id} channel={channel}"
         )
         print(msg, flush=True)
         logger.info(msg)
 
 
-def _delivery_content(task: ScheduledTask) -> tuple[str, bool]:
-    """返回 (投递文案, 是否还需要跑 Agent)。
+async def _execute_notify(task: ScheduledTask) -> None:
+    content = (task.notify_text or "").strip() or f"定时提醒：{task.title}"
+    await _save_context_message(task, "assistant", content)
+    await dispatch_to_channel(task, content)
 
-    微信提醒必须能直接发出去：有 notify_text 就不再跑模型。
-    只有「instruction 与 notify_text 不同」时才到点执行 Agent。
-    """
-    notify = (task.notify_text or "").strip()
+
+async def _execute_agent(task: ScheduledTask) -> None:
     instruction = (task.instruction or "").strip()
-    title = (task.title or "").strip()
-    if notify and (not instruction or notify == instruction):
-        return notify, False
-    if instruction and notify and instruction != notify:
-        return notify, True
-    if notify:
-        return notify, False
-    if instruction:
-        return instruction, False
-    return f"定时提醒：{title}" if title else "定时提醒", False
+    if not instruction:
+        raise ValueError("任务模式缺少 instruction")
+    reply = await _run_instruction(task)
+    if not reply:
+        reply = f"定时任务「{task.title}」已执行，但没有生成可发送的结果。"
+        await _save_context_message(task, "assistant", reply)
+    await dispatch_to_channel(task, reply)
 
 
 async def _execute_task(task: ScheduledTask) -> None:
+    kind = _task_kind(task)
     msg = (
-        f"[Scheduler] 触发 task={task.task_id} user={task.user_id} "
-        f"title={task.title} channel={task.channel} next_run_at={task.next_run_at}"
+        f"[Scheduler] 触发 task={task.task_id} kind={kind} user={task.user_id} "
+        f"title={task.title} channel={task.channel} chat_id={task.chat_id} "
+        f"next_run_at={task.next_run_at}"
     )
     print(msg, flush=True)
     logger.info(msg)
     try:
-        fallback, need_agent = _delivery_content(task)
-        content = fallback
-        if need_agent and (task.instruction or "").strip():
-            ran = await _run_instruction(task)
-            if ran:
-                content = ran
-        if not content:
-            content = f"定时提醒：{task.title}"
-        await dispatch_task_result(task, content)
+        if kind == "agent":
+            await _execute_agent(task)
+        else:
+            await _execute_notify(task)
         await finish_scheduled_task(task)
     except Exception as exc:
         logger.error("[Scheduler] 执行失败 task=%s: %s", task.task_id, exc, exc_info=True)
@@ -192,22 +206,26 @@ async def flush_pending_to_online_gateways() -> None:
 
 
 async def run_scheduler_loop() -> None:
+    global scheduler_started_at, scheduler_last_tick, scheduler_last_claimed
+    scheduler_started_at = datetime.utcnow().isoformat() + "Z"
     start_msg = f"[Scheduler] 定时任务调度器已启动，间隔 {_POLL_INTERVAL_S:.0f}s"
     print(start_msg, flush=True)
     logger.info(start_msg)
     try:
-        filled = await backfill_empty_notify_text()
+        filled = await backfill_task_kind()
         if filled:
-            print(f"[Scheduler] 已补全 {filled} 条任务的 notify_text", flush=True)
+            print(f"[Scheduler] 已补全 {filled} 条任务的 kind", flush=True)
     except Exception as exc:
-        logger.warning("[Scheduler] 补全 notify_text 失败: %s", exc)
+        logger.warning("[Scheduler] 补全 kind 失败: %s", exc)
     while True:
         try:
             recovered = await recover_stale_running_tasks()
             due = await claim_due_tasks()
             online = hub.online_user_ids()
+            scheduler_last_tick = datetime.utcnow().isoformat() + "Z"
+            scheduler_last_claimed = len(due)
             tick = (
-                f"[Scheduler] tick utc={datetime.utcnow().isoformat()}Z "
+                f"[Scheduler] tick utc={scheduler_last_tick} "
                 f"claimed={len(due)} recovered={recovered} gateway_online={len(online)}"
             )
             print(tick, flush=True)

@@ -18,10 +18,10 @@ echo -e "${RESET}"
 
 # ── 应用进程（逆序停止）──────────────────────────────────────────
 section "停止应用进程"
-kill_service "web"
-kill_service "gateway"
-kill_service "agent"
-kill_service "vdb"
+kill_service "web" 5173
+kill_service "gateway" 8082
+kill_service "agent" 8080
+kill_service "vdb" 8888
 
 # ── 数据库（可选）────────────────────────────────────────────────
 if $STOP_DB; then

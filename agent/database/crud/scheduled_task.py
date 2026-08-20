@@ -6,6 +6,7 @@ from agent.database.models.scheduled_task import ScheduledTask
 
 ALLOWED_CHANNELS = {"web", "weixin", "feishu", "wecom", "xiaoai", "rokid"}
 ALLOWED_SCHEDULE_TYPES = {"once", "daily", "weekly"}
+ALLOWED_KINDS = {"notify", "agent"}
 WEEKDAY_LABELS = {1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日"}
 _WEEKDAY_ALIASES = {
     "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7,
@@ -79,14 +80,13 @@ def _to_utc_naive(local_dt: datetime) -> datetime:
     return local_dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _fill_notify_text(title: str, instruction: str, notify_text: str) -> str:
-    text = (notify_text or "").strip()
-    if text:
-        return text
-    instruction = (instruction or "").strip()
-    if instruction:
-        return instruction
-    return (title or "").strip()
+def resolve_task_kind(kind: Optional[str], instruction: str = "", notify_text: str = "") -> str:
+    value = (kind or "").strip().lower()
+    if value in ALLOWED_KINDS:
+        return value
+    if (instruction or "").strip():
+        return "agent"
+    return "notify"
 
 
 def _local_tz(tz_name: str) -> timezone:
@@ -180,6 +180,9 @@ def task_to_dict(task: ScheduledTask) -> dict:
     return {
         "task_id": task.task_id,
         "title": task.title,
+        "kind": getattr(task, "kind", None) or resolve_task_kind(
+            None, task.instruction or "", task.notify_text or ""
+        ),
         "instruction": task.instruction,
         "notify_text": task.notify_text,
         "timezone": task.timezone,
@@ -216,6 +219,7 @@ async def create_scheduled_task(
     run_at_local: str,
     instruction: str = "",
     notify_text: str = "",
+    kind: str = "",
     timezone_name: str = "Asia/Shanghai",
     schedule_type: str = "once",
     weekdays: Optional[List[int]] = None,
@@ -229,13 +233,22 @@ async def create_scheduled_task(
     )
     title_value = title.strip()
     instruction_value = (instruction or "").strip()
-    notify_value = _fill_notify_text(title_value, instruction_value, notify_text)
+    notify_value = (notify_text or "").strip()
+    kind_value = resolve_task_kind(kind, instruction_value, notify_value)
+    if kind_value == "notify":
+        if not notify_value:
+            notify_value = title_value
+        if not notify_value:
+            raise ValueError("提醒模式必须填写 notify_text，例如：该喝水了！")
+    elif not instruction_value:
+        raise ValueError("任务模式必须填写 instruction，到点后会作为用户消息触发 Agent")
     task = ScheduledTask(
         task_id=uuid4().hex[:16],
         user_id=user_id,
         title=title_value,
         instruction=instruction_value,
         notify_text=notify_value,
+        kind=kind_value,
         timezone=(timezone_name or "Asia/Shanghai").strip() or "Asia/Shanghai",
         schedule_type=schedule_type,
         weekdays=weekday_values,
@@ -243,7 +256,7 @@ async def create_scheduled_task(
         next_run_at=next_run_at,
         channel=channel,
         chat_id=(chat_id or "").strip() or None,
-        conversation_id=conversation_id,
+        conversation_id=conversation_id or user_id,
         enabled=True,
         status="pending",
     )
@@ -269,6 +282,7 @@ async def update_scheduled_task(
     title: Optional[str] = None,
     instruction: Optional[str] = None,
     notify_text: Optional[str] = None,
+    kind: Optional[str] = None,
     timezone_name: Optional[str] = None,
     schedule_type: Optional[str] = None,
     weekdays: Optional[Union[list, str]] = None,
@@ -286,6 +300,8 @@ async def update_scheduled_task(
         task.instruction = instruction.strip()
     if notify_text is not None:
         task.notify_text = notify_text.strip()
+    if kind is not None:
+        task.kind = resolve_task_kind(kind, task.instruction or "", task.notify_text or "")
     if timezone_name is not None:
         task.timezone = timezone_name.strip() or task.timezone
     if schedule_type is not None:
@@ -310,10 +326,14 @@ async def update_scheduled_task(
 
     if not task.title:
         raise ValueError("title 不能为空")
-    if not (task.notify_text or "").strip():
-        task.notify_text = _fill_notify_text(task.title, task.instruction or "", "")
-    if not (task.instruction or task.notify_text):
-        raise ValueError("instruction 与 notify_text 至少需要一项")
+    task.kind = resolve_task_kind(getattr(task, "kind", None), task.instruction or "", task.notify_text or "")
+    if task.kind == "notify":
+        if not (task.notify_text or "").strip():
+            task.notify_text = (task.title or "").strip()
+        if not (task.notify_text or "").strip():
+            raise ValueError("提醒模式必须填写 notify_text")
+    elif not (task.instruction or "").strip():
+        raise ValueError("任务模式必须填写 instruction")
 
     task.updated_at = datetime.utcnow()
     await task.save()
@@ -346,17 +366,23 @@ async def delete_scheduled_task(user_id: str, task_id: str) -> bool:
     return True
 
 
-async def backfill_empty_notify_text() -> int:
-    """旧任务常把提醒写进 instruction，补上 notify_text 便于直接投递。"""
+async def backfill_task_kind() -> int:
+    """给旧任务补上 kind，避免提醒和 Agent 任务混在一起。"""
     tasks = await ScheduledTask.find(
-        {"$or": [{"notify_text": ""}, {"notify_text": {"$exists": False}}]}
+        {"$or": [{"kind": {"$exists": False}}, {"kind": ""}, {"kind": None}]}
     ).to_list()
     updated = 0
     for task in tasks:
-        filled = _fill_notify_text(task.title or "", task.instruction or "", task.notify_text or "")
-        if not filled or filled == (task.notify_text or ""):
+        kind_value = resolve_task_kind(
+            getattr(task, "kind", None),
+            task.instruction or "",
+            task.notify_text or "",
+        )
+        if (task.notify_text or "").strip() and (task.instruction or "").strip() == (task.notify_text or "").strip():
+            kind_value = "notify"
+        if getattr(task, "kind", None) == kind_value:
             continue
-        task.notify_text = filled
+        task.kind = kind_value
         task.updated_at = datetime.utcnow()
         await task.save()
         updated += 1

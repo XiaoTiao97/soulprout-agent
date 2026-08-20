@@ -14,6 +14,7 @@ class ScheduledTask(Document):
     title: str
     instruction: str = ""
     notify_text: str = ""
+    kind: str = ""
     timezone: str = "Asia/Shanghai"
     schedule_type: str = "once"
     weekdays: List[int] = Field(default_factory=list)

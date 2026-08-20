@@ -12,11 +12,13 @@ from zai import ZhipuAiClient
 
 from agent.database.crud.scheduled_task import (
     ALLOWED_CHANNELS,
+    ALLOWED_KINDS,
     ALLOWED_SCHEDULE_TYPES,
     create_scheduled_task,
     delete_scheduled_task,
     list_scheduled_tasks,
     parse_weekdays,
+    resolve_task_kind,
     set_scheduled_task_enabled,
     task_to_dict,
     update_scheduled_task,
@@ -1033,6 +1035,7 @@ class SoulproutToolFunction:
         run_at=None,
         instruction=None,
         notify_text=None,
+        kind=None,
         schedule_type=None,
         timezone=None,
         channel=None,
@@ -1044,6 +1047,7 @@ class SoulproutToolFunction:
         notify_text = notify_text or kwargs.get("notifyText") or kwargs.get("notify-text")
         instruction = instruction or kwargs.get("task") or kwargs.get("prompt")
         run_at = run_at or kwargs.get("runAt") or kwargs.get("run_at_local")
+        kind = kind or kwargs.get("task_kind") or kwargs.get("mode")
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         if not user_id:
             user_id = conversation_id
@@ -1064,10 +1068,18 @@ class SoulproutToolFunction:
                     return "错误：module=create 时 title 必填"
                 if not run_at or not str(run_at).strip():
                     return "错误：module=create 时 run_at 必填，格式 YYYY-MM-DD HH:MM"
-                if not (instruction or notify_text or title):
-                    return "错误：instruction 与 notify_text 至少填写一项"
-                if not notify_text:
-                    notify_text = (instruction or title or "").strip()
+                kind_value = resolve_task_kind(
+                    kind, instruction or "", notify_text or ""
+                )
+                if kind_value not in ALLOWED_KINDS:
+                    return "错误：kind 仅支持 notify（直接提醒）或 agent（到点触发 Agent）"
+                if kind_value == "notify":
+                    if not (notify_text or "").strip():
+                        notify_text = (title or "").strip()
+                    if not (notify_text or "").strip():
+                        return "错误：kind=notify 时必须填写 notify_text，这就是发给用户的原文，例如：该喝水了！"
+                elif not (instruction or "").strip():
+                    return "错误：kind=agent 时必须填写 instruction，到点后会作为用户消息触发 Agent"
                 type_value = (schedule_type or "once").strip().lower()
                 if type_value not in ALLOWED_SCHEDULE_TYPES:
                     return "错误：schedule_type 仅支持 once / daily / weekly"
@@ -1090,6 +1102,7 @@ class SoulproutToolFunction:
                     run_at_local=str(run_at),
                     instruction=instruction or "",
                     notify_text=notify_text or "",
+                    kind=kind_value,
                     timezone_name=(timezone or "Asia/Shanghai"),
                     schedule_type=type_value,
                     weekdays=weekday_values,
@@ -1119,6 +1132,8 @@ class SoulproutToolFunction:
                     )
                     if channel_error:
                         return channel_error
+                if kind is not None and str(kind).strip() and str(kind).strip().lower() not in ALLOWED_KINDS:
+                    return "错误：kind 仅支持 notify / agent"
                 weekday_values = weekdays if weekdays is not None else None
                 task = await update_scheduled_task(
                     user_id=user_id,
@@ -1126,6 +1141,7 @@ class SoulproutToolFunction:
                     title=title,
                     instruction=instruction,
                     notify_text=notify_text,
+                    kind=kind,
                     timezone_name=timezone,
                     schedule_type=type_value,
                     weekdays=weekday_values,

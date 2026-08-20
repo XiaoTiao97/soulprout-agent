@@ -571,10 +571,14 @@ TOOL_SCHEMAS = [
                 "channel is filled from the current message source when omitted "
                 "(WeChat/Feishu/web). If the user asks to remind on another channel "
                 "(e.g. WeChat while chatting on the web), set channel to weixin/feishu/wecom/xiaoai. "
-                "chat_id is optional when that user has already talked on the target channel. "
-                "For a reminder, ALWAYS set notify_text to the exact message to send the user "
-                "(e.g. 该喝水了). Do not put reminder copy only in instruction — instruction is only "
-                "for extra work the agent should do at fire time. channel defaults to web.\n"
+                "chat_id is optional when that user has already talked on the target channel.\n"
+                "There are TWO kinds — pick exactly one:\n"
+                "- kind=notify: a reminder. Set notify_text to the exact sentence to send "
+                "(e.g. 该喝水了！). At fire time it is stored as an assistant message and pushed "
+                "to the channel. Do NOT fill instruction.\n"
+                "- kind=agent: a scheduled job. Set instruction to the exact user request "
+                "(e.g. 帮我检索今天的新闻). At fire time it is stored as a user message and "
+                "the Agent runs it. Do NOT put reminder copy in instruction.\n"
                 "- module=list: return all scheduled tasks of the current user.\n"
                 "- module=update: update a task by task_id (time, weekdays, instruction, channel, etc.).\n"
                 "- module=stop: pause a task by task_id. The record is kept but will not fire until start.\n"
@@ -605,18 +609,26 @@ TOOL_SCHEMAS = [
                             "For daily/weekly the clock time is used; also used by update to change the time."
                         ),
                     },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["notify", "agent"],
+                        "description": (
+                            "[Required for create] notify = send reminder as assistant; "
+                            "agent = inject instruction as a user message and run the Agent"
+                        ),
+                    },
                     "instruction": {
                         "type": "string",
                         "description": (
-                            "Only if the agent must do extra work at fire time "
-                            "(search, summarize, etc.). Do NOT use this for a simple reminder."
+                            "[Required for kind=agent] Exact user request to run at fire time, "
+                            "e.g. 帮我检索今天的新闻. Stored as a user message."
                         ),
                     },
                     "notify_text": {
                         "type": "string",
                         "description": (
-                            "[Required for reminders] Exact text to send the user at fire time, "
-                            "without running the agent. Example: 该开会了"
+                            "[Required for kind=notify] Exact reminder to send, e.g. 该喝水了！ "
+                            "Stored as an assistant message and pushed to the channel."
                         ),
                     },
                     "schedule_type": {

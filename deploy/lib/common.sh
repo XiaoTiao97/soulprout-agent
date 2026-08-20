@@ -72,8 +72,11 @@ start_python_svc() {
     local logfile="$LOG_DIR/$name.log" pid
 
     if port_open "$port"; then
-        ok "$name 已在运行（:$port）"
-        return 0
+        warn "$name 端口 $port 仍被占用，先释放再启动，确保加载 git 上的新代码"
+        kill_port_listeners "$port"
+        if port_open "$port"; then
+            die "$name 端口 $port 无法释放，请手动查看：ss -lptn sport = :$port"
+        fi
     fi
 
     info "启动 $name（端口 $port，Python: $PYTHON）..."
@@ -216,13 +219,47 @@ save_pid() { echo "$1" > "$PID_DIR/$2.pid"; }
 read_pid() { cat "$PID_DIR/$1.pid" 2>/dev/null; }
 clear_pid() { rm -f "$PID_DIR/$1.pid"; }
 
+kill_port_listeners() {
+    # 释放占用该端口的监听进程，避免 stop 只杀了过期 pid、旧进程仍占着端口。
+    local port=$1
+    local pids=""
+    if command -v fuser &>/dev/null; then
+        fuser -k "${port}/tcp" >/dev/null 2>&1 || true
+    elif command -v lsof &>/dev/null; then
+        pids=$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)
+        [[ -n "$pids" ]] && kill $pids 2>/dev/null || true
+    elif command -v ss &>/dev/null; then
+        pids=$(ss -lptn "sport = :$port" 2>/dev/null | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | sort -u)
+        [[ -n "$pids" ]] && kill $pids 2>/dev/null || true
+    fi
+    local i=0
+    while port_open "$port" && [[ $i -lt 20 ]]; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+}
+
 kill_service() {
     local name=$1
+    local port=${2:-}
     local pid; pid=$(read_pid "$name")
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
         kill "$pid" && ok "已停止 $name（pid=$pid）"
+        sleep 0.5
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null || true
+        fi
     else
-        warn "$name 未在运行"
+        warn "$name pid 文件不存在或进程已退出"
     fi
     clear_pid "$name"
+    if [[ -n "$port" ]]; then
+        if port_open "$port"; then
+            warn "$name 端口 $port 仍被占用，强制释放以保证加载新代码"
+            kill_port_listeners "$port"
+        fi
+        if port_open "$port"; then
+            error "$name 端口 $port 仍未释放，start 可能会跳过或复用旧进程"
+        fi
+    fi
 }
