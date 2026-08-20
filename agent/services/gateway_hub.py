@@ -19,7 +19,9 @@ class GatewayHub:
     async def register(self, user_id: str, ws: WebSocket) -> None:
         async with self._lock:
             self._conns.setdefault(user_id, set()).add(ws)
-        logger.info("[GatewayHub] 已连接 user=%s 当前连接数=%d", user_id, len(self._conns.get(user_id, ())))
+        n = len(self._conns.get(user_id, ()))
+        logger.info("[GatewayHub] 已连接 user=%s 当前连接数=%d", user_id, n)
+        print(f"[GatewayHub] 已连接 user={user_id} 当前连接数={n}", flush=True)
 
     async def unregister(self, user_id: str, ws: WebSocket) -> None:
         async with self._lock:

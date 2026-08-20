@@ -33,22 +33,60 @@ def _tz_offset_hours(tz_name: str) -> int:
 
 
 def _parse_local_run_at(run_at_local: str, tz_name: str) -> datetime:
-    raw = (run_at_local or "").strip().replace("T", " ")
-    naive = None
+    raw = (run_at_local or "").strip()
+    if not raw:
+        raise ValueError("run_at 不能为空")
+    tz = _local_tz(tz_name)
+    iso = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(iso.replace(" ", "T") if "T" not in iso[:19] and " " in iso else iso)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=tz)
+        return parsed
+    except ValueError:
+        pass
+    raw_naive = raw.replace("T", " ")
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
-            naive = datetime.strptime(raw, fmt)
-            break
+            naive = datetime.strptime(raw_naive, fmt)
+            return naive.replace(tzinfo=tz)
         except ValueError:
             continue
-    if naive is None:
-        raise ValueError("run_at 格式无效，请使用 YYYY-MM-DD HH:MM，例如 2026-08-20 08:00")
-    tz = timezone(timedelta(hours=_tz_offset_hours(tz_name)))
-    return naive.replace(tzinfo=tz)
+    if len(raw) <= 8:
+        try:
+            clock = datetime.strptime(raw, "%H:%M:%S" if raw.count(":") == 2 else "%H:%M")
+        except ValueError:
+            clock = None
+        if clock is not None:
+            now_local = datetime.now(tz)
+            return now_local.replace(
+                hour=clock.hour, minute=clock.minute, second=clock.second, microsecond=0
+            )
+    raise ValueError("run_at 格式无效，请使用 YYYY-MM-DD HH:MM，例如 2026-08-20 08:00")
+
+
+def _naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def _to_utc_naive(local_dt: datetime) -> datetime:
+    if local_dt.tzinfo is None:
+        local_dt = local_dt.replace(tzinfo=timezone.utc)
     return local_dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _fill_notify_text(title: str, instruction: str, notify_text: str) -> str:
+    text = (notify_text or "").strip()
+    if text:
+        return text
+    instruction = (instruction or "").strip()
+    if instruction:
+        return instruction
+    return (title or "").strip()
 
 
 def _local_tz(tz_name: str) -> timezone:
@@ -189,12 +227,15 @@ async def create_scheduled_task(
     next_run_at = compute_next_run_at(
         run_at_local, timezone_name, schedule_type, weekday_values
     )
+    title_value = title.strip()
+    instruction_value = (instruction or "").strip()
+    notify_value = _fill_notify_text(title_value, instruction_value, notify_text)
     task = ScheduledTask(
         task_id=uuid4().hex[:16],
         user_id=user_id,
-        title=title.strip(),
-        instruction=(instruction or "").strip(),
-        notify_text=(notify_text or "").strip(),
+        title=title_value,
+        instruction=instruction_value,
+        notify_text=notify_value,
         timezone=(timezone_name or "Asia/Shanghai").strip() or "Asia/Shanghai",
         schedule_type=schedule_type,
         weekdays=weekday_values,
@@ -269,6 +310,8 @@ async def update_scheduled_task(
 
     if not task.title:
         raise ValueError("title 不能为空")
+    if not (task.notify_text or "").strip():
+        task.notify_text = _fill_notify_text(task.title, task.instruction or "", "")
     if not (task.instruction or task.notify_text):
         raise ValueError("instruction 与 notify_text 至少需要一项")
 
@@ -303,25 +346,43 @@ async def delete_scheduled_task(user_id: str, task_id: str) -> bool:
     return True
 
 
+async def backfill_empty_notify_text() -> int:
+    """旧任务常把提醒写进 instruction，补上 notify_text 便于直接投递。"""
+    tasks = await ScheduledTask.find(
+        {"$or": [{"notify_text": ""}, {"notify_text": {"$exists": False}}]}
+    ).to_list()
+    updated = 0
+    for task in tasks:
+        filled = _fill_notify_text(task.title or "", task.instruction or "", task.notify_text or "")
+        if not filled or filled == (task.notify_text or ""):
+            continue
+        task.notify_text = filled
+        task.updated_at = datetime.utcnow()
+        await task.save()
+        updated += 1
+    return updated
+
+
 async def claim_due_tasks(limit: int = 10) -> list[ScheduledTask]:
     now = datetime.utcnow()
-    due = await ScheduledTask.find(
-        ScheduledTask.enabled == True,  # noqa: E712
-        ScheduledTask.status == "pending",
-        ScheduledTask.next_run_at <= now,
-    ).sort("+next_run_at").limit(limit).to_list()
+    pending = await ScheduledTask.find(
+        {"enabled": True, "status": "pending"}
+    ).sort("+next_run_at").to_list()
     claimed: list[ScheduledTask] = []
-    for task in due:
-        if task.status != "pending" or not task.enabled:
+    for task in pending:
+        next_run = _naive_utc(task.next_run_at)
+        if next_run is None or next_run > now:
             continue
         task.status = "running"
         task.updated_at = now
         await task.save()
         claimed.append(task)
+        if len(claimed) >= limit:
+            break
     return claimed
 
 
-async def recover_stale_running_tasks(timeout_minutes: int = 30) -> int:
+async def recover_stale_running_tasks(timeout_minutes: int = 5) -> int:
     stale_before = datetime.utcnow() - timedelta(minutes=timeout_minutes)
     stuck = await ScheduledTask.find(
         ScheduledTask.status == "running",

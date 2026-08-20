@@ -90,6 +90,7 @@ async def _connect_and_listen(token: str, stop_event: asyncio.Event) -> None:
     connector = _make_ssl_connector()
     timeout = aiohttp.ClientTimeout(total=None, sock_read=90)
     logger.info("[Outbound] 连接云端投递通道 %s", url)
+    print(f"[Outbound] 连接云端投递通道 {url}", flush=True)
     async with aiohttp.ClientSession(
         timeout=timeout,
         connector=connector,
@@ -102,6 +103,7 @@ async def _connect_and_listen(token: str, stop_event: asyncio.Event) -> None:
             receive_timeout=90,
         ) as ws:
             logger.info("[Outbound] 投递通道已连接")
+            print("[Outbound] 投递通道已连接", flush=True)
             async for msg in ws:
                 if stop_event.is_set():
                     await ws.close()
@@ -142,6 +144,7 @@ async def run_outbound_loop(stop_event: asyncio.Event) -> None:
             raise
         except Exception as exc:
             logger.warning("[Outbound] 投递通道异常: %s", exc)
+            print(f"[Outbound] 投递通道异常: {exc}", flush=True)
             delay = min(delay * 1.5, 30)
         if stop_event.is_set():
             break

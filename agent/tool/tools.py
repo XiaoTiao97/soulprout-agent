@@ -1038,8 +1038,12 @@ class SoulproutToolFunction:
         channel=None,
         chat_id=None,
         weekdays=None,
+        **kwargs,
     ):
         """当前用户的定时任务：create / list / update / delete / stop / start。"""
+        notify_text = notify_text or kwargs.get("notifyText") or kwargs.get("notify-text")
+        instruction = instruction or kwargs.get("task") or kwargs.get("prompt")
+        run_at = run_at or kwargs.get("runAt") or kwargs.get("run_at_local")
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         if not user_id:
             user_id = conversation_id
@@ -1060,8 +1064,10 @@ class SoulproutToolFunction:
                     return "错误：module=create 时 title 必填"
                 if not run_at or not str(run_at).strip():
                     return "错误：module=create 时 run_at 必填，格式 YYYY-MM-DD HH:MM"
-                if not (instruction or notify_text):
+                if not (instruction or notify_text or title):
                     return "错误：instruction 与 notify_text 至少填写一项"
+                if not notify_text:
+                    notify_text = (instruction or title or "").strip()
                 type_value = (schedule_type or "once").strip().lower()
                 if type_value not in ALLOWED_SCHEDULE_TYPES:
                     return "错误：schedule_type 仅支持 once / daily / weekly"

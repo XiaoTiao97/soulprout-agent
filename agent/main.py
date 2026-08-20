@@ -86,7 +86,13 @@ async def lifespan(app: FastAPI):
 
 async def _run_scheduler():
     from agent.services.scheduler import run_scheduler_loop
-    await run_scheduler_loop()
+    try:
+        await run_scheduler_loop()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        print(f"[Scheduler] 调度器异常退出: {exc}", flush=True)
+        raise
 
 # Set the lifespan for the app
 app = FastAPI(lifespan=lifespan)

@@ -572,7 +572,9 @@ TOOL_SCHEMAS = [
                 "(WeChat/Feishu/web). If the user asks to remind on another channel "
                 "(e.g. WeChat while chatting on the web), set channel to weixin/feishu/wecom/xiaoai. "
                 "chat_id is optional when that user has already talked on the target channel. "
-                "Provide instruction (what the agent should do when it fires) and/or notify_text. channel defaults to web.\n"
+                "For a reminder, ALWAYS set notify_text to the exact message to send the user "
+                "(e.g. 该喝水了). Do not put reminder copy only in instruction — instruction is only "
+                "for extra work the agent should do at fire time. channel defaults to web.\n"
                 "- module=list: return all scheduled tasks of the current user.\n"
                 "- module=update: update a task by task_id (time, weekdays, instruction, channel, etc.).\n"
                 "- module=stop: pause a task by task_id. The record is kept but will not fire until start.\n"
@@ -605,11 +607,17 @@ TOOL_SCHEMAS = [
                     },
                     "instruction": {
                         "type": "string",
-                        "description": "What the agent should do when the task fires",
+                        "description": (
+                            "Only if the agent must do extra work at fire time "
+                            "(search, summarize, etc.). Do NOT use this for a simple reminder."
+                        ),
                     },
                     "notify_text": {
                         "type": "string",
-                        "description": "Optional reminder text to send as-is without running the agent",
+                        "description": (
+                            "[Required for reminders] Exact text to send the user at fire time, "
+                            "without running the agent. Example: 该开会了"
+                        ),
                     },
                     "schedule_type": {
                         "type": "string",
