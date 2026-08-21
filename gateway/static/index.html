@@ -916,7 +916,21 @@ async function init() {
     if (Array.isArray(d.cloud_urls) && d.cloud_urls.length) CLOUD_URLS = d.cloud_urls;
     applyLoginConnSettings(d);
     if (d.has_token && d.agent_user_id) {
-      showDash(d);
+      // 本地存着 token 不代表它还有效，得向 Agent 确认一次，
+      // 否则 token 过期后仍会直接进主界面，用户只能手动退出登录
+      let expired = false;
+      try {
+        const s = await api('/api/auth/session');
+        expired = (s.reason === 'expired');
+      } catch (err) {
+        // 问不到就按原样进主界面，断网不该把人踢去登录页
+      }
+      if (expired) {
+        showLogin();
+        setMsg('login-msg', t('index.sessionExpired'), 'err');
+      } else {
+        showDash(d);
+      }
     } else {
       showLogin();
     }

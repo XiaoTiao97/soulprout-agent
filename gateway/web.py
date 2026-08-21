@@ -926,6 +926,30 @@ async def api_logout():
     return JSONResponse({"success": True, "message": "已清除登录状态"})
 
 
+@app.get("/api/auth/session")
+async def api_auth_session():
+    """校验本地 token 是否仍然有效，供前端启动时判断该进主界面还是登录页。
+
+    ``/api/settings`` 只能说明本地存过 token，说明不了它还能不能用。
+    确认失效时顺手清掉，免得下次启动又被当成已登录。
+    只有 Agent 明确拒绝才清；断网时保留，否则用户离线还会被踢出登录。
+    """
+    from gateway.agent_auth import verify_agent_session
+    from gateway.config_store import update_settings
+
+    check = await verify_agent_session(timeout=8)
+    if check.get("reason") == "expired":
+        update_settings(agent_token="", agent_user_id="", agent_email="")
+
+    return JSONResponse({
+        "ok": bool(check.get("ok")),
+        "reason": check.get("reason", ""),
+        "message": check.get("message", ""),
+        "user_id": check.get("user_id", ""),
+        "email": check.get("email", ""),
+    })
+
+
 @app.post("/api/settings/test")
 async def api_test_connection():
     """测试当前配置的 Agent 是否可达，并校验 token 是否有效。"""

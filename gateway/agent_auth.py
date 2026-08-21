@@ -8,8 +8,15 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
-async def verify_agent_session() -> Dict[str, Any]:
-    """检查当前本地 token 是否仍有效。返回 {ok, user_id, email, message}。"""
+async def verify_agent_session(*, timeout: float = 10) -> Dict[str, Any]:
+    """检查当前本地 token 是否仍有效。返回 {ok, reason, user_id, email, message}。
+
+    ``reason`` 用于区分失败原因，调用方据此决定要不要清掉本地登录态：
+
+    - ``no_token``：本地压根没存 token
+    - ``network``：没能问到 Agent（断网、服务没起来、超时）——token 未必失效
+    - ``expired``：Agent 明确拒绝了这个 token
+    """
     from gateway.config_store import (
         api_path,
         get_agent_email,
@@ -20,12 +27,12 @@ async def verify_agent_session() -> Dict[str, Any]:
 
     token = get_agent_token()
     if not token:
-        return {"ok": False, "message": "尚未登录"}
+        return {"ok": False, "reason": "no_token", "message": "尚未登录"}
 
     try:
         import aiohttp
     except ImportError:
-        return {"ok": False, "message": "aiohttp 未安装"}
+        return {"ok": False, "reason": "network", "message": "aiohttp 未安装"}
 
     agent_url = get_agent_url()
     try:
@@ -34,20 +41,21 @@ async def verify_agent_session() -> Dict[str, Any]:
                 api_path(agent_url, "/user/me"),
                 cookies={"token": token},
                 headers={"Authorization": f"Bearer {token}"},
-                timeout=aiohttp.ClientTimeout(total=10),
+                timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
                 data = await resp.json(content_type=None)
     except Exception as exc:
-        return {"ok": False, "message": f"验证登录态失败：{exc}"}
+        return {"ok": False, "reason": "network", "message": f"验证登录态失败：{exc}"}
 
     if isinstance(data, dict) and data.get("success"):
         return {
             "ok": True,
+            "reason": "ok",
             "user_id": str(data.get("user_id") or get_agent_user_id()),
             "email": get_agent_email(),
             "message": "登录有效",
         }
-    return {"ok": False, "message": "登录已过期，请重新验证邮箱"}
+    return {"ok": False, "reason": "expired", "message": "登录已过期，请重新验证邮箱"}
 
 
 async def send_email_code(*, email: str, agent_url: Optional[str] = None) -> Dict[str, Any]:

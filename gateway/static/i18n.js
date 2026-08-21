@@ -93,6 +93,7 @@
         loginFailedPrefix: '登录失败：',
         logoutConfirm: '确定要退出登录吗？',
         userFallback: '用户',
+        sessionExpired: '登录已过期，请重新登录',
       },
       weixin: {
         pageTag: '微信接入',
@@ -346,6 +347,7 @@
         loginFailedPrefix: 'Sign-in failed: ',
         logoutConfirm: 'Log out?',
         userFallback: 'User',
+        sessionExpired: 'Your session has expired. Please sign in again.',
       },
       weixin: {
         pageTag: 'WeChat',
