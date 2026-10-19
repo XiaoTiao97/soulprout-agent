@@ -5,7 +5,7 @@
         <!-- 有对话消息时显示消息列表 -->
         <template v-if="groupedMessages.length || streamingBlocks.length || showPlanInStreamingRow">
           <div
-            v-if="chatMode === 'soulprout' && soulMessagesHasMore"
+            v-if="chatMode === 'soulprout' && soulMessagesHasMore && !hasHiddenOlderMessages"
             class="soul-load-more-wrap"
           >
             <button
@@ -17,7 +17,12 @@
               {{ soulMessagesLoadingMore ? t('chatWindow.loadingMoreHistory') : t('chatWindow.loadMoreHistory') }}
             </button>
           </div>
-          <template v-for="(group, index) in groupedMessages" :key="index">
+          <div
+            v-for="group in visibleGroupedMessages"
+            :key="groupDomKey(group)"
+            v-memo="[groupRenderKey(group)]"
+            class="answer-group"
+          >
             <!-- 用户消息 -->
             <div v-if="group.role === 'user'" class="answer-single-me-agent">
               <div class="user-message-column">
@@ -199,7 +204,7 @@
                 </template>
               </div>
             </div>
-          </template>
+          </div>
           
           <!-- 流式消息显示区域 - 按顺序显示每个消息块 -->
           <div v-if="streamingBlocks.length || showPlanInStreamingRow" class="answer-single-robot">
@@ -644,6 +649,11 @@ const currentBlockType = ref<string>('')
 // 添加在其他 ref 变量附近
 const isAutoScroll = ref(true)
 const answerContainer = ref<HTMLElement | null>(null)
+/** 可见区域从这条消息开始；它之前的分组先不渲染。用稳定键，列表替换后仍能对上 */
+const pinnedAnchorKey = ref<string | null>(null)
+const pinnedConversationId = ref('')
+/** 刚发送时先停在顶部，避免同一次渲染被滚动到底部 */
+let stickToLatestTop = false
 const copiedStates = ref(new Set<number>())
 const messageInput = ref<InstanceType<typeof MessageInput> | null>(null)
 const showSuggestions = ref(false)
@@ -714,6 +724,22 @@ watch(
   () => {
     streamingBlocks.value = []
     currentBlockType.value = ''
+  },
+)
+
+watch(
+  () => props.chat_request?.conversation_id,
+  (id, prev) => {
+    const next = id || ''
+    const previous = prev || ''
+    if (next === previous) return
+    // 新会话在发送后才拿到 id，锚点要留在刚发出的那条上
+    if (pinnedAnchorKey.value && pinnedConversationId.value === '' && next) {
+      pinnedConversationId.value = next
+      return
+    }
+    pinnedAnchorKey.value = null
+    pinnedConversationId.value = next
   },
 )
 
@@ -795,6 +821,7 @@ async function confirmEditUser() {
     })
     cancelEditUser()
     startStreaming()
+    pinLatestTurnToTop()
     emit('sendMessage', text, [], { input_message_id: id })
   } finally {
     isConfirmEditPending.value = false
@@ -803,13 +830,11 @@ async function confirmEditUser() {
 
 // 添加滚动到底部的方法
 const scrollToBottom = () => {
-  if (isAutoScroll.value && answerContainer.value) {
-    nextTick(() => {
-      if (answerContainer.value) {
-        answerContainer.value.scrollTop = answerContainer.value.scrollHeight
-      }
-    })
-  }
+  if (stickToLatestTop || !isAutoScroll.value || !answerContainer.value) return
+  nextTick(() => {
+    if (stickToLatestTop || !isAutoScroll.value || !answerContainer.value) return
+    answerContainer.value.scrollTop = answerContainer.value.scrollHeight
+  })
 }
 
 // 添加处理用户手动滚动的方法
@@ -1004,6 +1029,152 @@ const groupedMessages = computed<MessageGroup[]>(() => {
   return groups
 })
 
+function groupDomKey(group: MessageGroup): string {
+  const first = group.messages[0]
+  const last = group.messages[group.messages.length - 1]
+  if (!first || !last) return 'empty-group'
+  return `${first.role}:${first.type}:${first.created_at}:${last.type}:${last.created_at}:${group.messages.length}`
+}
+
+/** 历史分组内容不变时跳过整段重绘，避免流式 token 把已展开的历史再算一遍 */
+function groupRenderKey(group: MessageGroup): string {
+  const editingId = editingUserMessageId.value
+  let sig = isConfirmEditPending.value ? '1' : '0'
+  let editingHere = false
+  for (const message of group.messages) {
+    const feedbackKey = message.tool_call_id || String(message.created_at)
+    const editing = editingId === message.id
+    if (editing) editingHere = true
+    sig += `|${message.type}:${message.content?.length ?? 0}:${message.tool_calls?.length ?? 0}:${message.id || ''}:${editing ? 1 : 0}:${copiedStates.value.has(message.created_at) ? 1 : 0}:${submittedFeedbackAnswers.value[feedbackKey] ? 1 : 0}`
+  }
+  if (editingHere) sig += `|draft:${editingUserDraft.value}`
+  return sig
+}
+
+function messageAnchorKey(message: AgentMessage): string {
+  return `${message.role}:${message.type}:${String(message.created_at)}:${(message.content || '').slice(0, 32)}`
+}
+
+function findPinnedGroupIndex(groups: MessageGroup[]): number {
+  const key = pinnedAnchorKey.value
+  if (!key) return 0
+  const idx = groups.findIndex((group) => group.messages.some((message) => messageAnchorKey(message) === key))
+  return idx
+}
+
+const pinnedGroupIndex = computed(() => {
+  const groups = groupedMessages.value
+  const idx = findPinnedGroupIndex(groups)
+  if (!pinnedAnchorKey.value) return 0
+  return idx === -1 ? groups.length : idx
+})
+
+const hasHiddenOlderMessages = computed(() => !!pinnedAnchorKey.value && pinnedGroupIndex.value > 0)
+
+const visibleGroupedMessages = computed(() => {
+  const groups = groupedMessages.value
+  if (!pinnedAnchorKey.value) return groups
+  return groups.slice(pinnedGroupIndex.value)
+})
+
+function pinToLatestUserMessage() {
+  const groups = groupedMessages.value
+  pinnedConversationId.value = props.chat_request?.conversation_id || ''
+  for (let i = groups.length - 1; i >= 0; i--) {
+    if (groups[i].role !== 'user') continue
+    const anchor = groups[i].messages.find((message) => isUserTextMessage(message)) || groups[i].messages[0]
+    pinnedAnchorKey.value = messageAnchorKey(anchor)
+    return
+  }
+  const last = groups[groups.length - 1]?.messages[0]
+  pinnedAnchorKey.value = last ? messageAnchorKey(last) : null
+}
+
+function pinLatestTurnToTop() {
+  pinToLatestUserMessage()
+  isAutoScroll.value = true
+  stickToLatestTop = true
+  nextTick(() => {
+    if (answerContainer.value) {
+      answerContainer.value.scrollTop = 0
+    }
+    stickToLatestTop = false
+  })
+}
+
+/** 向上滚到顶时补出上一轮，视口停在原处，新内容只出现在上面 */
+function revealOlderTurn() {
+  const groups = groupedMessages.value
+  const start = pinnedGroupIndex.value
+  if (!pinnedAnchorKey.value || start <= 0) return false
+  let nextStart = start - 1
+  while (nextStart > 0 && groups[nextStart].role !== 'user') {
+    nextStart -= 1
+  }
+  const anchor = groups[nextStart].messages.find((message) => isUserTextMessage(message)) || groups[nextStart].messages[0]
+  const el = answerContainer.value
+  const prevHeight = el?.scrollHeight ?? 0
+  const prevTop = el?.scrollTop ?? 0
+  pinnedAnchorKey.value = messageAnchorKey(anchor)
+  isAutoScroll.value = false
+  nextTick(() => {
+    if (!el) return
+    el.scrollTop = prevTop + (el.scrollHeight - prevHeight)
+  })
+  return true
+}
+
+function canConsumeScrollUp(start: HTMLElement, boundary: HTMLElement): boolean {
+  let node: HTMLElement | null = start
+  while (node && node !== boundary) {
+    const overflowY = window.getComputedStyle(node).overflowY
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight + 1 && node.scrollTop > 0) {
+      return true
+    }
+    node = node.parentElement
+  }
+  return false
+}
+
+let revealScheduled = false
+function handleHistoryWheel(event: WheelEvent) {
+  if (event.deltaY >= 0) return
+  const container = answerContainer.value
+  if (!container || container.scrollTop > 2) return
+  const target = event.target
+  if (target instanceof HTMLElement) {
+    const tag = target.tagName
+    if (tag === 'TEXTAREA' || tag === 'INPUT' || target.isContentEditable) return
+    if (canConsumeScrollUp(target, container)) return
+  }
+  const canReveal = hasHiddenOlderMessages.value
+  const canLoadSoul = props.chatMode === 'soulprout' && !!props.soulMessagesHasMore && !props.soulMessagesLoadingMore
+  if (!canReveal && !canLoadSoul) return
+  event.preventDefault()
+  if (revealScheduled) return
+  revealScheduled = true
+  requestAnimationFrame(() => {
+    revealScheduled = false
+    if (!answerContainer.value || answerContainer.value.scrollTop > 2) return
+    if (hasHiddenOlderMessages.value) {
+      revealOlderTurn()
+      return
+    }
+    if (props.chatMode === 'soulprout' && props.soulMessagesHasMore && !props.soulMessagesLoadingMore) {
+      emit('loadMoreSoulMessages')
+    }
+  })
+}
+
+watch(
+  () => props.soulMessagesLoadingMore,
+  (loading, wasLoading) => {
+    if (wasLoading && !loading && hasHiddenOlderMessages.value && (answerContainer.value?.scrollTop ?? 0) <= 2) {
+      revealOlderTurn()
+    }
+  },
+)
+
 // 处理流式数据
 const handleStreamingMessage = (streamingMessage: AgentMessage) => {
   if (!streamingMessage || !streamingMessage.type) return
@@ -1142,8 +1313,9 @@ const handleSendMessage = (
     created_at: Date.now() 
   })
   
-  // 3. 开始流式状态
+  // 3. 开始流式状态，并只留下最新一轮
   startStreaming()
+  pinLatestTurnToTop()
   
   // 4. 触发父组件事件
   emit('sendMessage', message, files, options)
@@ -1172,15 +1344,31 @@ watch(() => props.currentStreamingMessage, (newMessage, oldMessage) => {
   })
 }, { deep: true })
 
-// 监听消息列表变化，自动滚动到底部（仅在新消息追加时，避免加载历史时反复滚动）
+// 列表换了一批（进入会话、服务端刷新）时只锚定最近一轮；末尾追加才跟随到底部
 watch(
-  () => props.agent_message_list.length,
-  (len, prevLen) => {
-    if (len > (prevLen ?? 0)) {
-      nextTick(() => {
-        scrollToBottom()
-      })
+  () => {
+    const list = props.agent_message_list
+    const last = list[list.length - 1]
+    return last ? messageAnchorKey(last) : ''
+  },
+  (tailKey, prevTailKey) => {
+    const groups = groupedMessages.value
+    if (!groups.length) {
+      pinnedAnchorKey.value = null
+      return
     }
+    const pinMissing = !pinnedAnchorKey.value || findPinnedGroupIndex(groups) < 0
+    if (pinMissing) {
+      pinToLatestUserMessage()
+      isAutoScroll.value = true
+      nextTick(() => {
+        if (stickToLatestTop || !answerContainer.value) return
+        answerContainer.value.scrollTop = answerContainer.value.scrollHeight
+      })
+      return
+    }
+    if (!tailKey || tailKey === prevTailKey) return
+    scrollToBottom()
   },
 )
 
@@ -1278,7 +1466,7 @@ const copyToClipboard = (text: string | undefined, timestamp: number) => {
 // Function to attach copy listeners to code block buttons
 const attachCopyListeners = () => {
   nextTick(() => {
-    const buttons = document.querySelectorAll('.code-copy-btn')
+    const buttons = (answerContainer.value ?? document).querySelectorAll('.code-copy-btn')
     buttons.forEach(btn => {
       btn.removeEventListener('click', handleCodeCopy)
       btn.addEventListener('click', handleCodeCopy)
@@ -1331,9 +1519,15 @@ const handleCodeCopy = (e) => {
 }
 
 // Call attachCopyListeners in onMounted and onUpdated
-onMounted(attachCopyListeners)
+onMounted(() => {
+  attachCopyListeners()
+  answerContainer.value?.addEventListener('wheel', handleHistoryWheel, { passive: false })
+})
 onUpdated(attachCopyListeners)
-onUnmounted(clearWelcomeAnimationTimers)
+onUnmounted(() => {
+  clearWelcomeAnimationTimers()
+  answerContainer.value?.removeEventListener('wheel', handleHistoryWheel)
+})
 
 const hasMessages = computed(
   () =>
@@ -1894,6 +2088,10 @@ const handleCreateAgentClick = () => {
   color: rgba(100, 116, 139, 0.75);
   font-size: 12px;
   line-height: 12px;
+}
+
+.answer-group {
+  display: contents;
 }
 
 .soul-load-more-wrap {

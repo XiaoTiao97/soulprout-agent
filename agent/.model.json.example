@@ -5,10 +5,10 @@
     "base_url": "https://api.deepseek.com",
     "api_key": "sk-xxx",
     "models": [
+      {"name": "deepseek-flash", "context_window": 1000000},
       {"name": "deepseek-v4-pro", "context_window": 1000000},
-      {"name": "deepseek-v4-flash", "context_window": 1000000},
-      {"name": "deepseek-v4-pro-thinking", "context_window": 1000000},
-      {"name": "deepseek-v4-flash-thinking", "context_window": 1000000}
+      {"name": "deepseek-flash-thinking", "context_window": 1000000},
+      {"name": "deepseek-v4-pro-thinking", "context_window": 1000000}
     ]
   },
   {
@@ -17,12 +17,10 @@
     "base_url": "https://ark.cn-beijing.volces.com/api/v3",
     "api_key": "sk-xxx",
     "models": [
-      {"name": "doubao-seed-2-0-pro-260215", "context_window": 256000},
-      {"name": "doubao-seed-2-0-lite-260215", "context_window": 256000},
-      {"name": "doubao-seed-2-0-mini-260215", "context_window": 256000},
-      {"name": "doubao-seed-2-0-pro-260215-thinking", "context_window": 256000},
-      {"name": "doubao-seed-2-0-lite-260215-thinking", "context_window": 256000},
-      {"name": "doubao-seed-2-0-mini-260215-thinking", "context_window": 256000}
+      {"name": "doubao-seed-2-1-pro-260915", "context_window": 1024000},
+      {"name": "doubao-seed-2-1-lite-260915", "context_window": 1024000},
+      {"name": "doubao-seed-2-1-pro-260915-thinking", "context_window": 1024000},
+      {"name": "doubao-seed-2-1-lite-260915-thinking", "context_window": 1024000}
     ]
   },
   {
@@ -41,10 +39,10 @@
     "base_url": "https://api.xiaomimimo.com/v1",
     "api_key": "sk-xxx",
     "models": [
-      {"name": "mimo-v2.5-pro-thinking", "context_window": 1000000},
-      {"name": "mimo-v2.5-pro", "context_window": 1000000},
-      {"name": "mimo-v2.5-thinking", "context_window": 1000000},
-      {"name": "mimo-v2.5", "context_window": 1000000}
+      {"name": "mimo-v2.6-pro-thinking", "context_window": 1000000},
+      {"name": "mimo-v2.6-pro", "context_window": 1000000},
+      {"name": "mimo-v2.6-flash-thinking", "context_window": 1000000},
+      {"name": "mimo-v2.6-flash", "context_window": 1000000}
     ]
   },
   {
@@ -53,8 +51,10 @@
     "base_url": "https://open.bigmodel.cn/api/paas/v4/",
     "api_key": "sk-xxx",
     "models": [
-      {"name": "glm-5.1", "context_window": 200000},
-      {"name": "glm-5.1-thinking", "context_window": 200000}
+      {"name": "glm-5.3", "context_window": 1000000},
+      {"name": "glm-5.3-thinking", "context_window": 1000000},
+      {"name": "glm-5.3-flash", "context_window": 1000000},
+      {"name": "glm-5.3-flash-thinking", "context_window": 1000000}
     ]
   },
   {
@@ -63,10 +63,8 @@
     "base_url": "https://qianfan.baidubce.com/v2",
     "api_key": "sk-xxx",
     "models": [
-      {"name": "kimi-k2.5-thinking", "context_window": 256000},
-      {"name": "kimi-k2.5", "context_window": 256000},
-      {"name": "glm-5-thinking", "context_window": 198000},
-      {"name": "glm-5", "context_window": 198000}
+      {"name": "ernie-5.1-thinking", "context_window": 128000},
+      {"name": "ernie-5.1", "context_window": 128000}
     ]
   }
 ]

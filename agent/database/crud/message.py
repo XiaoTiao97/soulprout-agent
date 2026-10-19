@@ -33,6 +33,12 @@ async def get_message_by_conv_id(
         return messages
     return await AgentMessage.find(query).sort("created_at").to_list()
 
+async def get_agent_messages_by_conv_id(conversation_id: str):
+    """运行时历史：包含 content 为数组的图片消息，供模型读取。"""
+    return await AgentMessage.find(
+        AgentMessage.conversation_id == conversation_id
+    ).sort("created_at").to_list()
+
 async def get_sub_agent_message_by_conv_id(conversation_id: str):
     return await SubAgentMessage.find(SubAgentMessage.conversation_id == conversation_id).sort("created_at").to_list()
 
@@ -185,7 +191,7 @@ async def save_message(data, is_sub_agent, session_id):
 async def get_runtime_history(is_sub_agent, session_id, conversation_id):
     if is_sub_agent:
         return await get_sub_agent_message_by_conv_id_name(conversation_id, session_id)
-    return await get_message_by_conv_id(conversation_id)
+    return await get_agent_messages_by_conv_id(conversation_id)
 
 async def delete_runtime_messages(is_sub_agent, message_ids):
     if is_sub_agent:

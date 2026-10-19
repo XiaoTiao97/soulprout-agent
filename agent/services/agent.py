@@ -767,10 +767,13 @@ class Chat:
     async def process_single_tool(self, name, arguments, message, tool_id):
         if name == "read_picture":
             result = await self.mcp_call_tool(name=name, arguments=arguments)
-            if not ("doubao" in self.model or "kimi" in self.model or "mimo" in self.model):
+            if not ("deepseek" in self.model or "doubao" in self.model or "kimi" in self.model or "mimo" in self.model):
                 content = f"{self.model}不支持阅读图片"
             elif result.get("ok") and result.get("base64"):
-                self.picture_base64_result.append(result.get("base64"))
+                self.picture_base64_result.append({
+                    "base64": result.get("base64"),
+                    "media_type": result.get("media_type") or "image/png",
+                })
                 content = result.get("message", "成功读取图片")
             else:
                 content = result.get("message", "路径不存在")
@@ -971,11 +974,14 @@ class Chat:
 
         # 处理所有读取图片的情况
         if len(self.picture_base64_result) > 0:
-            for picture_base64 in self.picture_base64_result:
-                self.messages.append({"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{picture_base64}"}}
-                ]})
-                await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id,type="text", role="user", content=[{"type": "image_url", "image_url":{"url": f"data:image/png;base64,{picture_base64}"}}], created_at=datetime.utcnow()))
+            for picture in self.picture_base64_result:
+                media_type = picture.get("media_type") or "image/png"
+                image_content = [
+                    {"type": "text", "text": self.input_text},
+                    {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{picture.get('base64')}"}}
+                ]
+                self.messages.append({"role": "user", "content": image_content})
+                await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="user", content=image_content, created_at=datetime.utcnow()))
         self.picture_base64_result = []
 
     async def remove_temp_files(self):
@@ -1089,7 +1095,7 @@ class Chat:
             await self.delete_runtime_messages(unique_ids)
 
     async def edit_message_process(self):
-        history = await get_message_by_conv_id(self.conversation_id)
+        history = await self.get_runtime_history()
         del_id_list = []
         if_del = False
         for message in history:

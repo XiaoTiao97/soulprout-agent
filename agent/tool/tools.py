@@ -212,16 +212,44 @@ class SoulproutToolFunction:
         except Exception as e:
             return f"错误：修改{file_path}失败，失败原因：{e}"
 
+    @staticmethod
+    def _image_media_type(data: bytes, file_name: str) -> str:
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if data.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if data.startswith((b"GIF87a", b"GIF89a")):
+            return "image/gif"
+        if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+            return "image/webp"
+        if data.startswith(b"BM"):
+            return "image/bmp"
+        ext = os.path.splitext(file_name or "")[1].lower()
+        return {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+        }.get(ext, "image/png")
+
     async def read_picture(self, file_name, conversation_id):
         target = os.path.join(self._workspace_dir(conversation_id), file_name)
         if not os.path.exists(target):
-            return {"ok": False, "message": "路径不存在", "base64": None}
+            return {"ok": False, "message": "路径不存在", "base64": None, "media_type": None}
         try:
             async with aiofiles.open(target, "rb") as image_file:
-                encoded = base64.b64encode(await image_file.read()).decode("utf-8")
-            return {"ok": True, "message": "成功读取图片", "base64": encoded}
+                raw = await image_file.read()
+            encoded = base64.b64encode(raw).decode("utf-8")
+            return {
+                "ok": True,
+                "message": "成功读取图片",
+                "base64": encoded,
+                "media_type": self._image_media_type(raw, file_name),
+            }
         except Exception as e:
-            return {"ok": False, "message": f"读取图片失败: {e}", "base64": None}
+            return {"ok": False, "message": f"读取图片失败: {e}", "base64": None, "media_type": None}
 
     async def bash(self, command, conversation_id):
         root = self._workspace_dir(conversation_id)
