@@ -245,3 +245,71 @@ start_id and end_id must be plain 24-char hex strings copied from message id fie
 
 # 当前对话初始状态绑定的智能体有，可以使用call_sub_agent来调用已经存在或临时新建的智能体
 SUB_AGENT_PROMPT = """SUB AGENT: The following agents are provided in the initial state: {agents_dict}. You can use call_sub_agent to invoke existing agents or temporarily create new ones."""
+
+
+# ─── 科研模式（Research Mode）──────────────────────────────────────────────────
+# 系统提示词中关于科研模式的说明：由使用者自行填写。
+# 非空时会被拼接到主智能体 / Soulprout 模式的 system_prompt 末尾；为空则不拼接。
+RESEARCH_MODE_PROMPT = """"""
+
+# conversation_option module=research_start 的工具返回结果：对科研模式的完整说明 + 当前 Agent 的运行指引。
+# 占位符：{research_file} 目标/验收标准文件名；{reviewer_agent} 科研验收子智能体名称。
+RESEARCH_START_RESULT = """Research Mode is now ON.
+
+Research Mode is designed for complex, difficult problems that cannot be solved reliably in a single pass. It runs as a loop: define goal -> research & attempt -> independent verification -> revise, and this turn is NOT allowed to end until the loop is closed. Follow the protocol below strictly.
+
+## Phase 1 - Define the goal (do this first, before any solving)
+1. Analyse the user's request and turn it into a concrete, verifiable FINAL GOAL plus a set of ACCEPTANCE CRITERIA.
+2. Write them to the local file `{research_file}` (use the write tool; the path is relative to the current workspace) with at least these sections:
+   - `# Goal`: what the problem is and what "done" means, in one paragraph.
+   - `# Deliverables`: the exact artifacts to be produced (file names/paths, report sections, code, data, figures, ...).
+   - `# Acceptance Criteria`: a numbered checklist of objective, checkable conditions (correctness, completeness, evidence/sources, format, constraints).
+   - `# Constraints & Assumptions`: hard constraints from the user and the assumptions you are making.
+   - `# Progress Log`: append a short entry after each round (what was tried, result, reviewer feedback).
+3. If the request is too ambiguous to define a goal, ask the user with ask_user_feedback before writing the file.
+
+## Phase 2 - Research & solve
+- Think at the macro level first: what does the user actually need to walk away with, and what would make the solution complete? Do not sink into brute-force reasoning on a single detail.
+- Before pushing hard on a sub-problem, check what capabilities already exist: search `skills` for a relevant skill, check `list_info` for tools / sub-agents (deep search, PPT, knowledge base, ...), and recall `base_memory` for user preferences or prior conclusions. Prefer using an existing capability over re-deriving everything yourself.
+- Be rigorous where it matters: evidence-backed, nothing fabricated. Decisions you make on the user's behalf (scope, trade-offs, assumptions) must be written down as assumptions, not silently baked in.
+- Save all deliverables as files in the workspace so the reviewer can inspect them.
+- Update `# Progress Log` in `{research_file}` after each major step, including the round number and what was tried.
+
+## Phase 3 - Independent verification (MANDATORY)
+- When you believe the goal is met, call `call_sub_agent` with module=exist and name=`{reviewer_agent}`.
+- In `purpose`, state explicitly: the path of `{research_file}`, the paths of ALL deliverable and reference files, a short summary of what was done, and which verification round this is. The reviewer reads the goal and acceptance criteria from `{research_file}` and judges from the user's macro perspective (is the problem really solved, is it complete, what must be confirmed with the user, is the approach sensible).
+- The reviewer replies with `VERDICT: PASS` or `VERDICT: FAIL` followed by findings and path-level suggestions (which skill / tool / sub-agent to use, what to confirm with the user).
+  - On FAIL: follow its suggestions - especially switching to a recommended skill / tool / sub-agent instead of repeating the same approach - go back to Phase 2, log the round, then call the reviewer again.
+  - On PASS: proceed to Phase 4.
+- Do NOT self-certify. Your own judgement that the task is complete does not count; only the reviewer's PASS does.
+
+## Stop rule - do not get stuck
+- If the same blocker survives 2+ rounds and neither you nor the reviewer has a genuinely new, feasible path, stop brute-forcing. Choose one:
+  a. Mark the unresolved part clearly in the deliverable as a "Limitation / Open issue / Needs confirmation" with the reason and a suggested follow-up, record it in `{research_file}`, and resubmit to the reviewer. Honest, clearly annotated results are acceptable and can PASS.
+  b. Ask the user for help or a decision with ask_user_feedback (missing information, a trade-off only they can make, resources only they can provide).
+- Never silently lower the bar or hide a gap; annotate it or ask.
+
+## Phase 4 - Close
+- Call `conversation_option` with module=research_end. The call is refused if the reviewer has not been invoked or if its last verdict was FAIL.
+- Then present the final deliverables to the user, including the reviewer's verification conclusion, any annotated limitations, and the points that need the user's confirmation.
+
+## Rules while Research Mode is ON
+- Do not end your turn with a plain answer before Phase 4 is done. If you do, the system will push you back into the loop.
+- Keep `{research_file}` as the single source of truth for the goal and criteria; update it instead of redefining the goal in chat.
+- Completeness and alignment with the user's real need matter more than polishing details.
+"""
+
+# conversation_option module=research_end 的工具返回结果
+RESEARCH_END_RESULT = """Research Mode is now OFF. Verification has been completed by `{reviewer_agent}` (last verdict: {verdict}).
+Now present the final deliverables to the user: what was produced (with file paths), how it meets the goal in `{research_file}`, the reviewer's verification conclusion, any annotated limitations / open issues, and the decisions or assumptions that need the user's confirmation."""
+
+# 兜底提醒：科研模式仍开启但主智能体直接输出了最终答复，以 user 消息注入，推动其回到科研流程
+# 占位符：{research_file}、{reviewer_agent}、{research_file_section}（RESEARCH.md 当前内容或缺失说明）
+RESEARCH_REMINDER_PROMPT = """SYSTEM: Research Mode is still ON, but you attempted to end the turn without completing the research protocol: `{reviewer_agent}` has not returned a PASS verdict and `conversation_option` module=research_end has not been called. Do not stop here. Continue the research loop:
+
+1. Make sure `{research_file}` exists and contains the final goal and acceptance criteria (create or update it if needed).
+2. Make sure every deliverable is saved as a file in the workspace, with any unresolved parts clearly annotated as limitations / open issues instead of hidden.
+3. Call `call_sub_agent` (module=exist, name=`{reviewer_agent}`) and tell it the path of `{research_file}`, every deliverable / reference file, and which verification round this is.
+4. If the verdict is FAIL, follow its path-level suggestions (use the recommended skills / tools / sub-agents rather than repeating the same approach) and verify again. If the same blocker has survived 2+ rounds with no new feasible path, annotate it as a limitation and resubmit, or ask the user with ask_user_feedback. If PASS, call `conversation_option` module=research_end, then present the final result together with the reviewer's conclusion.
+
+{research_file_section}"""

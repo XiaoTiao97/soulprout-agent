@@ -670,7 +670,12 @@ TOOL_SCHEMAS = [
                 "- module=clear: completely clear the current conversation context\n"
                 "- module=compress: immediately perform one context compression\n"
                 "- module=now: get the current Beijing time (Asia/Shanghai, UTC+8). "
-                "Use this before creating or interpreting scheduled tasks, reminders, or any time-sensitive request."
+                "Use this before creating or interpreting scheduled tasks, reminders, or any time-sensitive request.\n"
+                "- module=research_start: turn ON Research Mode for complex, hard problems. Returns the full Research Mode "
+                "protocol (write goal & acceptance criteria to RESEARCH.md -> research & solve -> mandatory verification by the "
+                "soulprout_research_reviewer sub-agent -> revise until PASS). While ON, the turn cannot end with a plain answer.\n"
+                "- module=research_end: turn OFF Research Mode. Only call after soulprout_research_reviewer has returned "
+                "VERDICT: PASS; the call is refused otherwise."
             ),
             "parameters": {
                 "type": "object",
@@ -678,8 +683,8 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "module": {
                         "type": "string",
-                        "enum": ["clear", "compress", "now"],
-                        "description": "clear / compress / now (current Beijing time)",
+                        "enum": ["clear", "compress", "now", "research_start", "research_end"],
+                        "description": "clear / compress / now (current Beijing time) / research_start / research_end",
                     }
                 },
             },

@@ -74,7 +74,10 @@ class Chat:
         self.time_now = f"""{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} {datetime.now().strftime("%A")}"""
         self.capabilities_prompt = prompt.CAPABILITIES_PROMPT
         self.agent_info = os.getenv("AGENT_INFO", prompt.AGENT_INFO)
+        self.research_mode_prompt = prompt.RESEARCH_MODE_PROMPT.strip()
         self.system_prompt = f"""{self.agent_info}\n{self.capabilities_prompt}\n"""
+        if self.research_mode_prompt:
+            self.system_prompt += f"{self.research_mode_prompt}\n"
 
         self.model_config = None
         self.agent_name = None
@@ -83,6 +86,11 @@ class Chat:
         self.picture_base64_result = []
         self.pause_for_user_feedback = False
         self.stop_after_conversation_clear = False
+        # ─── 科研模式状态（仅存活于本次 Chat 实例，语义同 stop_after_conversation_clear）───
+        self.research_mode = False                  # research_start 置 True，research_end 置 False
+        self.research_reviewer_called = False       # 本轮科研中是否已调用过验收子智能体
+        self.research_last_verdict = None           # 验收子智能体最近一次结论："PASS" / "FAIL" / None
+        self.research_remind_count = 0              # 兜底提醒已触发次数
         self.agents_dict = {}
         self.total_tokens = 0
         self.round_limit = 200
@@ -155,6 +163,79 @@ class Chat:
         if not arguments.get("chat_id") and self.source_chat_id:
             if not chosen or chosen == self.source_channel:
                 arguments["chat_id"] = self.source_chat_id
+
+    # ─── 科研模式辅助 ────────────────────────────────────────────────────────
+    def _is_research_reviewer_call(self, name, arguments) -> bool:
+        if name != "call_sub_agent" or not isinstance(arguments, dict):
+            return False
+        reviewer = self.config.research_reviewer_agent_name
+        return arguments.get("name") == reviewer or arguments.get("agent_id") == reviewer
+
+    def _track_research_verdict(self, name, arguments, result_text: str) -> None:
+        """记录科研验收子智能体的调用情况与结论（VERDICT: PASS / FAIL）。"""
+        if not self._is_research_reviewer_call(name, arguments):
+            return
+        self.research_reviewer_called = True
+        match = re.search(r"VERDICT\s*[:：]\s*(PASS|FAIL)", result_text or "", re.IGNORECASE)
+        if match:
+            self.research_last_verdict = match.group(1).upper()
+        else:
+            # 子智能体未按格式输出时，不覆盖上一次结论，但保证“已调用”状态成立
+            print(f"科研验收子智能体未返回可识别的 VERDICT，保留上一次结论：{self.research_last_verdict}")
+
+    def _research_start(self) -> str:
+        self.research_mode = True
+        self.research_reviewer_called = False
+        self.research_last_verdict = None
+        self.research_remind_count = 0
+        return prompt.RESEARCH_START_RESULT.format(
+            research_file=self.config.research_file_name,
+            reviewer_agent=self.config.research_reviewer_agent_name,
+        )
+
+    def _research_end(self) -> str:
+        reviewer = self.config.research_reviewer_agent_name
+        if not self.research_mode:
+            return "Research Mode is not ON in the current session; nothing to close."
+        if not self.research_reviewer_called:
+            return (
+                f"Refused: Research Mode cannot be closed because `{reviewer}` has not been invoked yet. "
+                f"Call call_sub_agent (module=exist, name=`{reviewer}`) with the path of "
+                f"`{self.config.research_file_name}` and all deliverable files, and close only after it returns VERDICT: PASS."
+            )
+        if self.research_last_verdict == "FAIL":
+            return (
+                f"Refused: the last verdict from `{reviewer}` was FAIL. Revise the work according to its suggestions, "
+                f"update `{self.config.research_file_name}`, and call the reviewer again before closing Research Mode."
+            )
+        verdict = self.research_last_verdict or "PASS (no explicit verdict parsed)"
+        self.research_mode = False
+        self.research_remind_count = 0
+        return prompt.RESEARCH_END_RESULT.format(
+            reviewer_agent=reviewer,
+            verdict=verdict,
+            research_file=self.config.research_file_name,
+        )
+
+    async def _build_research_reminder(self) -> str:
+        """构造兜底提醒内容；若工作区存在 RESEARCH.md 则附上其当前内容。"""
+        research_file = self.config.research_file_name
+        file_path = os.path.join(self.local_file_path, self.conversation_id, research_file)
+        section = f"(`{research_file}` was not found in the workspace. Write it first.)"
+        try:
+            if await aiofiles.os.path.exists(file_path):
+                async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = (await f.read()).strip()
+                if len(content) > 8000:
+                    content = content[:8000] + "\n...<truncated>"
+                section = f"Current content of `{research_file}`:\n```\n{content}\n```"
+        except Exception as e:
+            print(f"读取 {research_file} 失败：{e}")
+        return prompt.RESEARCH_REMINDER_PROMPT.format(
+            research_file=research_file,
+            reviewer_agent=self.config.research_reviewer_agent_name,
+            research_file_section=section,
+        )
 
     def normalize_sub_agent_string_list(self, value):
         """将 tools/kbs/files 等参数规范为字符串列表。"""
@@ -609,6 +690,8 @@ class Chat:
             f"{agent_info_section}\n"
             f"Current Date: {datetime.now().strftime('%Y-%m-%d')}\n"
         )
+        if self.research_mode_prompt:
+            self.system_prompt += f"{self.research_mode_prompt}\n"
 
         tools = await self.mcp_list_tools()
         tools_use_final = [
@@ -748,6 +831,7 @@ class Chat:
         except Exception as e:
             result_agent = f"调用子智能体失败，失败原因：{e}，请重试。"
 
+        self._track_research_verdict(name, arguments, result_agent)
         self.messages.append({"role": "tool", "content": result_agent, "tool_call_id": message.tool_calls[tool_id].id})
         result_message = agent_session_id + '\n' + result_agent
         await self.save_message(
@@ -845,6 +929,7 @@ class Chat:
                 await memory._set_memory_loaded([])
                 self.messages = [{"role": "system", "content": self.system_prompt}]
                 self.stop_after_conversation_clear = True
+                self.research_mode = False
                 yield ChatResponse(
                     conversation_id=self.conversation_id,
                     user_id=self.user_id,
@@ -869,8 +954,14 @@ class Chat:
                     f"(Asia/Shanghai, UTC+8)"
                 )
                 reload = False
+            elif module == "research_start":
+                content = self._research_start()
+                reload = False
+            elif module == "research_end":
+                content = self._research_end()
+                reload = False
             else:
-                content = "错误：module 必须为 clear、compress 或 now"
+                content = "错误：module 必须为 clear、compress、now、research_start 或 research_end"
                 reload = False
 
             self.messages.append({"role": "tool", "content": content, "tool_call_id": tool_call_id})
@@ -1273,8 +1364,36 @@ class Chat:
                 self.pause_for_user_feedback = False
                 finish = True
             elif len(message_total) > 0:
-                finish = True
                 await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant", content=message_total, reasoning_content=reasoning_content_total if len(reasoning_content_total) > 0 else None, created_at=datetime.utcnow()))
+                # 科研模式兜底：主智能体未经验收/未关闭科研模式就直接输出了最终答复 → 不结束，注入 user 提醒让其回到科研流程
+                if self.research_mode and self.research_remind_count < self.config.research_remind_limit:
+                    self.research_remind_count += 1
+                    reminder = await self._build_research_reminder()
+                    print(f"科研模式兜底提醒（第 {self.research_remind_count} 次）")
+                    await self.save_message(AgentMessage(
+                        user_id=self.user_id,
+                        conversation_id=self.conversation_id,
+                        type="research_reminder",
+                        role="user",
+                        content=reminder,
+                        created_at=datetime.utcnow(),
+                    ))
+                    yield ChatResponse(
+                        conversation_id=self.conversation_id,
+                        user_id=self.user_id,
+                        type="research_reminder",
+                        role="user",
+                        content=reminder,
+                    ).model_dump_json()
+                else:
+                    if self.research_mode:
+                        yield ChatResponse(
+                            conversation_id=self.conversation_id,
+                            user_id=self.user_id,
+                            type="error",
+                            content=f"科研模式兜底提醒已达上限（{self.config.research_remind_limit} 次），主智能体仍未完成验收流程，本轮结束",
+                        ).model_dump_json()
+                    finish = True
 
     async def conversation_init(self):
         if self.conversation_id == "":
