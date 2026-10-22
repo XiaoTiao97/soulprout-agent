@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 
 from agent.api.models.message import ChatRequest
@@ -29,17 +28,6 @@ _POLL_INTERVAL_S = 60.0
 _GATEWAY_CHANNELS = {"weixin", "feishu", "wecom", "xiaoai", "rokid"}
 
 
-def _parse_sse_chunk(raw) -> dict:
-    if isinstance(raw, dict):
-        return raw
-    if not isinstance(raw, str):
-        return {}
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return {}
-
-
 def _conversation_id(task: ScheduledTask) -> str:
     return (task.conversation_id or task.user_id or "").strip() or task.user_id
 
@@ -58,9 +46,9 @@ async def _save_context_message(task: ScheduledTask, role: str, content: str) ->
     ).insert()
 
 
-async def _run_instruction(task: ScheduledTask) -> str:
+async def _run_instruction(task: ScheduledTask) -> tuple[str, str]:
     from agent.core.config import Config
-    from agent.services.agent import Chat
+    from agent.services.run_manager import run_manager
 
     config = Config()
     request = ChatRequest(
@@ -77,19 +65,12 @@ async def _run_instruction(task: ScheduledTask) -> str:
         model_source=config.soulprout_model_source,
         model=config.soulprout_model,
     )
-    chat = Chat(request)
-    parts: list[str] = []
-    async for raw in chat.run():
-        chunk = _parse_sse_chunk(raw)
-        content = chunk.get("content") or ""
-        if not content:
-            continue
-        chunk_type = chunk.get("type")
-        if chunk_type in ("user_feedback", "error"):
-            parts.append(content)
-        elif chunk.get("role") == "assistant" and chunk_type == "text":
-            parts.append(content)
-    return "".join(parts).strip()
+    text, status = await run_manager.collect_reply(request)
+    if status != "done":
+        return "", status
+    if text == "（无回复）":
+        return "", status
+    return text, status
 
 
 async def dispatch_to_channel(task: ScheduledTask, content: str) -> None:
@@ -132,7 +113,11 @@ async def _execute_task(task: ScheduledTask) -> None:
             instruction = (task.instruction or "").strip()
             if not instruction:
                 raise ValueError("任务模式缺少 instruction")
-            reply = await _run_instruction(task)
+            reply, status = await _run_instruction(task)
+            if status in ("interrupted", "stopped"):
+                logger.info("[Scheduler] 任务被打断，不投递 task=%s status=%s", task.task_id, status)
+                await finish_scheduled_task(task)
+                return
             if not reply:
                 reply = f"定时任务「{task.title}」已执行，但没有生成可发送的结果。"
                 await _save_context_message(task, "assistant", reply)

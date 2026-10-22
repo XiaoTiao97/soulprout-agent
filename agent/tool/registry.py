@@ -671,10 +671,10 @@ TOOL_SCHEMAS = [
                 "- module=compress: immediately perform one context compression\n"
                 "- module=now: get the current Beijing time (Asia/Shanghai, UTC+8). "
                 "Use this before creating or interpreting scheduled tasks, reminders, or any time-sensitive request.\n"
-                "- module=research_start: turn ON Research Mode for complex, hard problems. Returns the full Research Mode "
-                "protocol (write goal & acceptance criteria to RESEARCH.md -> research & solve -> mandatory verification by the "
-                "soulprout_research_reviewer sub-agent -> revise until PASS). While ON, the turn cannot end with a plain answer.\n"
-                "- module=research_end: turn OFF Research Mode. Only call after soulprout_research_reviewer has returned "
+                "- module=research_start: turn ON Deep Research for complex, hard problems. Returns the full Deep Research "
+                "protocol (write goal & acceptance criteria to RESEARCH.md -> explore & solve -> mandatory verification by the "
+                "soulprout_research_reviewer sub-agent -> revise until it is as good as it can be). While ON, the turn cannot end with a plain answer.\n"
+                "- module=research_end: turn OFF Deep Research. Only call after soulprout_research_reviewer has returned "
                 "VERDICT: PASS; the call is refused otherwise."
             ),
             "parameters": {

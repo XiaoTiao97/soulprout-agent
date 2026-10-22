@@ -1,26 +1,56 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request, UploadFile, File, Form, Query
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Query
 from agent.services.auth import get_current_user
-from agent.services.agent import Chat
 from agent.database.crud.message import get_message_by_conv_id
 from agent.api.models.message import ChatRequest, ChatResponse
+from agent.services.run_manager import run_manager
 from fastapi.responses import StreamingResponse
 from agent.core.config import Config
 import asyncio
-import traceback
 import json
 import os
 import aiofiles.os as aio_os
 import aiofiles
 import time
 
-# 工具（如 web_search）执行期间可能长时间无业务事件；定期发 SSE comment 保活，
-# 避免 Cloudflare/Nginx 等因空闲断开 Gateway 到 Agent 的长连接。
+# 工具执行期间可能长时间无业务事件；定期发 SSE comment 保活。
 _SSE_HEARTBEAT_INTERVAL_S = 15.0
 
 config = Config()
 models_info_list = config.models_info_list
 router = APIRouter()
+
+
+def _sse_data(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+async def _require_user(request: Request):
+    token = request.cookies.get("token")
+    if not token:
+        auth = request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    return await get_current_user(token)
+
+
+async def _iter_subscriber(request: Request, queue: asyncio.Queue, prelude: list[dict] | None = None):
+    for event in prelude or []:
+        yield _sse_data(event)
+    while True:
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=_SSE_HEARTBEAT_INTERVAL_S)
+        except asyncio.TimeoutError:
+            if await request.is_disconnected():
+                break
+            yield ": ping\n\n"
+            continue
+        if await request.is_disconnected():
+            break
+        yield _sse_data(event)
+
 
 @router.get("/message/models")
 async def get_models_list():
@@ -29,6 +59,63 @@ async def get_models_list():
         if models_info.get("model_use") == True:
             models_dict[models_info.get("model_source")] = [model.get("name") for model in models_info.get("models")]
     return models_dict
+
+
+@router.get("/message/runs")
+async def list_running_conversations(request: Request):
+    user = await _require_user(request)
+    return run_manager.list_running(user.user_id)
+
+
+@router.get("/message/runs/stream")
+async def stream_running_conversations(request: Request):
+    user = await _require_user(request)
+    queue = run_manager.subscribe_status(user.user_id)
+
+    async def generate_stream():
+        try:
+            async for chunk in _iter_subscriber(request, queue):
+                yield chunk
+        finally:
+            run_manager.detach_status(user.user_id, queue)
+
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
+
+
+@router.post("/message/stop")
+async def stop_conversation(request: Request):
+    user = await _require_user(request)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    conversation_id = ""
+    if isinstance(payload, dict):
+        conversation_id = str(payload.get("conversation_id") or "").strip()
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="缺少 conversation_id")
+    stopped = await run_manager.stop(conversation_id, user.user_id)
+    return {"success": stopped}
+
+
+@router.get("/message/{conversation_id}/stream")
+async def attach_conversation_stream(request: Request, conversation_id: str):
+    user = await _require_user(request)
+    try:
+        _run, queue, snapshot = await run_manager.attach(conversation_id, user.user_id)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="会话不属于当前用户")
+
+    async def generate_stream():
+        try:
+            prelude = [snapshot] if snapshot is not None else []
+            async for chunk in _iter_subscriber(request, queue, prelude):
+                yield chunk
+        finally:
+            run_manager.detach(conversation_id, queue)
+
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
+
 
 @router.get("/message/{conversation_id}")
 async def get_messages(
@@ -42,17 +129,15 @@ async def get_messages(
     messages = await get_message_by_conv_id(conversation_id, limit=limit, before=before_dt)
     return messages
 
+
 @router.post("/message/chat", response_class=StreamingResponse)
 async def chat_stream(
         request: Request,
         chat_request: str = Form(...),
         files: list[UploadFile] = File(None),
 ):
-    token = request.cookies.get("token")
-    if token:
-        user = await get_current_user(token)
+    user = await _require_user(request)
 
-    # 解析 chat_request JSON
     chat_req_dict = json.loads(chat_request)
     chat_request = ChatRequest(**chat_req_dict)
     chat_request.user_id = user.user_id
@@ -66,7 +151,8 @@ async def chat_stream(
     except Exception:
         pass
 
-    # 临时保存文件到临时目录
+    # 先绑定会话 id，新任务会预分配 id，这样本轮运行和订阅用的是同一个 key。
+    # 文件仍按绑定前的空 id 走临时目录，由 conversation_init 在建会话时搬走。
     temp_file_paths = []
     file_name_list = []
     if files:
@@ -91,56 +177,25 @@ async def chat_stream(
                 print(f"文件保存失败 {file.filename}: {e}")
                 continue
     chat_request.file_name_list = file_name_list
-    ai_service = Chat(chat_request)
+
+    try:
+        handle = await run_manager.submit(chat_request)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="会话不属于当前用户")
 
     async def generate_stream():
-        queue: asyncio.Queue = asyncio.Queue()
-
-        async def _produce():
-            try:
-                async for chunk in ai_service.run():
-                    await queue.put(("chunk", chunk))
-            except Exception:
-                await queue.put(("error", traceback.format_exc()))
-            finally:
-                await queue.put(("done", None))
-
-        producer = asyncio.create_task(_produce())
         try:
-            while True:
-                try:
-                    kind, payload = await asyncio.wait_for(
-                        queue.get(),
-                        timeout=_SSE_HEARTBEAT_INTERVAL_S,
-                    )
-                except asyncio.TimeoutError:
-                    # SSE comment：客户端应忽略；用于穿透代理空闲超时
-                    yield ": ping\n\n"
-                    if await request.is_disconnected():
-                        producer.cancel()
-                        break
-                    continue
-
-                if kind == "done":
-                    break
-                if kind == "error":
-                    error_resp = ChatResponse(
-                        conversation_id=chat_request.conversation_id,
-                        user_id=chat_request.user_id,
-                        type="error",
-                        content=f"回复异常，原因：{payload}",
-                    ).model_dump_json()
-                    yield f"data: {error_resp}\n\n"
-                    break
-                if await request.is_disconnected():
-                    producer.cancel()
-                    break
-                yield f"data: {payload}\n\n"
+            async for chunk in _iter_subscriber(request, handle.queue):
+                yield chunk
+        except Exception:
+            error_resp = ChatResponse(
+                conversation_id=handle.conversation_id,
+                user_id=user.user_id,
+                type="error",
+                content="回复异常",
+            ).model_dump_json()
+            yield f"data: {error_resp}\n\n"
         finally:
-            if not producer.done():
-                producer.cancel()
-                try:
-                    await producer
-                except (asyncio.CancelledError, Exception):
-                    pass
+            run_manager.detach(handle.conversation_id, handle.queue)
+
     return StreamingResponse(generate_stream(), media_type="text/event-stream")

@@ -41,7 +41,7 @@
                 </div>
             </div>
         </div>
-        <div class="conversation-select" :class="{ 'disabled-select': isGenerating }" :title="isGenerating ? t('conversation.generatingDisabled') : ''">
+        <div class="conversation-select">
             <div
               class="chat-mode-section"
               :class="{ 'chat-mode-section--collapsed': isExpanded }"
@@ -108,6 +108,22 @@
                 </button>
             </div>
 
+            <div v-if="chatMode === 'task' && visibleRunningConversations.length" class="running-section" :class="{ 'hidden-text': isExpanded }">
+                <div class="running-header">{{ t('conversation.runningNow') }}</div>
+                <div
+                    class="history-agent running-agent"
+                    v-for="item in visibleRunningConversations"
+                    :key="item.conversation_id"
+                    @click="handleOpenRunning(item)"
+                    :class="{ selected: item.conversation_id === chat_request.conversation_id }"
+                >
+                    <div class="conversation-abstract-wrapper">
+                        <span class="running-dot" aria-hidden="true"></span>
+                        <p class="conversation_abstract" :title="runningLabel(item)">{{ runningLabel(item) }}</p>
+                    </div>
+                </div>
+            </div>
+
             <div
               v-if="chatMode === 'task'"
               class="history-choose"
@@ -116,12 +132,13 @@
             >
             <div
                 class="history-agent"
-                v-for="item in conversation_list"
+                v-for="item in historyConversations"
                 :key="item.conversation_id"
                 @click="handlePickConversation(item)"
-                :class="{ selected: item.conversation_id === chat_request.conversation_id }"
+                :class="{ selected: item.conversation_id === chat_request.conversation_id, 'is-running': isConversationRunning(item.conversation_id) }"
             >
                 <div class="conversation-abstract-wrapper">
+                    <span v-if="isConversationRunning(item.conversation_id)" class="running-dot" aria-hidden="true"></span>
                     <input
                       v-if="editingId === item.conversation_id"
                       :ref="el => setEditingInputRef(el, item.conversation_id)"
@@ -254,7 +271,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, toRefs, type ComponentPublicInstance } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, toRefs, type ComponentPublicInstance } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
@@ -279,6 +296,7 @@ const emit = defineEmits([
   'openAgentOption',
   'updateConversationAbstract',
   'switchMode',
+  'openRunning',
 ]);
 
 const props = withDefaults(defineProps<{
@@ -288,14 +306,20 @@ const props = withDefaults(defineProps<{
   isGenerating: boolean;
   username?: string;
   chatMode?: 'soulprout' | 'task';
+  runningConversations?: Array<{
+    conversation_id: string;
+    mode?: string;
+    abstract?: string;
+  }>;
 }>(), {
   chatMode: 'task',
+  runningConversations: () => [],
 });
 
-const { conversation_list, isExpanded, chat_request, isGenerating } = toRefs(props);
+const { conversation_list, isExpanded, chat_request } = toRefs(props);
 
 const handleSwitchMode = (mode: 'soulprout' | 'task') => {
-  if (props.isGenerating || props.chatMode === mode) return;
+  if (props.chatMode === mode) return;
   emit('switchMode', mode);
 };
 
@@ -426,6 +450,41 @@ const handlePickConversation = (item: { conversation_id: string }) => {
   activeMenuId.value = null;
 };
 
+const isConversationRunning = (conversationId: string) =>
+  props.runningConversations.some((item) => item.conversation_id === conversationId);
+
+const runningLabel = (item: { conversation_id?: string; mode?: string; abstract?: string }) => {
+  if (item.abstract) return item.abstract;
+  const known = conversation_list.value.find(
+    (conv) => conv.conversation_id === item.conversation_id,
+  );
+  if (known?.abstract) return known.abstract;
+  if (item.mode === 'soulprout') return t('conversation.soulLabel');
+  return '';
+};
+
+const visibleRunningConversations = computed(() =>
+  (props.runningConversations || []).filter((item) => runningLabel(item)),
+);
+
+const historyConversations = computed(() => {
+  const runningIds = new Set(
+    visibleRunningConversations.value.map((item) => item.conversation_id),
+  );
+  const seen = new Set<string>();
+  return conversation_list.value.filter((item) => {
+    if (!item.conversation_id || seen.has(item.conversation_id)) return false;
+    seen.add(item.conversation_id);
+    if (runningIds.has(item.conversation_id)) return false;
+    return true;
+  });
+});
+
+const handleOpenRunning = (item: { conversation_id: string; mode?: string; abstract?: string }) => {
+  emit('openRunning', item);
+  activeMenuId.value = null;
+};
+
 const confirmDeleteId = ref<string | null>(null);
 
 const handleDelete = (conversationId: string, event: MouseEvent) => {
@@ -478,6 +537,39 @@ onUnmounted(() => {
   cursor: not-allowed;
   pointer-events: none;
   opacity: 0.7;
+}
+
+.running-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.running-header {
+  width: 90%;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(120, 120, 120);
+  letter-spacing: 0.02em;
+}
+
+.running-dot {
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+  animation: running-pulse 1.6s ease-out infinite;
+}
+
+@keyframes running-pulse {
+  70% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
 }
 
 /* —— 对话模式切换：分段控件（Segmented Control）形态。

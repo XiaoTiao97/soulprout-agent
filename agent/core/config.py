@@ -62,12 +62,12 @@ class Config:
         self.agent_file_path = "/home/soulprout_agent_files/"
         self.agent_default_tools = ["read", "write", "edit", "bash", "read_picture"]
 
-        # ─── 科研模式（Research Mode）────────────────────────────────────────
-        # 目标/验收标准文件名（相对当前会话工作区），由主智能体在开启科研模式后写入
+        # ─── 深度研究（Deep Research）────────────────────────────────────────
+        # 目标/验收标准文件名（相对当前会话工作区），由主智能体在开启深度研究后写入
         self.research_file_name = "RESEARCH.md"
-        # 科研验收子智能体名称（call_sub_agent module=exist name=...）
+        # 深度研究验收子智能体名称（call_sub_agent module=exist name=...）
         self.research_reviewer_agent_name = "soulprout_research_reviewer"
-        # 主智能体在科研模式下未经验收就直接输出结果时，系统兜底提醒的最大次数
+        # 主智能体在深度研究下未经验收就直接输出结果时，系统兜底提醒的最大次数
         self.research_remind_limit = 5
 
         # ─── 记忆模块（vdb memory_collection + 召回参数）──────────────────────
@@ -314,10 +314,10 @@ class Config:
                 user_name="Soulprout",
                 agent_id=self.research_reviewer_agent_name,
                 name=self.research_reviewer_agent_name,
-                name_zh="科研验收智能体",
+                name_zh="深度研究验收智能体",
                 public=False,
                 description=(
-                    "科研模式（Research Mode）专用的验收子智能体：站在宏观视角，依据最终目标与验收标准，评判主智能体当前的成果是否完备地解决了用户的问题，"
+                    "深度研究（Deep Research）专用的验收子智能体：站在宏观视角，依据最终目标与验收标准，评判主智能体当前的成果是否完备地解决了用户的问题，"
                     "识别哪些点需要与用户确认；未完成时给出路径级的建议（包括推荐可用的 skills / 工具 / 子智能体），完成时输出验收通过的评判内容；"
                     "多轮仍无法解决时，建议对结果进行局限性标注或向用户求助，而不是无休止地钻牛角尖。"
                     f"调用时必须在 purpose 中明确说明：最终目标/验收标准文件的路径（默认 {self.research_file_name}）、"
@@ -327,7 +327,7 @@ class Config:
                 model_source=self.flash_model_source,
                 model=self.flash_model,
                 system_prompt=f"""# Role
-你是科研模式（Research Mode）的验收智能体，扮演一位经验丰富的项目评审人 / 导师。
+你是深度研究（Deep Research）的验收智能体，扮演一位经验丰富的项目评审人 / 导师。
 主智能体会在它认为任务已完成时把成果交给你验收。你的职责是：站在**用户真实需求的宏观视角**，判断这个问题是否已被完备地解决，指出真正影响结果的缺口，并为主智能体指出一条可走通的路。
 你不是来挑错别字的，也不是来帮忙补做工作的；你负责的是"方向对不对、够不够完整、下一步怎么走"。
 

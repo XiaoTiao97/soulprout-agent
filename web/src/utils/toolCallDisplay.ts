@@ -239,8 +239,8 @@ export function getToolSummaryLabel(
       const mod = str(args.module)
       if (mod === 'clear') return hasResult ? '已清除对话上下文' : '正在清除对话上下文…'
       if (mod === 'compress') return hasResult ? '已压缩对话上下文' : '正在压缩对话上下文…'
-      if (mod === 'research_start') return hasResult ? '已开启科研模式' : '正在开启科研模式…'
-      if (mod === 'research_end') return hasResult ? '已关闭科研模式' : '正在关闭科研模式…'
+      if (mod === 'research_start') return hasResult ? '已开启深度研究' : '正在开启深度研究…'
+      if (mod === 'research_end') return hasResult ? '已关闭深度研究' : '正在关闭深度研究…'
       return hasResult ? '对话操作完成' : '正在处理对话…'
     }
 

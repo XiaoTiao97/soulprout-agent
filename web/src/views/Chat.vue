@@ -17,8 +17,10 @@
         @openKBOption="openKBOption"
         @openAgentOption="openAgentOption"
           :isGenerating="isGenerating"
+          :runningConversations="runningConversations"
         @updateConversationAbstract="updateConversationAbstract"
         @switchMode="handleSwitchMode"
+        @openRunning="openRunningConversation"
       />
 
       <div class="chat-main" :class="{ 'with-extra': showExtraInfo }">
@@ -179,6 +181,16 @@ const currentUserId = ref<string>('')
 
 const currentUsername = ref<string>('')
 
+type RunningConversation = {
+  conversation_id: string
+  user_id: string
+  mode: 'soulprout' | 'task'
+  abstract: string
+  started_at: number
+}
+
+const runningConversations = ref<RunningConversation[]>([])
+
 /** 任务模式下展示的会话列表（剔除 Soulprout 唯一会话） */
 const taskConversationList = computed<ConversationBase[]>(() =>
   conversation_list.value.filter(
@@ -263,6 +275,8 @@ async function fetchConversations(): Promise<void> {
 
 // 以下是交互处理方法（后续可完善逻辑）
 function createConversation() {
+  detachLocalStream()
+  isGenerating.value = false
   chat_request.value.conversation_id = ""
   chat_request.value.tools_use = true
   chat_request.value.skills_use = true
@@ -293,9 +307,9 @@ function createConversation() {
  */
 async function handleSwitchMode(mode: 'soulprout' | 'task') {
   if (mode === chatMode.value) return
-  if (isGenerating.value) {
-    stopGeneration()
-  }
+  detachLocalStream()
+  isGenerating.value = false
+  currentStreamingMessage.value = null
   if (mode === 'soulprout') {
     cachedTaskChatRequest.value = { ...chat_request.value }
     chatMode.value = 'soulprout'
@@ -369,6 +383,9 @@ async function loadSoulproutConversation() {
     console.debug('Soulprout 会话尚未建立或拉取失败：', error)
     soulMessagesHasMore.value = false
   }
+  if (userId) {
+    await attachConversationStream(userId)
+  }
 }
 
 async function loadMoreSoulMessages() {
@@ -404,8 +421,15 @@ async function loadMoreSoulMessages() {
 }
 
 async function deleteConversation(conversationId) {
-  // 删除某个会话
+  // 删除某个会话。先停掉这条会话上的运行，避免删掉之后还在写历史。
   try {
+    detachLocalStream()
+    isGenerating.value = false
+    try {
+      await axios.post('/api/message/stop', { conversation_id: conversationId })
+    } catch (error) {
+      console.debug('停止会话失败（可能本来就没在跑）：', error)
+    }
     const response = await axios.delete('/api/conversations/' + conversationId)
     if (response.data.success) {
       // 成功删除后，重新获取会话列表
@@ -477,7 +501,10 @@ function normalizeMessagesFromApi(raw: AgentMessage[]): AgentMessage[] {
 function messageCreatedAtMs(msg: AgentMessage): number {
   const t = msg.created_at as number | string
   if (typeof t === 'number' && Number.isFinite(t)) return t
-  return new Date(t).getTime()
+  // 后端存的是 UTC 且不带时区，按本地时间解析会差出时区偏移
+  const text = String(t)
+  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(text)
+  return new Date(hasZone ? text : `${text}Z`).getTime()
 }
 
 function applyMessageListsFromApi(messages: AgentMessage[]) {
@@ -552,6 +579,9 @@ async function updateConversationAbstract(conversationId: string, abstract: stri
 
 async function pickConversation(conversationId) {
   try {
+    detachLocalStream()
+    isGenerating.value = false
+    currentStreamingMessage.value = null
     chatPlanStreamForWindow.value = ''
     chatPlanProgressForWindow.value = ''
     blueprintAwaitingResult.value = false
@@ -579,6 +609,7 @@ async function pickConversation(conversationId) {
       const firstModel = getFirstModelFromList()
       chat_request.value.model_source = response_conversation.data.model_source || firstModel?.model_source
       chat_request.value.model = response_conversation.data.model || firstModel?.model
+      await attachConversationStream(conversationId)
   } catch (error) {
     console.error('获取消息失败:', error)
   }
@@ -602,7 +633,9 @@ async function processMessageQueue() {
 
   while (messageQueue.value.length > 0) {
     const chunk_json = messageQueue.value.shift()
-    // console.log('处理队列消息:', chunk_json.role, chunk_json.type, '剩余队列长度:', messageQueue.value.length)
+    if (!chunk_json || await handleControlChunk(chunk_json)) {
+      continue
+    }
 
     if (chunk_json.role === 'user' && chunk_json.type === 'file') {
       const fileContent = chunk_json.content || ''
@@ -810,6 +843,24 @@ async function processMessageQueue() {
 }
 
 const abortController = ref<AbortController | null>(null)
+let streamEpoch = 0
+let runsAbortController: AbortController | null = null
+
+function detachLocalStream() {
+  streamEpoch += 1
+  if (abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
+  }
+  messageQueue.value = []
+}
+
+function detachRunsStream() {
+  if (runsAbortController) {
+    runsAbortController.abort()
+    runsAbortController = null
+  }
+}
 
 const toolMessages = ref<AgentMessage[]>([])
 const fileMessages = ref<AgentMessage[]>([]) // 文件消息列表
@@ -857,6 +908,8 @@ async function handleSendMessage(
   files: File[] = [],
   options?: { input_message_id?: string; user_feedback?: boolean },
 ) {
+  detachLocalStream()
+  const epoch = streamEpoch
   isGenerating.value = true
   isStreamEnded.value = false  // 重置流结束标志
   chatPlanStreamForWindow.value = ''
@@ -893,37 +946,35 @@ async function handleSendMessage(
     created_at: Date.now() 
   }
 
-  let buffer = ''
   let timeoutId: ReturnType<typeof setTimeout> | null = null
-  
-  // 设置30秒超时
   const setupTimeout = () => {
     if (timeoutId) clearTimeout(timeoutId)
     timeoutId = setTimeout(() => {
+      if (epoch !== streamEpoch) return
       isLoading.value = false
       timeoutError.value = t('chat.timeout')
       console.error('请求超时')
-      // 中止请求
-      if (abortController.value) {
-        abortController.value.abort()
-      }
+      if (abortController.value) abortController.value.abort()
     }, 1800000)
   }
-  
-  // 清除超时
   const clearTimeoutHandler = () => {
     if (timeoutId) {
       clearTimeout(timeoutId)
       timeoutId = null
     }
   }
-  
+
   setupTimeout() // 开始计时
   try {
     abortController.value = new AbortController()
     const formData = new FormData();
     // 传递 agent_id 而非 agent_name
     const payload = { ...chat_request.value }
+    if (chatMode.value !== 'soulprout' && !payload.conversation_id) {
+      const conversationId = crypto.randomUUID()
+      chat_request.value.conversation_id = conversationId
+      payload.conversation_id = conversationId
+    }
     if (payload.agent_id) delete payload.agent_name
     if (options?.input_message_id) {
       payload.input_message_id = options.input_message_id
@@ -960,6 +1011,8 @@ async function handleSendMessage(
       signal: abortController.value.signal
     })
 
+    if (epoch !== streamEpoch) return
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
@@ -968,148 +1021,391 @@ async function handleSendMessage(
       throw new Error('没有返回流')
     }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-    const created_at_time = Date.now()
-    streamingSessionCreatedAt.value = created_at_time
-    
-    try {
-      while (true) {
-        const { value, done } = await reader.read()
-        
-        if (done) {
-          break
-        }
-
-        if (value) {
-          // 收到数据，重置超时计时器并清除错误
-          clearTimeoutHandler()
-          setupTimeout()
-          if (timeoutError.value) {
-            timeoutError.value = ''  // 清除可能的超时错误
-          }
-          
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-          
-          for (const line of lines) {
-            const trimmedLine = line.trim()
-            // SSE格式: data: {json_data}
-            if (trimmedLine.startsWith('data: ')) {
-              const data = trimmedLine.substring(6).trim() // 移除 'data: ' 前缀
-              if (!data) continue
-
-              try {
-                const chunk_json = JSON.parse(data)
-                chunk_json.created_at = created_at_time
-
-                if (chunk_json.type === 'input_message_id') {
-                  const mid = parseMessageId(chunk_json.content)
-                  if (mid) {
-                    for (let i = agent_message_list.value.length - 1; i >= 0; i--) {
-                      const m = agent_message_list.value[i]
-                      if (m.role === 'user' && !m.id) {
-                        m.id = mid
-                        break
-                      }
-                    }
-                  }
-                  continue
-                }
-
-                if (chunk_json.type === 'reload_history') {
-                  const cid =
-                    chunk_json.conversation_id || chat_request.value.conversation_id || ''
-                  if (cid) {
-                    await refreshMessagesFromServer(cid)
-                  }
-                  continue
-                }
-
-                // 如果type是'text'，隐藏loading
-                if (chunk_json.type === 'text' || chunk_json.type === 'reasoner_content') {
-                  isLoading.value = false
-                } else if (chunk_json.type === 'abstract') {
-                  // 优先更新会话列表，再进行流式输出
-                   abstract.value = chunk_json.content
-                  chat_request.value.conversation_id = chunk_json.conversation_id
-                  conversation_list.value.unshift({
-                    user_id: chunk_json.user_id,
-                    conversation_id: chunk_json.conversation_id, 
-                    abstract: abstract.value, 
-                    create_at: "",
-                    updated_at: "", 
-                  })
-                }
-                
-                // 将消息添加到队列中顺序处理
-                // console.log('添加消息到队列:', chunk_json.role, chunk_json.type, '内容:', chunk_json.content?.substring(0, 50))
-                messageQueue.value.push(chunk_json)
-                processMessageQueue()
-              } catch (error) {
-                console.error('解析 JSON 失败:', error, '原始数据:', data)
-              }
-            }
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock()
-      clearTimeoutHandler()  // 流结束时清除计时器
-      abortController.value = null
-      
-      // 标记流已结束，但不立即清理队列
-      isStreamEnded.value = true
-
-      // 如果队列已经处理完，立即清理
-      if (!isProcessingQueue && messageQueue.value.length === 0) {
-        isGenerating.value = false
-        isStreamEnded.value = false
-        currentStreamingMessage.value = null
-        chat_request.value.files = []  // 清理 files
-        delete chat_request.value.input_message_id
-        delete chat_request.value.user_feedback
-      }
-    }
-
-    if (currentStreamingMessage.value) {
-      currentStreamingMessage.value = null
-    }
-    
-    // 注意：不要立即清空streamingContent，让用户看到完整响应
-    // streamingContent.value = ''
+    await readSseResponse(response, epoch, setupTimeout, clearTimeoutHandler)
   }
-   catch (error) {
-    if (error.name === 'AbortError') {
-      timeoutError.value = t('chat.stopped')
-    } else {
-      console.error('流式消息失败:', error)
-      timeoutError.value = t('chat.requestFailed')
+   catch (error: any) {
+    if (epoch !== streamEpoch) return
+    if (error?.name === 'AbortError') {
+      return
     }
+    console.error('流式消息失败:', error)
+    timeoutError.value = t('chat.requestFailed')
     isLoading.value = false
     currentStreamingMessage.value = null
     clearTimeoutHandler()
     isGenerating.value = false
     isStreamEnded.value = false
-    messageQueue.value = []  // 停止时清空队列
-    chat_request.value.files = []  // 清理 files
+    messageQueue.value = []
+    chat_request.value.files = []
     delete chat_request.value.input_message_id
     delete chat_request.value.user_feedback
   }
 }
 
-function stopGeneration() {
-  if (abortController.value) {
-    abortController.value.abort()
-    abortController.value = null
+async function readSseResponse(
+  response: Response,
+  epoch: number,
+  setupTimeout: () => void,
+  clearTimeoutHandler: () => void,
+) {
+  if (!response.body) throw new Error('没有返回流')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  const batch = { at: Date.now() }
+  streamingSessionCreatedAt.value = batch.at
+  let buffer = ''
+  let followedTurnId = ''
+  try {
+    while (epoch === streamEpoch) {
+      const { value, done } = await reader.read()
+      if (done || epoch !== streamEpoch) break
+      if (!value) continue
+
+      clearTimeoutHandler()
+      setupTimeout()
+      if (timeoutError.value) timeoutError.value = ''
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        if (!trimmedLine.startsWith('data: ')) continue
+        const data = trimmedLine.substring(6).trim()
+        if (!data) continue
+        try {
+          const chunk_json = JSON.parse(data)
+          if (
+            chunk_json.type === 'turn_started' ||
+            chunk_json.type === 'accepted' ||
+            chunk_json.type === 'snapshot'
+          ) {
+            batch.at = Date.now()
+            streamingSessionCreatedAt.value = batch.at
+            if (chunk_json.turn_id) followedTurnId = chunk_json.turn_id
+          }
+          chunk_json.created_at = batch.at
+          if (chunk_json.type === 'turn_started' && chunk_json.turn_id) {
+            followedTurnId = chunk_json.turn_id
+          } else if (
+            chunk_json.turn_id &&
+            followedTurnId &&
+            chunk_json.turn_id !== followedTurnId
+          ) {
+            continue
+          } else if (!followedTurnId && chunk_json.turn_id) {
+            followedTurnId = chunk_json.turn_id
+          }
+
+          if (chunk_json.type === 'input_message_id') {
+            const mid = parseMessageId(chunk_json.content)
+            if (mid) {
+              for (let i = agent_message_list.value.length - 1; i >= 0; i--) {
+                const m = agent_message_list.value[i]
+                if (m.role === 'user' && !m.id) {
+                  m.id = mid
+                  break
+                }
+              }
+            }
+            continue
+          }
+
+          if (chunk_json.type === 'reload_history') {
+            const cid = chunk_json.conversation_id || chat_request.value.conversation_id || ''
+            if (cid) await refreshMessagesFromServer(cid)
+            continue
+          }
+
+          if (chunk_json.type === 'text' || chunk_json.type === 'reasoner_content') {
+            isLoading.value = false
+          } else if (chunk_json.type === 'abstract') {
+            abstract.value = chunk_json.content
+            chat_request.value.conversation_id = chunk_json.conversation_id
+            const existing = conversation_list.value.find(
+              (item) => item.conversation_id === chunk_json.conversation_id,
+            )
+            if (existing) {
+              existing.abstract = abstract.value
+            } else {
+              conversation_list.value.unshift({
+                user_id: chunk_json.user_id,
+                conversation_id: chunk_json.conversation_id,
+                abstract: abstract.value,
+                create_at: '',
+                updated_at: '',
+              })
+            }
+          }
+
+          messageQueue.value.push(chunk_json)
+          processMessageQueue()
+        } catch (error) {
+          console.error('解析 JSON 失败:', error, '原始数据:', data)
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+    clearTimeoutHandler()
+    if (epoch === streamEpoch) {
+      abortController.value = null
+      isStreamEnded.value = true
+      if (!isProcessingQueue && messageQueue.value.length === 0) {
+        isGenerating.value = false
+        isStreamEnded.value = false
+        currentStreamingMessage.value = null
+        chat_request.value.files = []
+        delete chat_request.value.input_message_id
+        delete chat_request.value.user_feedback
+      }
+    }
   }
+}
+
+async function attachConversationStream(conversationId: string) {
+  if (!conversationId) return
+  detachLocalStream()
+  const epoch = streamEpoch
+  abortController.value = new AbortController()
+  const setupTimeout = () => {}
+  const clearTimeoutHandler = () => {}
+  try {
+    const response = await fetch(`/api/message/${encodeURIComponent(conversationId)}/stream`, {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      cache: 'no-store',
+      signal: abortController.value.signal,
+    })
+    if (epoch !== streamEpoch) return
+    if (!response.ok || !response.body) return
+    await readSseResponse(response, epoch, setupTimeout, clearTimeoutHandler)
+  } catch (error: any) {
+    if (epoch !== streamEpoch) return
+    if (error?.name === 'AbortError') return
+    console.error('挂接会话流失败:', error)
+  }
+}
+
+function applyRunEvent(event: {
+  type?: string
+  conversation_id?: string
+  user_id?: string
+  mode?: string
+  abstract?: string
+  started_at?: number
+}) {
+  const conversationId = event.conversation_id || ''
+  if (!conversationId) return
+  if (event.type === 'run_started') {
+    const idx = runningConversations.value.findIndex((item) => item.conversation_id === conversationId)
+    const previous = idx >= 0 ? runningConversations.value[idx] : undefined
+    const known = conversation_list.value.find((item) => item.conversation_id === conversationId)
+    const next: RunningConversation = {
+      conversation_id: conversationId,
+      user_id: event.user_id || previous?.user_id || '',
+      mode: event.mode === 'soulprout' ? 'soulprout' : 'task',
+      abstract: event.abstract || previous?.abstract || known?.abstract || '',
+      started_at: event.started_at || previous?.started_at || Date.now(),
+    }
+    if (idx >= 0) runningConversations.value[idx] = next
+    else runningConversations.value.unshift(next)
+    return
+  }
+  if (event.type === 'run_updated') {
+    const item = runningConversations.value.find((row) => row.conversation_id === conversationId)
+    if (item && event.abstract) item.abstract = event.abstract
+    return
+  }
+  if (event.type === 'run_finished') {
+    runningConversations.value = runningConversations.value.filter(
+      (item) => item.conversation_id !== conversationId,
+    )
+  }
+}
+
+async function watchRunningConversations() {
+  detachRunsStream()
+  const controller = new AbortController()
+  runsAbortController = controller
+  let buffer = ''
+  while (!controller.signal.aborted) {
+    try {
+      const response = await fetch('/api/message/runs/stream', {
+        method: 'GET',
+        headers: { Accept: 'text/event-stream', 'Cache-Control': 'no-cache' },
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      if (!response.ok || !response.body) throw new Error('runs stream failed')
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      buffer = ''
+      while (!controller.signal.aborted) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data: ')) continue
+          const data = trimmed.substring(6).trim()
+          if (!data) continue
+          try {
+            applyRunEvent(JSON.parse(data))
+          } catch (error) {
+            console.error('解析运行状态失败:', error)
+          }
+        }
+      }
+      if (!controller.signal.aborted) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+      }
+    } catch (error: any) {
+      if (controller.signal.aborted || error?.name === 'AbortError') return
+      console.error('运行列表订阅中断:', error)
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+  }
+}
+
+async function openRunningConversation(item: RunningConversation) {
+  if (item.mode === 'soulprout' || item.conversation_id === currentUserId.value) {
+    if (chatMode.value !== 'soulprout') {
+      cachedTaskChatRequest.value = { ...chat_request.value }
+      chatMode.value = 'soulprout'
+    }
+    await loadSoulproutConversation()
+    return
+  }
+  if (chatMode.value !== 'task') {
+    chatMode.value = 'task'
+  }
+  await pickConversation(item.conversation_id)
+}
+
+async function handleControlChunk(chunk_json: any): Promise<boolean> {
+  const kind = chunk_json?.type
+  if (kind === 'accepted') {
+    if (chunk_json.conversation_id) {
+      chat_request.value.conversation_id = chunk_json.conversation_id
+    }
+    isGenerating.value = true
+    return true
+  }
+  if (kind === 'turn_started') {
+    if (currentStreamingMessage.value) {
+      currentStreamingMessage.value = null
+      await nextTick()
+    }
+    isGenerating.value = true
+    isLoading.value = true
+    return true
+  }
+  if (kind === 'snapshot') {
+    if (!chunk_json.running && !chunk_json.content && !chunk_json.reasoning_content && !chunk_json.plan) {
+      return true
+    }
+    isGenerating.value = true
+    isLoading.value = !chunk_json.content
+    if (chunk_json.plan_progress) chatPlanProgressForWindow.value = chunk_json.plan_progress
+    if (chunk_json.plan) chatPlanStreamForWindow.value = chunk_json.plan
+    if (chunk_json.reasoning_content) {
+      currentStreamingMessage.value = {
+        user_id: chunk_json.user_id || '',
+        conversation_id: chunk_json.conversation_id || '',
+        type: 'reasoner_content',
+        role: 'assistant',
+        content: chunk_json.reasoning_content,
+        created_at: chunk_json.created_at,
+      }
+      await nextTick()
+    }
+    if (chunk_json.content) {
+      currentStreamingMessage.value = {
+        user_id: chunk_json.user_id || '',
+        conversation_id: chunk_json.conversation_id || '',
+        type: 'text',
+        role: 'assistant',
+        content: chunk_json.content,
+        created_at: chunk_json.created_at,
+      }
+      await nextTick()
+    }
+    return true
+  }
+  if (kind === 'user_message') {
+    const content = chunk_json.content || ''
+    let pending: { id?: string; content?: string } | null = null
+    for (let i = agent_message_list.value.length - 1; i >= 0; i--) {
+      const message = agent_message_list.value[i]
+      if (message.role === 'user' && (message.type === 'text' || message.type === 'user_feedback')) {
+        pending = message
+        break
+      }
+    }
+    if (pending && !pending.id && (pending.content || '') === content) return true
+    if (currentStreamingMessage.value) {
+      currentStreamingMessage.value = null
+      await nextTick()
+    }
+    agent_message_list.value.push({
+      user_id: chunk_json.user_id || '',
+      conversation_id: chunk_json.conversation_id || chat_request.value.conversation_id || '',
+      type: 'text',
+      role: 'user',
+      content,
+      created_at: chunk_json.created_at || Date.now(),
+    })
+    return true
+  }
+  if (kind === 'interrupted') {
+    if (currentStreamingMessage.value) {
+      currentStreamingMessage.value = null
+      await nextTick()
+    }
+    isGenerating.value = true
+    return true
+  }
+  if (kind === 'turn_done' || kind === 'stopped') {
+    currentStreamingMessage.value = null
+    await nextTick()
+    isGenerating.value = false
+    isLoading.value = false
+    if (kind === 'stopped') timeoutError.value = t('chat.stopped')
+    commitPlanStreamToHistory()
+    chatPlanStreamForWindow.value = ''
+    chatPlanProgressForWindow.value = ''
+    blueprintAwaitingResult.value = false
+    delete chat_request.value.input_message_id
+    delete chat_request.value.user_feedback
+    return true
+  }
+  return false
+}
+
+async function stopGeneration() {
+  const conversationId = chatMode.value === 'soulprout'
+    ? (currentUserId.value || chat_request.value.conversation_id || '')
+    : (chat_request.value.conversation_id || '')
+  detachLocalStream()
   isLoading.value = false
   currentStreamingMessage.value = null
   timeoutError.value = t('chat.stopped')
   isGenerating.value = false
   delete chat_request.value.input_message_id
   delete chat_request.value.user_feedback
+  if (!conversationId) return
+  try {
+    await axios.post('/api/message/stop', { conversation_id: conversationId })
+  } catch (error) {
+    console.error('停止生成失败:', error)
+  }
 }
 
 const isExpanded = ref(false)
@@ -1337,6 +1633,7 @@ onMounted(async () => {
   await fetchCurrentUserId()
   await fetchConversations()
   await getLLMmodels()
+  watchRunningConversations()
   if (chatMode.value === 'soulprout') {
     await loadSoulproutConversation()
   }
@@ -1345,6 +1642,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   stopResize()
+  detachLocalStream()
+  detachRunsStream()
 })
 </script>
 

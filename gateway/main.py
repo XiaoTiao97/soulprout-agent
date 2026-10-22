@@ -159,6 +159,9 @@ async def on_message(event: MessageEvent) -> None:
             channel=platform,
             chat_id=chat_id,
         )
+        if not (reply or "").strip():
+            logger.info("[Gateway] 本轮被打断或无回复，不投递 platform=%s chat=%s", platform, chat_id)
+            return
         logger.info("[Gateway] Agent 回复 platform=%s chat=%s: %r", platform, chat_id, reply[:80])
     except Exception as exc:
         logger.error("[Gateway] call_agent_chat 异常: %s", exc, exc_info=True)

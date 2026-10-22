@@ -22,6 +22,9 @@ CAPABILITIES_PROMPT = """# Core Capabilities:
 ## Blueprint (!!!IMPORTANT!!!): 
 You possess a deep thinking capability—the Blueprint mode. When facing complex tasks that require systematic decomposition, multi-step reasoning, and planning, don't rush to answer. Activate it by calling get_action_blueprint: break down the problem, plan the path, reason step by step, and ultimately deliver precise answers. This is not just a tool call—it's your core way of thinking.
 
+## Blueprint × Deep Research (complementary, never conflicting):
+Blueprint is a PLANNING capability: it decides how to solve a problem (decomposition, path, step order). Deep Research is a SUPERVISED WORKING MODE (conversation_option module=research_start / research_end): it fixes a verifiable goal, then loops through execution and independent review until the result passes. They work together: Deep Research defines "what done means" and guarantees quality through review; Blueprint plans "how to get there". When Deep Research is ON and the task is complex, multi-step, or the path is unclear, call get_action_blueprint first to plan the route (after the goal and acceptance criteria are written), then execute along the blueprint. When the reviewer returns FAIL with a path-level problem, or new information changes the situation, call get_action_blueprint again to re-plan instead of brute-forcing. Using one never means giving up the other.
+
 ## Skills (!!!IMPORTANT!!!): 
 You operate in an environment with extensive external Skills, so your output must be precise and delivered at a high standard—every statement backed by evidence, like a research paper (reduce the use of web_search that have low accuracy). Never vague, never fabricated, never lazy. When a task exceeds your direct capability, use the skills tool to search/view/load/close_search relevant Skills to complete it (user Skills take priority), you need to read {skill}/SKILL.md to know how to use the skill. Before delivering, reflect on whether the result is precise and whether you've exhaustively searched for methods. If your ability falls short, be honest about it.
 
@@ -247,16 +250,16 @@ start_id and end_id must be plain 24-char hex strings copied from message id fie
 SUB_AGENT_PROMPT = """SUB AGENT: The following agents are provided in the initial state: {agents_dict}. You can use call_sub_agent to invoke existing agents or temporarily create new ones."""
 
 
-# ─── 科研模式（Research Mode）──────────────────────────────────────────────────
-# 系统提示词中关于科研模式的说明：由使用者自行填写。
+# ─── 深度研究（Deep Research）──────────────────────────────────────────────────
+# 系统提示词中关于深度研究的说明：由使用者自行填写。
 # 非空时会被拼接到主智能体 / Soulprout 模式的 system_prompt 末尾；为空则不拼接。
 RESEARCH_MODE_PROMPT = """"""
 
-# conversation_option module=research_start 的工具返回结果：对科研模式的完整说明 + 当前 Agent 的运行指引。
-# 占位符：{research_file} 目标/验收标准文件名；{reviewer_agent} 科研验收子智能体名称。
-RESEARCH_START_RESULT = """Research Mode is now ON.
+# conversation_option module=research_start 的工具返回结果：对深度研究的完整说明 + 当前 Agent 的运行指引。
+# 占位符：{research_file} 目标/验收标准文件名；{reviewer_agent} 深度研究验收子智能体名称。
+RESEARCH_START_RESULT = """Deep Research is now ON.
 
-Research Mode is designed for complex, difficult problems that cannot be solved reliably in a single pass. It runs as a loop: define goal -> research & attempt -> independent verification -> revise, and this turn is NOT allowed to end until the loop is closed. Follow the protocol below strictly.
+Deep Research is designed for complex, difficult problems that cannot be solved reliably in a single pass. It runs as a loop: define goal -> explore & attempt -> independent verification -> revise, until the work is as good as it can be. This turn is NOT allowed to end until the loop is closed. Follow the protocol below strictly.
 
 ## Phase 1 - Define the goal (do this first, before any solving)
 1. Analyse the user's request and turn it into a concrete, verifiable FINAL GOAL plus a set of ACCEPTANCE CRITERIA.
@@ -268,7 +271,8 @@ Research Mode is designed for complex, difficult problems that cannot be solved 
    - `# Progress Log`: append a short entry after each round (what was tried, result, reviewer feedback).
 3. If the request is too ambiguous to define a goal, ask the user with ask_user_feedback before writing the file.
 
-## Phase 2 - Research & solve
+## Phase 2 - Explore & solve
+- Plan before executing when needed: Blueprint (get_action_blueprint) is your planning capability and works hand in hand with Deep Research - Deep Research supervises the result, Blueprint plans the route. If the task is complex, multi-step, or the path is unclear, call get_action_blueprint first (with the goal and acceptance criteria from `{research_file}` in mind), then execute along the blueprint and record the planned route in `# Progress Log`.
 - Think at the macro level first: what does the user actually need to walk away with, and what would make the solution complete? Do not sink into brute-force reasoning on a single detail.
 - Before pushing hard on a sub-problem, check what capabilities already exist: search `skills` for a relevant skill, check `list_info` for tools / sub-agents (deep search, PPT, knowledge base, ...), and recall `base_memory` for user preferences or prior conclusions. Prefer using an existing capability over re-deriving everything yourself.
 - Be rigorous where it matters: evidence-backed, nothing fabricated. Decisions you make on the user's behalf (scope, trade-offs, assumptions) must be written down as assumptions, not silently baked in.
@@ -279,7 +283,7 @@ Research Mode is designed for complex, difficult problems that cannot be solved 
 - When you believe the goal is met, call `call_sub_agent` with module=exist and name=`{reviewer_agent}`.
 - In `purpose`, state explicitly: the path of `{research_file}`, the paths of ALL deliverable and reference files, a short summary of what was done, and which verification round this is. The reviewer reads the goal and acceptance criteria from `{research_file}` and judges from the user's macro perspective (is the problem really solved, is it complete, what must be confirmed with the user, is the approach sensible).
 - The reviewer replies with `VERDICT: PASS` or `VERDICT: FAIL` followed by findings and path-level suggestions (which skill / tool / sub-agent to use, what to confirm with the user).
-  - On FAIL: follow its suggestions - especially switching to a recommended skill / tool / sub-agent instead of repeating the same approach - go back to Phase 2, log the round, then call the reviewer again.
+  - On FAIL: follow its suggestions - especially switching to a recommended skill / tool / sub-agent instead of repeating the same approach - go back to Phase 2, log the round, then call the reviewer again. If the failure is about the overall path or approach, call get_action_blueprint again to re-plan before continuing.
   - On PASS: proceed to Phase 4.
 - Do NOT self-certify. Your own judgement that the task is complete does not count; only the reviewer's PASS does.
 
@@ -293,19 +297,19 @@ Research Mode is designed for complex, difficult problems that cannot be solved 
 - Call `conversation_option` with module=research_end. The call is refused if the reviewer has not been invoked or if its last verdict was FAIL.
 - Then present the final deliverables to the user, including the reviewer's verification conclusion, any annotated limitations, and the points that need the user's confirmation.
 
-## Rules while Research Mode is ON
+## Rules while Deep Research is ON
 - Do not end your turn with a plain answer before Phase 4 is done. If you do, the system will push you back into the loop.
 - Keep `{research_file}` as the single source of truth for the goal and criteria; update it instead of redefining the goal in chat.
 - Completeness and alignment with the user's real need matter more than polishing details.
 """
 
 # conversation_option module=research_end 的工具返回结果
-RESEARCH_END_RESULT = """Research Mode is now OFF. Verification has been completed by `{reviewer_agent}` (last verdict: {verdict}).
+RESEARCH_END_RESULT = """Deep Research is now OFF. Verification has been completed by `{reviewer_agent}` (last verdict: {verdict}).
 Now present the final deliverables to the user: what was produced (with file paths), how it meets the goal in `{research_file}`, the reviewer's verification conclusion, any annotated limitations / open issues, and the decisions or assumptions that need the user's confirmation."""
 
-# 兜底提醒：科研模式仍开启但主智能体直接输出了最终答复，以 user 消息注入，推动其回到科研流程
+# 兜底提醒：深度研究仍开启但主智能体直接输出了最终答复，以 user 消息注入，推动其回到深度研究流程
 # 占位符：{research_file}、{reviewer_agent}、{research_file_section}（RESEARCH.md 当前内容或缺失说明）
-RESEARCH_REMINDER_PROMPT = """SYSTEM: Research Mode is still ON, but you attempted to end the turn without completing the research protocol: `{reviewer_agent}` has not returned a PASS verdict and `conversation_option` module=research_end has not been called. Do not stop here. Continue the research loop:
+RESEARCH_REMINDER_PROMPT = """SYSTEM: Deep Research is still ON, but you attempted to end the turn without completing the Deep Research protocol: `{reviewer_agent}` has not returned a PASS verdict and `conversation_option` module=research_end has not been called. Do not stop here. Continue the Deep Research loop:
 
 1. Make sure `{research_file}` exists and contains the final goal and acceptance criteria (create or update it if needed).
 2. Make sure every deliverable is saved as a file in the workspace, with any unresolved parts clearly annotated as limitations / open issues instead of hidden.

@@ -213,7 +213,8 @@ class SoulproutToolFunction:
             return f"错误：修改{file_path}失败，失败原因：{e}"
 
     @staticmethod
-    def _image_media_type(data: bytes, file_name: str) -> str:
+    def _image_media_type(data: bytes) -> str | None:
+        """只认模型接受的四种格式。以文件头为准，不按扩展名猜测，无法识别则返回 None。"""
         if data.startswith(b"\x89PNG\r\n\x1a\n"):
             return "image/png"
         if data.startswith(b"\xff\xd8\xff"):
@@ -222,17 +223,7 @@ class SoulproutToolFunction:
             return "image/gif"
         if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
             return "image/webp"
-        if data.startswith(b"BM"):
-            return "image/bmp"
-        ext = os.path.splitext(file_name or "")[1].lower()
-        return {
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-            ".bmp": "image/bmp",
-        }.get(ext, "image/png")
+        return None
 
     async def read_picture(self, file_name, conversation_id):
         target = os.path.join(self._workspace_dir(conversation_id), file_name)
@@ -241,12 +232,20 @@ class SoulproutToolFunction:
         try:
             async with aiofiles.open(target, "rb") as image_file:
                 raw = await image_file.read()
+            media_type = self._image_media_type(raw)
+            if not media_type:
+                return {
+                    "ok": False,
+                    "message": f"图片格式不支持（仅支持 png、jpeg、gif、webp），未送入模型：{file_name}",
+                    "base64": None,
+                    "media_type": None,
+                }
             encoded = base64.b64encode(raw).decode("utf-8")
             return {
                 "ok": True,
                 "message": "成功读取图片",
                 "base64": encoded,
-                "media_type": self._image_media_type(raw, file_name),
+                "media_type": media_type,
             }
         except Exception as e:
             return {"ok": False, "message": f"读取图片失败: {e}", "base64": None, "media_type": None}

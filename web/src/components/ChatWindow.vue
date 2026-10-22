@@ -378,7 +378,7 @@
         ref="messageInput"
         :chat_request="chat_request"
         :model_list="model_list"
-        :isGenerating="isStreaming"
+        :isGenerating="isGenerating || isStreaming"
         :agent_card_list="agent_card_list"
         :userId="userId"
         :kb_list="kb_list"
@@ -785,17 +785,15 @@ async function confirmEditUser() {
 
   isConfirmEditPending.value = true
   try {
-    if (props.isGenerating) {
-      emit('stopGeneration')
-      await nextTick()
-      await nextTick()
-      idx = props.agent_message_list.findIndex(
-        (m) => m.role === 'user' && m.id === id,
-      )
-      if (idx === -1) {
-        cancelEditUser()
-        return
-      }
+    if (isStreaming.value) {
+      finishStreaming()
+    }
+    idx = props.agent_message_list.findIndex(
+      (m) => m.role === 'user' && m.id === id,
+    )
+    if (idx === -1) {
+      cancelEditUser()
+      return
     }
 
     props.agent_message_list.splice(idx)
@@ -1107,7 +1105,7 @@ function revealOlderTurn() {
   const groups = groupedMessages.value
   const start = pinnedGroupIndex.value
   if (!pinnedAnchorKey.value || start <= 0) return false
-  let nextStart = start - 1
+  let nextStart = Math.min(start, groups.length) - 1
   while (nextStart > 0 && groups[nextStart].role !== 'user') {
     nextStart -= 1
   }
@@ -1117,53 +1115,96 @@ function revealOlderTurn() {
   const prevTop = el?.scrollTop ?? 0
   pinnedAnchorKey.value = messageAnchorKey(anchor)
   isAutoScroll.value = false
+  revealScheduled = true
   nextTick(() => {
-    if (!el) return
-    el.scrollTop = prevTop + (el.scrollHeight - prevHeight)
+    requestAnimationFrame(() => {
+      if (el) el.scrollTop = prevTop + Math.max(0, el.scrollHeight - prevHeight)
+      revealScheduled = false
+    })
   })
   return true
 }
 
-function canConsumeScrollUp(start: HTMLElement, boundary: HTMLElement): boolean {
-  let node: HTMLElement | null = start
-  while (node && node !== boundary) {
-    const overflowY = window.getComputedStyle(node).overflowY
-    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight + 1 && node.scrollTop > 0) {
-      return true
-    }
-    node = node.parentElement
-  }
-  return false
+function isScrollableY(node: HTMLElement): boolean {
+  const overflowY = window.getComputedStyle(node).overflowY
+  return (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
+    && node.scrollHeight > node.clientHeight + 1
 }
 
+/** 滚轮落在文字上时 target 是文本节点，要先回到元素再往上找滚动区。 */
+function eventElement(target: EventTarget | null): HTMLElement | null {
+  if (target instanceof HTMLElement) return target
+  if (target instanceof Node) return target.parentElement
+  return null
+}
+
+/** 从光标到对话容器之间的内层滚动区，由近到远。 */
+function nestedScrollables(start: HTMLElement, boundary: HTMLElement): HTMLElement[] {
+  const list: HTMLElement[] = []
+  let node: HTMLElement | null = start
+  while (node && node !== boundary) {
+    if (isScrollableY(node)) list.push(node)
+    node = node.parentElement
+  }
+  return list
+}
+
+function wheelDeltaY(event: WheelEvent): number {
+  if (event.deltaMode === 1) return event.deltaY * 16
+  if (event.deltaMode === 2) return event.deltaY * (answerContainer.value?.clientHeight || 0)
+  return event.deltaY
+}
+
+const REVEAL_TOP_THRESHOLD = 2
 let revealScheduled = false
+
+function maybeRevealOlderAtTop() {
+  if (stickToLatestTop) return
+  const el = answerContainer.value
+  if (!el || el.scrollTop > REVEAL_TOP_THRESHOLD) return
+  if (revealScheduled) return
+  if (hasHiddenOlderMessages.value) {
+    revealOlderTurn()
+    return
+  }
+  if (props.chatMode === 'soulprout' && props.soulMessagesHasMore && !props.soulMessagesLoadingMore) {
+    revealScheduled = true
+    emit('loadMoreSoulMessages')
+    requestAnimationFrame(() => { revealScheduled = false })
+  }
+}
+
 function handleHistoryWheel(event: WheelEvent) {
   if (event.deltaY >= 0) return
   const container = answerContainer.value
-  if (!container || container.scrollTop > 2) return
-  const target = event.target
-  if (target instanceof HTMLElement) {
-    const tag = target.tagName
-    if (tag === 'TEXTAREA' || tag === 'INPUT' || target.isContentEditable) return
-    if (canConsumeScrollUp(target, container)) return
+  if (!container) return
+  const start = eventElement(event.target)
+  if (!start || !container.contains(start)) return
+  const tag = start.tagName
+  if (tag === 'TEXTAREA' || tag === 'INPUT' || start.isContentEditable) return
+
+  const nested = nestedScrollables(start, container)
+  const innermost = nested[0]
+  // 最近的小框自己还能往上滚，交给浏览器
+  if (innermost && innermost.scrollTop > 1) return
+  // 小框已经到顶，但更外层的小框还能滚
+  const outerNested = nested.find((node) => node.scrollTop > 1)
+  if (outerNested) {
+    event.preventDefault()
+    outerNested.scrollTop = Math.max(0, outerNested.scrollTop + wheelDeltaY(event))
+    return
   }
-  const canReveal = hasHiddenOlderMessages.value
-  const canLoadSoul = props.chatMode === 'soulprout' && !!props.soulMessagesHasMore && !props.soulMessagesLoadingMore
-  if (!canReveal && !canLoadSoul) return
+  // 内层都到顶了，继续滚对话本身
+  if (container.scrollTop > 1) {
+    event.preventDefault()
+    container.scrollTop = Math.max(0, container.scrollTop + wheelDeltaY(event))
+  }
+  if (container.scrollTop > REVEAL_TOP_THRESHOLD) return
+  if (!hasHiddenOlderMessages.value && !(props.chatMode === 'soulprout' && props.soulMessagesHasMore && !props.soulMessagesLoadingMore)) {
+    return
+  }
   event.preventDefault()
-  if (revealScheduled) return
-  revealScheduled = true
-  requestAnimationFrame(() => {
-    revealScheduled = false
-    if (!answerContainer.value || answerContainer.value.scrollTop > 2) return
-    if (hasHiddenOlderMessages.value) {
-      revealOlderTurn()
-      return
-    }
-    if (props.chatMode === 'soulprout' && props.soulMessagesHasMore && !props.soulMessagesLoadingMore) {
-      emit('loadMoreSoulMessages')
-    }
-  })
+  maybeRevealOlderAtTop()
 }
 
 watch(
@@ -1278,6 +1319,9 @@ const handleSendMessage = (
 ) => {
   const now = Date.now()
   const isUserFeedback = !!options?.user_feedback
+  if (isStreaming.value) {
+    finishStreaming()
+  }
   const userMsg: AgentMessage = {
     user_id: '',
     conversation_id: '',
@@ -2091,7 +2135,11 @@ const handleCreateAgentClick = () => {
 }
 
 .answer-group {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .soul-load-more-wrap {

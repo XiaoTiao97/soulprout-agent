@@ -26,7 +26,7 @@ from agent.database.crud.conversation import (
 from agent.database.models.user import UserInfo
 from agent.skill.manager import load_skill_to_workspace
 from agent.tool.tools import ToolExecutor
-from agent.services import prompt
+from agent.services import exception_handler, prompt
 from agent.services.blueprint import Blueprint
 from agent.services.compress import Compress
 from agent.services.memory import Memory
@@ -40,6 +40,7 @@ import os
 import aiofiles
 import aiofiles.os
 from pathlib import Path
+from openai import BadRequestError
 
 class Chat:
     def __init__(self, request):
@@ -86,9 +87,12 @@ class Chat:
         self.picture_base64_result = []
         self.pause_for_user_feedback = False
         self.stop_after_conversation_clear = False
-        # ─── 科研模式状态（仅存活于本次 Chat 实例，语义同 stop_after_conversation_clear）───
+        self.cancel_cleanup = False
+        self._partial_text = ""
+        self._partial_reasoning = ""
+        # ─── 深度研究状态（仅存活于本次 Chat 实例，语义同 stop_after_conversation_clear）───
         self.research_mode = False                  # research_start 置 True，research_end 置 False
-        self.research_reviewer_called = False       # 本轮科研中是否已调用过验收子智能体
+        self.research_reviewer_called = False       # 本轮深度研究中是否已调用过验收子智能体
         self.research_last_verdict = None           # 验收子智能体最近一次结论："PASS" / "FAIL" / None
         self.research_remind_count = 0              # 兜底提醒已触发次数
         self.agents_dict = {}
@@ -164,7 +168,7 @@ class Chat:
             if not chosen or chosen == self.source_channel:
                 arguments["chat_id"] = self.source_chat_id
 
-    # ─── 科研模式辅助 ────────────────────────────────────────────────────────
+    # ─── 深度研究辅助 ────────────────────────────────────────────────────────
     def _is_research_reviewer_call(self, name, arguments) -> bool:
         if name != "call_sub_agent" or not isinstance(arguments, dict):
             return False
@@ -172,7 +176,7 @@ class Chat:
         return arguments.get("name") == reviewer or arguments.get("agent_id") == reviewer
 
     def _track_research_verdict(self, name, arguments, result_text: str) -> None:
-        """记录科研验收子智能体的调用情况与结论（VERDICT: PASS / FAIL）。"""
+        """记录深度研究验收子智能体的调用情况与结论（VERDICT: PASS / FAIL）。"""
         if not self._is_research_reviewer_call(name, arguments):
             return
         self.research_reviewer_called = True
@@ -181,7 +185,7 @@ class Chat:
             self.research_last_verdict = match.group(1).upper()
         else:
             # 子智能体未按格式输出时，不覆盖上一次结论，但保证“已调用”状态成立
-            print(f"科研验收子智能体未返回可识别的 VERDICT，保留上一次结论：{self.research_last_verdict}")
+            print(f"深度研究验收子智能体未返回可识别的 VERDICT，保留上一次结论：{self.research_last_verdict}")
 
     def _research_start(self) -> str:
         self.research_mode = True
@@ -196,17 +200,17 @@ class Chat:
     def _research_end(self) -> str:
         reviewer = self.config.research_reviewer_agent_name
         if not self.research_mode:
-            return "Research Mode is not ON in the current session; nothing to close."
+            return "Deep Research is not ON in the current session; nothing to close."
         if not self.research_reviewer_called:
             return (
-                f"Refused: Research Mode cannot be closed because `{reviewer}` has not been invoked yet. "
+                f"Refused: Deep Research cannot be closed because `{reviewer}` has not been invoked yet. "
                 f"Call call_sub_agent (module=exist, name=`{reviewer}`) with the path of "
                 f"`{self.config.research_file_name}` and all deliverable files, and close only after it returns VERDICT: PASS."
             )
         if self.research_last_verdict == "FAIL":
             return (
                 f"Refused: the last verdict from `{reviewer}` was FAIL. Revise the work according to its suggestions, "
-                f"update `{self.config.research_file_name}`, and call the reviewer again before closing Research Mode."
+                f"update `{self.config.research_file_name}`, and call the reviewer again before closing Deep Research."
             )
         verdict = self.research_last_verdict or "PASS (no explicit verdict parsed)"
         self.research_mode = False
@@ -247,6 +251,21 @@ class Chat:
 
     # llm_stream/大模型流式输出
     async def llm_stream(self, messages, model_config):
+        for attempt in range(2):
+            yielded = False
+            try:
+                async for item in self._llm_stream_once(messages, model_config):
+                    yielded = True
+                    yield item
+                return
+            except BadRequestError as error:
+                if yielded or attempt == 1 or not await exception_handler.drop_rejected_image(
+                    messages, error, getattr(self, "_request_message_ids", []), self.get_runtime_history,
+                ):
+                    raise
+                print(f"[image] 请求因不受支持的图片被拒绝，已移除后重试：{error}")
+
+    async def _llm_stream_once(self, messages, model_config):
         tool_call = False
         tool_message = Message(role="assistant")
         file_tool_message = FileMessage(role="file")
@@ -393,16 +412,21 @@ class Chat:
 
     async def get_history(self):
         history = await self.get_runtime_history()
-        history_list = [
-            {
+        await exception_handler.sanitize_stored_images(history)
+        history_list = []
+        history_ids = []
+        for item in history:
+            if item.role == "agent":
+                continue
+            history_ids.append(item.id)
+            history_list.append({
                 'role': item.role,
                 'content': item.content,
                 **({'reasoning_content': item.reasoning_content} if hasattr(item, 'reasoning_content') and item.reasoning_content is not None else {}),
                 **({'tool_calls': item.tool_calls} if hasattr(item, 'tool_calls') and item.tool_calls is not None else {}),
                 **({'tool_call_id': item.tool_call_id} if hasattr(item, 'tool_call_id') and item.tool_call_id is not None else {})
-            }
-            for item in history if item.role != "agent"
-        ]
+            })
+        self._history_message_ids = history_ids
         return history_list
 
     async def get_abstract(self):
@@ -853,10 +877,10 @@ class Chat:
             result = await self.mcp_call_tool(name=name, arguments=arguments)
             if not ("deepseek" in self.model or "doubao" in self.model or "kimi" in self.model or "mimo" in self.model):
                 content = f"{self.model}不支持阅读图片"
-            elif result.get("ok") and result.get("base64"):
+            elif result.get("ok") and exception_handler.is_accepted_image(result.get("media_type"), result.get("base64")):
                 self.picture_base64_result.append({
                     "base64": result.get("base64"),
-                    "media_type": result.get("media_type") or "image/png",
+                    "media_type": result.get("media_type"),
                 })
                 content = result.get("message", "成功读取图片")
             else:
@@ -1066,11 +1090,11 @@ class Chat:
         # 处理所有读取图片的情况
         if len(self.picture_base64_result) > 0:
             for picture in self.picture_base64_result:
-                media_type = picture.get("media_type") or "image/png"
-                image_content = [
-                    {"type": "text", "text": self.input_text},
-                    {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{picture.get('base64')}"}}
-                ]
+                image_content = exception_handler.build_image_user_content(
+                    self.input_text, picture.get("base64"), picture.get("media_type"),
+                )
+                if not image_content:
+                    continue
                 self.messages.append({"role": "user", "content": image_content})
                 await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="user", content=image_content, created_at=datetime.utcnow()))
         self.picture_base64_result = []
@@ -1290,11 +1314,14 @@ class Chat:
             await self.history_check()
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
+            leading_synthetic = 1
             if self.agent_card and self.agent_card.supervisor_history:
                 main_history = await get_message_by_conv_id(self.conversation_id)
                 main_history_list = [{"role": item.role, "content": item.content} for item in main_history if item.role != "agent"]
                 summary_info = await self._summary_history("", main_history_list)
                 history.insert(1, {"role": "user", "content": f"用户之前的主智能体对话：{summary_info}"})
+                leading_synthetic = 2
+            self._request_message_ids = exception_handler.request_message_ids(self._history_message_ids, leading_synthetic)
             self.messages = history
 
             if not memory_process_result:
@@ -1365,11 +1392,11 @@ class Chat:
                 finish = True
             elif len(message_total) > 0:
                 await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant", content=message_total, reasoning_content=reasoning_content_total if len(reasoning_content_total) > 0 else None, created_at=datetime.utcnow()))
-                # 科研模式兜底：主智能体未经验收/未关闭科研模式就直接输出了最终答复 → 不结束，注入 user 提醒让其回到科研流程
+                # 深度研究兜底：主智能体未经验收/未关闭深度研究就直接输出了最终答复 → 不结束，注入 user 提醒让其回到深度研究流程
                 if self.research_mode and self.research_remind_count < self.config.research_remind_limit:
                     self.research_remind_count += 1
                     reminder = await self._build_research_reminder()
-                    print(f"科研模式兜底提醒（第 {self.research_remind_count} 次）")
+                    print(f"深度研究兜底提醒（第 {self.research_remind_count} 次）")
                     await self.save_message(AgentMessage(
                         user_id=self.user_id,
                         conversation_id=self.conversation_id,
@@ -1391,21 +1418,41 @@ class Chat:
                             conversation_id=self.conversation_id,
                             user_id=self.user_id,
                             type="error",
-                            content=f"科研模式兜底提醒已达上限（{self.config.research_remind_limit} 次），主智能体仍未完成验收流程，本轮结束",
+                            content=f"深度研究兜底提醒已达上限（{self.config.research_remind_limit} 次），主智能体仍未完成验收流程，本轮结束",
                         ).model_dump_json()
                     finish = True
 
     async def conversation_init(self):
         if self.conversation_id == "":
             self.conversation_id = str(uuid4())
+        existing = await get_conversation_by_id(self.conversation_id)
+        if existing is None:
             abstract = await self.get_abstract()
             if self.temp_file_path:
                 await self.remove_temp_files()
             await create_conversation(Conversation(user_id=self.user_id, conversation_id=self.conversation_id, abstract=abstract, tools_use=self.tools_use, skills_use=self.skills_use, kb_use=self.kb_use, agent_use=self.agent_use, agent_id=self.agent_id, agent_name=self.agent_name, model_source=self.model_source, model=self.model))
             return True, abstract
-        else:
-            await update_conversation_by_conv_for_tools_and_kb(conversation_id=self.conversation_id, tools_use=self.tools_use, skills_use=self.skills_use, kb_use=self.kb_use, agent_use=self.agent_use, agent_id=self.agent_id, agent_name=self.agent_name, model_source=self.model_source, model=self.model, update_at=datetime.utcnow())
-            return False, None
+        await update_conversation_by_conv_for_tools_and_kb(conversation_id=self.conversation_id, tools_use=self.tools_use, skills_use=self.skills_use, kb_use=self.kb_use, agent_use=self.agent_use, agent_id=self.agent_id, agent_name=self.agent_name, model_source=self.model_source, model=self.model, update_at=datetime.utcnow())
+        return False, None
+
+    async def flush_partial(self):
+        """取消时把已经流出、尚未落库的 assistant 正文写入历史。停止时再清理未完成的 tool 序列。"""
+        text = self._partial_text or ""
+        reasoning = self._partial_reasoning or ""
+        self._partial_text = ""
+        self._partial_reasoning = ""
+        if text.strip() and self.conversation_id:
+            await self.save_message(AgentMessage(
+                user_id=self.user_id,
+                conversation_id=self.conversation_id,
+                type="text",
+                role="assistant",
+                content=text,
+                reasoning_content=reasoning if reasoning else None,
+                created_at=datetime.utcnow(),
+            ))
+        if self.cancel_cleanup and self.conversation_id:
+            await self.history_check()
 
     async def run(self):
         if self.is_sub_agent:
@@ -1461,6 +1508,7 @@ class Chat:
         print("model_source:", self.model_source, "model:", self.model)
         user_msg_type = "user_feedback" if self.user_feedback else "text"
         result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow()))
+        yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="user_message", role="user", content=self.input_text).model_dump_json()
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="input_message_id", content=str(result.id)).model_dump_json()
 
         # 处理上传文件
@@ -1471,12 +1519,15 @@ class Chat:
             self.round_limit -= 1
             message_total = ""
             reasoning_content_total = ""
+            self._partial_text = ""
+            self._partial_reasoning = ""
             await self.history_check()
             memory_process_result = await self.compress_process()     # 上下文压缩（成功后内部会同步 memory_loaded）
             # compress 可能截断 tool 配对，压缩后再校验一次
             await self.history_check()
             history = await self.get_history()
             history.insert(0, {"role": "system", "content": self.system_prompt})
+            self._request_message_ids = exception_handler.request_message_ids(self._history_message_ids, 1)
             self.messages = history
 
             # 异常处理
@@ -1516,10 +1567,12 @@ class Chat:
                         self.messages[-1]["content"] = message_total
                         message_save["content"] = message_total
                         message_total = ""
+                        self._partial_text = ""
                     if len(reasoning_content_total) > 0:
                         self.messages[-1]["reasoning_content"] = reasoning_content_total
                         message_save["reasoning_content"] = reasoning_content_total
                         reasoning_content_total = ""
+                        self._partial_reasoning = ""
                     await self.save_message(AgentMessage(**message_save))
                     yield ChatResponse(**message_save).model_dump_json()
 
@@ -1548,12 +1601,14 @@ class Chat:
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type=message.type, role="file", json_table=message.json_table).model_dump_json()
                 elif message.content:
                     message_total += message.content
+                    self._partial_text = message_total
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="text", content=message.content).model_dump_json()
 
                 elif message.reasoning_content:
                     if isinstance(message.reasoning_content, str):
                         reasoning_content = message.reasoning_content
                         reasoning_content_total += reasoning_content
+                        self._partial_reasoning = reasoning_content_total
                     yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="reasoner_content", content=reasoning_content).model_dump_json()
 
             if self.stop_after_conversation_clear:
@@ -1564,4 +1619,6 @@ class Chat:
                 finish = True
             elif len(message_total) > 0:
                 finish = True
+                self._partial_text = ""
+                self._partial_reasoning = ""
                 await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="text", role="assistant", content=message_total, reasoning_content=reasoning_content_total if len(reasoning_content_total) > 0 else None, created_at=datetime.utcnow()))

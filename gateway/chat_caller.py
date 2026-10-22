@@ -184,6 +184,43 @@ def _ingest_sse_chunk(
         parts.append(content)
 
 
+def _consume_turn_event(chunk: dict[str, Any], state: dict[str, Any]) -> Optional[str]:
+    """只收集本次 submit 的 turn。返回 done / interrupted / stopped，未结束则返回 None。"""
+    event_type = chunk.get("type")
+    event_turn = chunk.get("turn_id")
+    if event_type == "accepted" and event_turn and not state.get("turn_id"):
+        state["turn_id"] = event_turn
+        return None
+    turn_id = state.get("turn_id")
+    if not turn_id:
+        if event_type == "turn_started" and event_turn:
+            state["turn_id"] = event_turn
+        return None
+    if event_turn and event_turn != turn_id:
+        return None
+    if event_type in ("interrupted", "stopped") and event_turn == turn_id:
+        return event_type
+    if event_type == "turn_done" and event_turn == turn_id:
+        return "done"
+    if event_turn == turn_id:
+        _ingest_sse_chunk(
+            chunk,
+            state["parts"],
+            state["feedback_parts"],
+            state["error_parts"],
+        )
+    return None
+
+
+def _new_turn_state() -> dict[str, Any]:
+    return {
+        "turn_id": None,
+        "parts": [],
+        "feedback_parts": [],
+        "error_parts": [],
+    }
+
+
 def _compose_reply(
     parts: list[str],
     feedback_parts: list[str],
@@ -304,13 +341,20 @@ async def _call_http(
                     )
                     return f"（Agent 请求失败 HTTP {resp.status}）"
 
-                parts: list[str] = []
-                feedback_parts: list[str] = []
-                error_parts: list[str] = []
+                state = _new_turn_state()
                 async for chunk in _iter_sse_json_events(resp):
-                    _ingest_sse_chunk(chunk, parts, feedback_parts, error_parts)
+                    status = _consume_turn_event(chunk, state)
+                    if status == "done":
+                        return _compose_reply(
+                            state["parts"], state["feedback_parts"], state["error_parts"]
+                        )
+                    if status in ("interrupted", "stopped"):
+                        logger.info("[ChatCaller] 本轮已结束 status=%s，不返回被打断的回复", status)
+                        return ""
 
-                return _compose_reply(parts, feedback_parts, error_parts)
+                return _compose_reply(
+                    state["parts"], state["feedback_parts"], state["error_parts"]
+                )
 
     except Exception as exc:
         logger.error("[ChatCaller] HTTP 调用失败 url=%s: %s", endpoint, exc, exc_info=True)
@@ -372,15 +416,24 @@ async def _iter_http_text_chunks(
                     yield f"（Agent 请求失败 HTTP {resp.status}）"
                     return
 
+                state = _new_turn_state()
                 async for chunk in _iter_sse_json_events(resp):
-                    content = chunk.get("content") or ""
-                    if not content:
-                        continue
-                    chunk_type = chunk.get("type")
-                    if chunk_type in ("user_feedback", "error"):
-                        yield content
-                    elif chunk.get("role") == "assistant" and chunk_type == "text":
-                        yield content
+                    before = (
+                        len(state["parts"]),
+                        len(state["feedback_parts"]),
+                        len(state["error_parts"]),
+                    )
+                    status = _consume_turn_event(chunk, state)
+                    if len(state["parts"]) > before[0] and state["parts"][-1]:
+                        yield state["parts"][-1]
+                    elif len(state["feedback_parts"]) > before[1] and state["feedback_parts"][-1]:
+                        yield state["feedback_parts"][-1]
+                    elif len(state["error_parts"]) > before[2] and state["error_parts"][-1]:
+                        yield state["error_parts"][-1]
+                    if status in ("done", "interrupted", "stopped"):
+                        if status != "done":
+                            logger.info("[ChatCaller] 流式本轮已结束 status=%s", status)
+                        return
 
     except Exception as exc:
         logger.error(

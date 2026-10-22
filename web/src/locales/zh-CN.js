@@ -107,6 +107,7 @@ export default {
     viewKB: '查看知识库',
     viewAgents: '查看专家库',
     generatingDisabled: '正在生成中，无法操作',
+    runningNow: '正在运行',
     chatMode: '对话模式',
     soulLabel: '灵芽',
     taskLabel: '任务',

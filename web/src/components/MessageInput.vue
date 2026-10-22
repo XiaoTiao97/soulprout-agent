@@ -501,30 +501,15 @@ function handleButtonClick() {
 }
 
 function submitMessage() {
-  if (input.value.trim()) {
-    if (props.isGenerating) {
-      showGenerationPrompt.value = true
-      setTimeout(() => {
-        showGenerationPrompt.value = false
-      }, 2000) // Hide after 2 seconds
-      return
+  if (!input.value.trim()) return
+  emit('sendMessage', input.value, selectedFiles.value)
+  input.value = ''
+  clearSelectedFiles()
+  nextTick(() => {
+    if (textareaRef.value) {
+      textareaRef.value.style.height = 'auto'
     }
-    emit('sendMessage', input.value, selectedFiles.value)
-    input.value = ''
-    clearSelectedFiles()
-    nextTick(() => {
-      if (textareaRef.value) {
-        textareaRef.value.style.height = 'auto'
-      }
-    })
-  } else if (props.isGenerating) {
-    showGenerationPrompt.value = true
-    setTimeout(() => {
-      showGenerationPrompt.value = false
-      // Removed: emit('stopGeneration')
-    }, 2000)
-    return
-  }
+  })
 }
 
 function toggleModelSelector() {

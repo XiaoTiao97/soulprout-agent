@@ -107,6 +107,7 @@ export default {
     viewKB: 'View knowledge base',
     viewAgents: 'View expert library',
     generatingDisabled: 'Generating — actions disabled',
+    runningNow: 'Running',
     chatMode: 'Chat mode',
     soulLabel: 'Soul',
     taskLabel: 'Task',
