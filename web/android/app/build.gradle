@@ -10,11 +10,19 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // 唤醒词（sherpa-onnx）原生库较大，只打真机常见架构；x86_64 供模拟器调试
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+    }
+    // 唤醒词模型文件不压缩，方便原生层直接按 asset 读取
+    androidResources {
+        noCompress += ['onnx']
     }
     buildTypes {
         release {
@@ -40,6 +48,10 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // 离线唤醒词：sherpa-onnx（JNI + onnxruntime + Kotlin API）。
+    // AAR 不进 git，先执行 web/android/fetch-wake-deps.ps1 下载到 app/libs/。
+    implementation(name: 'sherpa-onnx-2.0.0', ext: 'aar')
 }
 
 apply from: 'capacitor.build.gradle'

@@ -31,11 +31,18 @@ export function resolveApi(path) {
 }
 
 function withAuthHeaders(headers) {
-  const token = getToken()
-  if (!token) return headers
   const next = new Headers(headers || {})
-  if (!next.has('Authorization')) next.set('Authorization', `Bearer ${token}`)
+  // Cache-Control 不在服务端放行的请求头里，带上会导致预检失败。
+  // 不走缓存由 fetch 的 cache: 'no-store' 负责。
+  next.delete('Cache-Control')
+  const token = getToken()
+  if (token && !next.has('Authorization')) next.set('Authorization', `Bearer ${token}`)
   return next
+}
+
+/** 跨域访问官网时不能带 Cookie。后端未开 credentials，带上会被浏览器直接丢弃。 */
+function crossOriginInit(options = {}) {
+  return { ...options, headers: withAuthHeaders(options.headers), credentials: 'omit' }
 }
 
 export const http = axios.create()
@@ -50,7 +57,7 @@ http.interceptors.request.use((config) => {
 })
 
 export function apiFetch(path, options = {}) {
-  return fetch(resolveApi(path), { ...options, headers: withAuthHeaders(options.headers) })
+  return fetch(resolveApi(path), crossOriginInit(options))
 }
 
 /** 只在安卓入口调用。让聊天组件里写死的 /api 请求（axios 与 fetch）在直连服务器时也能用。 */
@@ -65,7 +72,7 @@ export function installMobileApiShim() {
   const nativeFetch = window.fetch.bind(window)
   window.fetch = (input, init) => {
     if (typeof input === 'string' && input.startsWith('/api')) {
-      return nativeFetch(resolveApi(input), { ...(init || {}), headers: withAuthHeaders(init?.headers) })
+      return nativeFetch(resolveApi(input), crossOriginInit(init || {}))
     }
     return nativeFetch(input, init)
   }

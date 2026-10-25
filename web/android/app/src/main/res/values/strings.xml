@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Soulprout</string>
-    <string name="title_activity_main">Soulprout</string>
+    <string name="app_name">灵芽</string>
+    <string name="title_activity_main">灵芽</string>
     <string name="package_name">com.soulprout.agent</string>
     <string name="custom_url_scheme">com.soulprout.agent</string>
 </resources>

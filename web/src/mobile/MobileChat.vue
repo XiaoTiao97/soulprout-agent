@@ -407,9 +407,25 @@ function openWebPreview(url) {
   padding-bottom: 16px !important;
   min-height: 0 !important;
   overflow-y: auto !important;
+  /* 手机上不允许左右滑动：宽度恒定，超宽内容在各自内部处理（见下） */
+  overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior: contain;
+  /* 不占宽度的滚动条，避免可用宽度被吃掉一截 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-chat :deep(.answer-container::-webkit-scrollbar) {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 网页端用来占位的空白栏，手机上没有用，且会在屏幕右侧外多出一块 */
+.mobile-chat :deep(.conversation-view) {
+  display: none !important;
 }
 
 .mobile-chat :deep(.answer-single-me-agent),
@@ -428,6 +444,102 @@ function openWebPreview(url) {
 
 .mobile-chat :deep(.answer-robot-container) {
   width: 100% !important;
+  min-width: 0;
+}
+
+/* 气泡原本是 width: fit-content，遇到长链接 / 表格 / 代码块会按最长内容撑宽，
+   把整个聊天区顶出横向滚动条。这里限制为不超过屏幕，并让长文本能换行。 */
+.mobile-chat :deep(.answer-robot-content),
+.mobile-chat :deep(.answer-robot-content-us),
+.mobile-chat :deep(.answer-me-content) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100% - 32px);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.mobile-chat :deep(.p-content-markdown) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* 表格、代码块：只在自己内部横向滚动，不撑宽页面 */
+.mobile-chat :deep(.p-content-markdown table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-chat :deep(.code-wrapper),
+.mobile-chat :deep(.p-content-markdown pre) {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.mobile-chat :deep(.code-wrapper pre) {
+  overflow-x: auto;
+}
+
+.mobile-chat :deep(.p-content-markdown img) {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 灵芽欢迎页：「多渠道接入：微信 飞书 ……」一整行不换行，手机上会被裁掉，改成换行居中 */
+.mobile-chat :deep(.no-history-container--soul) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 16px;
+}
+
+.mobile-chat :deep(.soul-channel-line) {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 8px;
+}
+
+.mobile-chat :deep(.soul-channel-list) {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 8px;
+  max-width: 100%;
+}
+
+/* 欢迎页（任务模式）标题 + 「移动到这里查看」提示原本是一整行，手机上标题贴边、提示被裁掉 */
+.mobile-chat :deep(.no-history-container) {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding-inline: 16px;
+  text-align: center;
+}
+
+.mobile-chat :deep(.no-history-title-row) {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  row-gap: 8px;
+  max-width: 100%;
+}
+
+.mobile-chat :deep(.no-history-container .no-history-content1) {
+  font-size: 26px;
+}
+
+/* 欢迎页（任务模式）两张卡片原本不换行、各自至少 300px，手机放不下 */
+.mobile-chat :deep(.suggestion-cards-two) {
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.mobile-chat :deep(.suggestion-cards-two .suggestion-card) {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .booting {

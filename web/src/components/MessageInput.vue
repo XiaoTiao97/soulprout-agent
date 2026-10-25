@@ -921,9 +921,14 @@ async function onRecordStopped() {
     const text = (data.text || '').trim()
     if (!text) throw new Error(t('messageInput.noSpeechDetected'))
     input.value = input.value ? `${input.value}${text}` : text
-    // 手机端：识别出的文字放进输入框，切回打字模式，方便确认后再发送
-    if (mobileLayout) voiceMode.value = false
-    adjustHeight()
+    if (mobileLayout && voiceMode.value && !props.isGenerating) {
+      // 手机端按住说话：松手识别完直接发送，不经过输入框；保持在语音模式，下次继续按住说话
+      submitMessage()
+    } else {
+      // 网页端；或手机端正在生成回复时（不打断当前回复）：文字放进输入框，手机端切回打字模式，确认后再发送
+      if (mobileLayout) voiceMode.value = false
+      adjustHeight()
+    }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : t('messageInput.speechFailed')
     alert(msg)
@@ -1059,40 +1064,102 @@ defineExpose({
   position: relative;
 }
 
-.settings-select-btn {
-  display: flex;
+/* ---------------------------------------------------------------------
+ * 输入栏工具按钮（上传 / 设置 / 专家模式）统一样式
+ * 色板与侧边栏保持一致：白 / 灰 / #212121，不引入彩色。
+ * 默认：透明底 + 细灰线；悬停：淡灰；展开：稍深灰；已选中：#212121 黑块
+ * --------------------------------------------------------------------- */
+.upload-option,
+.settings-select-btn,
+.agent-select-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 13px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.09);
   border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  color: #111827;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  color: rgb(61, 61, 61);
+  box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
-.settings-select-btn:hover {
-  background: #eef1f5;
-  border-color: #dfe3e8;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
+.upload-option {
+  width: 36px;
+  padding: 0;
 }
 
-.settings-active {
-  background: #eef1f5;
-  border-color: #dfe3e8;
+.upload-option img {
+  opacity: 0.75;
+  transition: opacity 0.2s ease;
 }
 
+.upload-option:hover img {
+  opacity: 1;
+}
+
+.upload-option:hover:not(:disabled),
+.settings-select-btn:hover,
+.agent-select-btn:hover {
+  background: rgba(0, 0, 0, 0.045);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgb(33, 33, 33);
+  box-shadow: none;
+}
+
+.upload-option:active:not(:disabled),
+.settings-select-btn:active,
+.agent-select-btn:active {
+  transform: scale(0.97);
+}
+
+.upload-option:focus-visible,
+.settings-select-btn:focus-visible,
+.agent-select-btn:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.2);
+  outline-offset: 2px;
+}
+
+.upload-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 设置面板展开中 */
+.settings-select-btn.settings-active,
+.settings-select-btn.settings-active:hover {
+  background: rgba(0, 0, 0, 0.07);
+  border-color: rgba(0, 0, 0, 0.18);
+  color: rgb(33, 33, 33);
+}
+
+/* 专家模式已选中：与侧边栏分段控件的黑色 thumb 同款 */
+.agent-select-btn.agent-active,
+.agent-select-btn.agent-active:hover {
+  background: rgb(33, 33, 33) !important;
+  border: 1px solid rgb(33, 33, 33) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* 下拉 / 弹出面板：纯白浮层 */
 .settings-panel {
   position: absolute;
   bottom: 100%;
   left: 0;
-  margin-bottom: 8px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 18px 38px -22px rgba(15, 23, 42, 0.16);
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.04),
+    0 16px 36px -10px rgba(0, 0, 0, 0.14);
   z-index: 1000;
   min-width: 220px;
   padding: 10px;
@@ -1114,7 +1181,8 @@ defineExpose({
 .settings-row-label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: rgb(110, 110, 110);
+  letter-spacing: 0.2px;
   flex-shrink: 0;
 }
 
@@ -1125,27 +1193,29 @@ defineExpose({
   padding: 6px 12px;
   min-height: 36px;
   box-sizing: border-box;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid transparent;
+  border-radius: 9px;
   cursor: pointer;
   font-size: 13px;
-  color: #111827;
-  transition: all 0.2s ease;
+  font-weight: 500;
+  color: rgb(61, 61, 61);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   min-width: 165px;
   width: 165px;
   justify-content: space-between;
 }
 
 .settings-row-trigger:hover {
-  background: #eef1f5;
-  border-color: #dfe3e8;
+  background: rgba(0, 0, 0, 0.075);
+  border-color: transparent;
 }
 
-.settings-row-trigger.kb-active {
-  background: #e2e9ff;
-  color: #1d4ed8;
-  border-color: #c8d7ff;
+.settings-row-trigger.kb-active,
+.settings-row-trigger.kb-active:hover {
+  background: rgb(33, 33, 33) !important;
+  color: #fff !important;
+  border-color: rgb(33, 33, 33) !important;
 }
 
 .settings-row-value {
@@ -1170,10 +1240,12 @@ defineExpose({
   min-width: 200px;
   max-width: 320px;
   overflow-y: auto;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 18px 38px -22px rgba(15, 23, 42, 0.16);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 16px 36px -10px rgba(0, 0, 0, 0.14);
   z-index: 1001;
   padding: 10px 0;
 }
@@ -1218,14 +1290,24 @@ defineExpose({
   border: transparent;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.2s ease;
-  color: #111827;
-  border-radius: 10px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  color: rgb(61, 61, 61);
+  border-radius: 9px;
 }
 
-.settings-right-dropdown .model-option:hover,
+.settings-right-dropdown .model-option:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgb(33, 33, 33);
+}
+
 .settings-right-dropdown .model-option.active {
-  background: #e7e7e7;
+  background: rgb(33, 33, 33);
+  color: #fff;
+}
+
+.settings-right-dropdown .model-group-title {
+  color: rgb(140, 140, 140);
+  letter-spacing: 0.6px;
 }
 
 .kb-dropdown-right .kb-list {
@@ -1262,10 +1344,14 @@ defineExpose({
   position: absolute;
   bottom: 100%;
   left: 0;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 18px 38px -22px rgba(15, 23, 42, 0.16);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.04),
+    0 16px 36px -10px rgba(0, 0, 0, 0.14);
+  margin-bottom: 10px;
   z-index: 1000;
   padding: 10px;
   min-width: 140px;
@@ -1299,7 +1385,7 @@ defineExpose({
 
 .agent-dropdown-left.has-right {
   padding-right: 10px;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid rgba(0, 0, 0, 0.07);
   margin-right: 10px;
 }
 
@@ -1335,20 +1421,20 @@ defineExpose({
   cursor: pointer;
   border-radius: 10px;
   transition: background-color 0.2s ease, color 0.2s ease;
-  color: #303030;
+  color: rgb(61, 61, 61);
   text-align: left;
 }
 
 .mode-item:hover {
-  background: #e7e7e7;
-  color: #303030;
+  background: rgba(0, 0, 0, 0.05);
+  color: rgb(33, 33, 33);
 }
-  
-  .mode-item.active {
-    background: #dbe7ff;
-    color: #303030;
-    box-shadow: inset 0 0 0 1px #e7e7e7;
-  }
+
+.mode-item.active,
+.mode-item.active:hover {
+  background: rgb(33, 33, 33);
+  color: #fff;
+}
 
 .list-column-wrapper {
   display: flex;
@@ -1380,17 +1466,17 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   padding: 6px 10px;
-  background: #f1f5f9;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  color: #334155;
+  color: rgb(61, 61, 61);
   font-size: 1rem;
   transition: background 0.2s;
 }
 
 .agent-dropdown-block-header:hover {
-  background: #e2e8f0;
+  background: rgba(0, 0, 0, 0.075);
 }
 
 .agent-dropdown-block-title {
@@ -1486,8 +1572,8 @@ defineExpose({
 
 .confirm-btn-wrapper {
   padding: 8px;
-  border-top: 1px solid #e5e7eb;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  background: #fff;
   flex-shrink: 0;
   z-index: 10;
 }
@@ -1502,8 +1588,8 @@ defineExpose({
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.2s ease;
-  color: #111827;
-  border-radius: 10px;
+  color: rgb(61, 61, 61);
+  border-radius: 9px;
   margin: 4px 0;
   width: fit-content;
   min-width: 120px;
@@ -1513,16 +1599,17 @@ defineExpose({
 .agent-checkbox input {
   margin: 0;
   margin-right: 8px;
-  accent-color: #2b63ff;
+  accent-color: rgb(33, 33, 33);
 }
 
 .agent-checkbox:hover {
-  background: #e7e7e7;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .agent-checkbox:has(input:checked) {
-  background: #e7e7e7;
-  color: #111827;
+  background: rgba(0, 0, 0, 0.07);
+  color: rgb(33, 33, 33);
+  font-weight: 600;
 }
 
 .agent-checkbox-disabled {
@@ -1537,7 +1624,7 @@ defineExpose({
 }
 
 .multi-active {
-  background: #007bff;
+  background: rgb(33, 33, 33);
   color: white;
 }
   
@@ -1569,41 +1656,45 @@ defineExpose({
   height: 32px;
   padding: 0;
   box-sizing: border-box;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(0, 0, 0, 0.09);
   border-radius: 999px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  color: #374151;
+  background: transparent;
+  color: rgb(61, 61, 61);
   cursor: pointer;
   transition: width 0.28s ease, padding 0.28s ease, gap 0.28s ease,
-    background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   overflow: hidden;
   flex-shrink: 0;
+  box-shadow: none;
 }
 
 .voice-btn:hover:not(:disabled) {
-  background: #eef1f5;
-  border-color: #dfe3e8;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgb(33, 33, 33);
+  box-shadow: none;
 }
 
 .voice-btn:disabled {
   cursor: default;
 }
 
-.voice-btn--recording {
+.voice-btn--recording,
+.voice-btn--recording:hover:not(:disabled) {
   padding: 0 10px 0 12px;
   gap: 8px;
-  border-color: #fca5a5;
-  background: linear-gradient(180deg, #fffafa 0%, #fef2f2 100%);
-  color: #b91c1c;
-  box-shadow: 0 8px 18px -14px rgba(239, 68, 68, 0.25);
+  border-color: #f0c4c0;
+  background: #fdf2f1;
+  color: #d04a42;
+  box-shadow: none;
 }
 
-.voice-btn--transcribing {
-  border-color: #c8d7ff;
-  background: linear-gradient(180deg, #f8faff 0%, #eef3ff 100%);
-  color: #2b63ff;
-  box-shadow: 0 8px 18px -14px rgba(43, 99, 255, 0.2);
+.voice-btn--transcribing,
+.voice-btn--transcribing:hover:not(:disabled) {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.05);
+  color: rgb(61, 61, 61);
+  box-shadow: none;
 }
 
 .voice-btn-icon {
@@ -1720,13 +1811,6 @@ defineExpose({
   border-top: 6px solid rgba(39, 38, 38, 0.84);
 }
   
-.agent-active {
-  background: linear-gradient(135deg, #f4f7ff 0%, #e8efff 45%, #f4f8ff 100%) !important;
-  color: #2b63ff !important;
-  border: 1px solid #2b63ff !important;
-  box-shadow: 0 10px 22px -18px rgba(43, 99, 255, 0.45);
-}
-
 .kb-selector {
   position: relative;
 }
@@ -1736,35 +1820,35 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.09);
   border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  color: #111827;
+  font-size: 13.5px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  color: rgb(61, 61, 61);
 }
 
 .kb-select-btn:hover {
-  background: #eef1f5;
-  border-color: #dfe3e8;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.045);
+  border-color: rgba(0, 0, 0, 0.15);
 }
 
+/* 已启用（工具 / 技能 / 知识库）：黑块 */
 .kb-active {
-  background: #e2e9ff !important;
-  color: #1d4ed8;
-  border: 1px solid #c8d7ff;
+  background: rgb(33, 33, 33) !important;
+  color: #fff !important;
+  border: 1px solid rgb(33, 33, 33) !important;
 }
 
 .kb-dropdown {
   position: absolute;
   bottom: 100%;
   left: 0;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 18px 38px -22px rgba(15, 23, 42, 0.16);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.14);
   z-index: 1000;
   min-width: 200px;
   padding: 10px 0;
@@ -1794,7 +1878,7 @@ defineExpose({
 .kb-checkbox input {
   margin: 0;
   margin-right: 8px;
-  accent-color: #2b63ff;
+  accent-color: rgb(33, 33, 33);
 }
 
 .kb-checkbox span {
@@ -1805,22 +1889,25 @@ defineExpose({
 }
 
 .kb-checkbox:hover {
-  background: #f4f6f8;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .kb-checkbox input:checked + span,
 .kb-checkbox input:checked + * {
-  color: #2b63ff;
+  color: rgb(33, 33, 33);
   font-weight: 600;
 }
 
+/* 确认按钮：黑底白字，与侧边栏主操作一致 */
 .confirm-btn {
   margin-top: 8px;
   padding: 8px 14px;
-  background: linear-gradient(135deg, #f4f7ff 0%, #e8efff 45%, #f4f8ff 100%);
-  color: #2b63ff;
-  border: 1px solid #2b63ff;
+  background: rgb(33, 33, 33);
+  color: #fff;
+  border: 1px solid rgb(33, 33, 33);
   border-radius: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
   cursor: pointer;
   width: 80%;
   display: inline-flex;
@@ -1828,8 +1915,8 @@ defineExpose({
   justify-content: center;
   margin-left: auto;
   margin-right: auto;
-  transition: all 0.2s ease;
-  box-shadow: 0 10px 22px -18px rgba(43, 99, 255, 0.45);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 .confirm-btn-wrapper .confirm-btn {
@@ -1840,43 +1927,20 @@ defineExpose({
 }
 
 .confirm-btn:disabled {
-  background: #ccc;
-  color: #666;
-  border-color: #ccc;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgb(160, 160, 160);
+  border-color: transparent;
   cursor: not-allowed;
   box-shadow: none;
 }
 
 .confirm-btn:not(:disabled):hover {
-  background: linear-gradient(135deg, #e8efff 0%, #d6e4ff 45%, #e8efff 100%);
-  border-color: #2563eb;
-  color: #2563eb;
-  box-shadow: 0 10px 22px -18px rgba(43, 99, 255, 0.6);
+  background: rgb(58, 58, 58);
+  border-color: rgb(58, 58, 58);
 }
 
-.upload-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  color: #111827;
-}
-
-.upload-option:hover {
-  background: #eef1f5;
-  border-color: #dfe3e8;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
-}
-
-.upload-option:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.confirm-btn:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 .selected-files {
@@ -1920,7 +1984,7 @@ defineExpose({
   max-width: 64px;
   text-align: center;
   font-size: 11px;
-  color: #374151;
+  color: rgb(61, 61, 61);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2038,6 +2102,8 @@ defineExpose({
   font-size: 13px;
   border-radius: 999px;
   white-space: nowrap;
+  width: auto;
+  min-width: 34px;
 }
 
 .query--mobile .voice-mode-toggle {
@@ -2048,10 +2114,10 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(0, 0, 0, 0.09);
   border-radius: 50%;
-  background: #f4f5f7;
-  color: #374151;
+  background: transparent;
+  color: rgb(61, 61, 61);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -2071,7 +2137,7 @@ defineExpose({
   padding: 9px 12px;
   font-size: 16px;
   border-radius: 12px;
-  background: #f4f5f7;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .query--mobile .input_button {
@@ -2083,10 +2149,10 @@ defineExpose({
 .query--mobile .hold-btn {
   width: 100%;
   height: 40px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(0, 0, 0, 0.09);
   border-radius: 12px;
-  background: #f4f5f7;
-  color: #111827;
+  background: rgba(0, 0, 0, 0.04);
+  color: rgb(33, 33, 33);
   font-size: 15px;
   font-weight: 600;
   touch-action: none;
@@ -2097,7 +2163,7 @@ defineExpose({
 }
 
 .query--mobile .hold-btn--active {
-  background: #dfe3e8;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .query--mobile .hold-btn--cancel {
@@ -2107,7 +2173,7 @@ defineExpose({
 }
 
 .query--mobile .hold-btn:disabled {
-  color: #2b63ff;
+  color: rgb(140, 140, 140);
 }
 
 /* 下拉：按整条输入栏的宽度展开，不再从按钮往右伸 */
@@ -2169,7 +2235,7 @@ defineExpose({
   padding-bottom: 8px;
   margin-bottom: 8px;
   border-right: none;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 .query--mobile .mode-selector {

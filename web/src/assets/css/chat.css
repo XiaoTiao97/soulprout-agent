@@ -593,12 +593,30 @@ body::before {
     gap: 10px;
     width: 100%;
     max-width: 800px;
-    background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 12px;
-    padding: 10px 20px;
-    box-shadow: 0 6px 12px rgba(201, 201, 201, 0.5);
-    margin-bottom: 15px;
-    border: 1px solid #eeeeee;
+    /* 悬浮卡片：半透明白 + 背景模糊，边缘用 1px 极淡描边 + 顶部内高光，
+       阴影分三层（接触阴影 / 近景 / 远景扩散），让输入框"浮"在对话内容之上 */
+    background-color: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(20px) saturate(1.1);
+    backdrop-filter: blur(20px) saturate(1.1);
+    border-radius: 20px;
+    padding: 14px 18px 12px;
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 6px 16px -4px rgba(0, 0, 0, 0.07),
+        0 20px 44px -12px rgba(0, 0, 0, 0.13),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    margin-bottom: 22px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.query-form:focus-within {
+    border-color: rgba(0, 0, 0, 0.11);
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.05),
+        0 8px 20px -4px rgba(0, 0, 0, 0.09),
+        0 26px 56px -12px rgba(0, 0, 0, 0.17),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .usernumber {
@@ -646,6 +664,10 @@ body::before {
 
 .input_field:focus {
     border: none;
+}
+
+.input_field::placeholder {
+    color: rgb(160, 160, 160);
 }
 
 .input-options{
@@ -807,21 +829,27 @@ body::before {
     align-items: center;
     width: 32px;
     height: 32px;
-    background-color: rgba(47, 79, 79, 0.8);
+    background-color: rgb(33, 33, 33);
     border-radius: 50%;
     border: 2px solid transparent;
     cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 10px -2px rgba(0, 0, 0, 0.22);
     padding: 0;
 }
 
 .input_button:hover {
-        background-color: rgba(47, 79, 79, 0.6);
+        background-color: rgb(50, 50, 50);
+        transform: translateY(-1px);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 6px 14px -2px rgba(0, 0, 0, 0.28);
+    }
+
+.input_button:active {
+        transform: scale(0.95);
     }
 
 .input_button:disabled {
-    background-color: rgba(47, 79, 79, 0.6);
+    background-color: rgb(33, 33, 33);
     color: #ccc;
     cursor: not-allowed;
 }
@@ -1231,7 +1259,8 @@ body::before {
     padding-right: 20px;
     margin-inline: 16px;
     margin-block: 8px;
-    background-color: rgba(3, 93, 0, 0.3); /* 设置背景色 */
+    background-color: rgb(33, 33, 33);
+    color: #fff;
     /*border: 1px solid #ccc; !* 边框样式 *!*/
     border-radius: 15px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 阴影效果 */
@@ -2432,25 +2461,7 @@ code {
   position: relative;
 }
 
-.agent-select-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  color: #111827;
-}
-
-.agent-select-btn:hover {
-  background: #eef1f5;
-  border-color: #dfe3e8;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
-}
+/* .agent-select-btn 的样式已统一收敛到 MessageInput.vue（与上传 / 设置按钮同款） */
 
 .agent-dropdown {
   position: absolute;
@@ -2458,10 +2469,10 @@ code {
   right: 0;
   margin-bottom: 8px;
   min-width: 200px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 18px 38px -22px rgba(15, 23, 42, 0.16);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.14);
   z-index: 1000;
   max-height: 300px;
   overflow-y: auto;
@@ -2476,9 +2487,9 @@ code {
   border: none;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.2s ease;
-  color: #111827;
-  border-radius: 10px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  color: rgb(61, 61, 61);
+  border-radius: 9px;
   margin-left: 6px;
   width: fit-content;
   min-width: 120px;
@@ -2487,13 +2498,13 @@ code {
 }
 
 .agent-select:hover {
-  background: #e7e7e7;
+  background: rgba(0, 0, 0, 0.05);
+  color: rgb(33, 33, 33);
 }
 
 .agent-select.active {
-  background: #e7e7e7;
-  color: #111827;
-  box-shadow: inset 0 0 0 1px #e7e7e7;
+  background: rgb(33, 33, 33);
+  color: #fff;
 }
 
 .chat-main {

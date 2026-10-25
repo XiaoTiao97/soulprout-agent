@@ -1596,6 +1596,17 @@ const handleCodeCopy = (e) => {
 // Call attachCopyListeners in onMounted and onUpdated
 onMounted(() => {
   attachCopyListeners()
+  // 挂载时列表可能已经有内容（手机端等数据就绪后才渲染本组件）。
+  // 上面那个按末尾消息触发的 watch 此时不会执行，这里补一次，
+  // 效果与进入会话一致：只显示最近一轮，更早的往上拉再展开。
+  if (groupedMessages.value.length > 0 && !pinnedAnchorKey.value) {
+    pinToLatestUserMessage()
+    isAutoScroll.value = true
+    nextTick(() => {
+      if (stickToLatestTop || !answerContainer.value) return
+      answerContainer.value.scrollTop = answerContainer.value.scrollHeight
+    })
+  }
   answerContainer.value?.addEventListener('wheel', handleHistoryWheel, { passive: false })
   answerContainer.value?.addEventListener('touchstart', handleHistoryTouchStart, { passive: true })
   answerContainer.value?.addEventListener('touchmove', handleHistoryTouchMove, { passive: false })
@@ -1698,7 +1709,7 @@ const handleCreateAgentClick = () => {
   min-width: 0;
 }
 
-/* 编辑时去掉气泡墨绿底；勿用 height:fit-content，否则在 flex 子项里会按 textarea 最小高度卡成一行 */
+/* 编辑时去掉气泡底色；勿用 height:fit-content，否则在 flex 子项里会按 textarea 最小高度卡成一行 */
 .answer-me-content--editing {
   background-color: transparent !important;
   box-shadow: none !important;

@@ -57,6 +57,9 @@ class Config:
         self.nls_token = os.getenv("NLS_TOKEN")
         self.aliyun_access_key_id = os.getenv("ALIYUN_ACCESS_KEY_ID")
         self.aliyun_access_key_secret = os.getenv("ALIYUN_ACCESS_KEY_SECRET")
+        # 豆包语音（火山引擎）：待命模式的流式识别 + 双向流式合成
+        # 火山引擎新版控制台的 API Key（请求头 X-Api-Key）；资源 ID 与音色固定写在代码里
+        self.doubao_speech_api_key = os.getenv("DOUBAO_SPEECH_API_KEY")
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
         self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"
