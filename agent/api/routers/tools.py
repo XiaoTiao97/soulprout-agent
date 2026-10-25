@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Form, File, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from agent.core.config import Config
+from agent.database.models.user import UserInfo
+from agent.services.auth import ensure_conversation_owner, require_user
 import os
 from urllib.parse import quote
 from weasyprint import HTML, CSS
@@ -168,7 +170,8 @@ def resolve_target_file(conversation_id: str, filename: str) -> Path:
 
 # 获取文件列表接口（添加conversation_id查询参数）
 @router.get("/files")
-async def get_files(conversation_id: str = Query(...)):
+async def get_files(conversation_id: str = Query(...), user: UserInfo = Depends(require_user)):
+    await ensure_conversation_owner(conversation_id, user.user_id)
     conv_dir = get_conversation_dir(conversation_id)
     # 目录不存在直接空列表
     if not conv_dir.exists():
@@ -192,7 +195,8 @@ async def get_files(conversation_id: str = Query(...)):
 
 # 下载文件接口（添加conversation_id查询参数）
 @router.get("/download/{filename:path}")
-async def download_file(filename: str, conversation_id: str = Query(...)):
+async def download_file(filename: str, conversation_id: str = Query(...), user: UserInfo = Depends(require_user)):
+    await ensure_conversation_owner(conversation_id, user.user_id)
     try:
         file_path = resolve_target_file(conversation_id, filename)
         if not file_path.exists() or not file_path.is_file():
@@ -207,7 +211,8 @@ async def download_file(filename: str, conversation_id: str = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/file_content/{filename:path}")
-async def get_file_content(filename: str, conversation_id: str = Query(...)):
+async def get_file_content(filename: str, conversation_id: str = Query(...), user: UserInfo = Depends(require_user)):
+    await ensure_conversation_owner(conversation_id, user.user_id)
     try:
         file_path = resolve_target_file(conversation_id, filename)
         if not file_path.exists() or not file_path.is_file():
@@ -325,7 +330,8 @@ async def convert_html_to_pptx(conversation_id: str, filename: str) -> str:
 
 
 @router.get("/export/{filename:path}")
-async def export_file(filename: str, conversation_id: str = Query(...), format: str = Query(...)):
+async def export_file(filename: str, conversation_id: str = Query(...), format: str = Query(...), user: UserInfo = Depends(require_user)):
+    await ensure_conversation_owner(conversation_id, user.user_id)
     try:
         file_path = resolve_target_file(conversation_id, filename)
         if not file_path.exists() or not file_path.is_file():
@@ -359,8 +365,10 @@ async def export_file(filename: str, conversation_id: str = Query(...), format: 
 async def save_file(
     filename: str,
     file_content: str = Form(...),
-    conversation_id: str = Form(...)
+    conversation_id: str = Form(...),
+    user: UserInfo = Depends(require_user),
 ):
+    await ensure_conversation_owner(conversation_id, user.user_id)
     try:
         file_path = resolve_target_file(conversation_id, filename)
         file_path.parent.mkdir(parents=True, exist_ok=True)

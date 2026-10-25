@@ -16,8 +16,9 @@ import random
 from typing import Optional, Tuple
 
 from beanie.operators import Eq
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
+from agent.database.crud.conversation import get_conversation_by_id
 from agent.database.models.user import UserInfo
 from agent.services.email_service import verify_email_code
 from agent.utils.jwt_utils import verify_token
@@ -35,6 +36,37 @@ async def get_current_user(token: str) -> UserInfo:
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     return user
+
+
+async def require_user(request: Request) -> UserInfo:
+    """
+    从请求中取出当前登录用户，可直接作为 ``Depends(require_user)`` 使用。
+
+    token 来源：Cookie ``token``（网页端）优先，其次 ``Authorization: Bearer``
+    （网关、手机 App 等无法依赖 Cookie 的客户端）。
+    """
+    token = request.cookies.get("token")
+    if not token:
+        auth = request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    return await get_current_user(token)
+
+
+async def ensure_conversation_owner(conversation_id: str, user_id: str) -> None:
+    """
+    校验会话属于该用户，否则抛 404（不区分“不存在”和“不是你的”，避免被探测）。
+
+    - Soulprout 模式的会话 id 就是 user_id，直接放行（此时库里可能还没有记录）；
+    - 其余会话以库中记录的 user_id 为准。
+    """
+    if conversation_id == user_id:
+        return
+    conversation = await get_conversation_by_id(conversation_id)
+    if conversation is None or conversation.user_id != user_id:
+        raise HTTPException(status_code=404, detail="会话不存在")
 
 
 async def _allocate_user_id() -> str:

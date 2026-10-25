@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import uvicorn
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from agent.database.models.user import UserInfo
 from agent.database.crud.agent_card import update_or_create_agent_card_by_agent_id
 from agent.database.models.agent_card import AgentCard
@@ -90,6 +92,22 @@ async def _run_scheduler():
 
 # Set the lifespan for the app
 app = FastAPI(lifespan=lifespan)
+
+# 仅放行 App（Capacitor WebView）的来源，用 Authorization 头鉴权，所以不开 credentials。
+# 网页端与官网同源、网关是服务端调用，都不受此影响。可用环境变量 CORS_ALLOW_ORIGINS（逗号分隔）覆盖。
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ALLOW_ORIGINS", "https://localhost,http://localhost,capacitor://localhost").split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=86400,
+)
 app.include_router(api_router)
 
 if __name__ == '__main__':

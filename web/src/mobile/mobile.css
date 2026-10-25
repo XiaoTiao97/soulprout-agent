@@ -1,0 +1,19 @@
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: #f2f2f2;
+  color: #111827;
+  font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+}

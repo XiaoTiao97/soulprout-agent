@@ -1,5 +1,5 @@
 <template>
-  <div class="query">
+  <div class="query" :class="{ 'query--mobile': mobileLayout }">
     <form class="query-form" @submit.prevent="submitMessage">
       <div class="selected-files" v-if="selectedFiles.length > 0">
         <div class="selected-file-item" v-for="(file, idx) in selectedFiles" :key="getFileKey(file)">
@@ -15,8 +15,25 @@
           <div class="selected-file-name" :title="file.name">{{ file.name }}</div>
         </div>
       </div>
+      <!-- 手机端：输入栏最左侧，切换语音 / 打字 -->
+      <button
+        v-if="mobileLayout"
+        class="voice-mode-toggle"
+        type="button"
+        :aria-label="voiceMode ? t('mobile.switchToKeyboard') : t('mobile.switchToVoice')"
+        @click="toggleVoiceMode"
+      >
+        <svg v-if="voiceMode" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
+          <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+        </svg>
+        <svg v-else class="voice-mic-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
+        </svg>
+      </button>
       <div class="input-total">
         <textarea
+          v-show="!(mobileLayout && voiceMode)"
           ref="textareaRef"
           class="input_field"
           v-model="input"
@@ -26,6 +43,23 @@
           :placeholder="t('messageInput.placeholder')"
           rows="1"
         />
+        <!-- 手机端语音：长按录音，松手结束，上滑取消 -->
+        <button
+          v-if="mobileLayout && voiceMode"
+          class="hold-btn"
+          :class="{ 'hold-btn--active': voiceHolding, 'hold-btn--cancel': voiceHolding && voiceCancelZone }"
+          type="button"
+          :disabled="isTranscribing"
+          @pointerdown.prevent="onHoldStart"
+          @pointermove="onHoldMove"
+          @pointerup="onHoldEnd($event, false)"
+          @pointercancel="onHoldEnd($event, true)"
+          @contextmenu.prevent
+        >
+          <span v-if="isTranscribing">{{ t('messageInput.transcribing') }}</span>
+          <span v-else-if="voiceHolding">{{ voiceCancelZone ? t('mobile.releaseToCancel') : t('mobile.releaseToFinish') }}</span>
+          <span v-else>{{ t('mobile.holdToTalk') }}</span>
+        </button>
       </div>
       <div class="input-options">
         <div class="input-options-left">
@@ -148,6 +182,7 @@
                       <div 
                         class="mode-item" 
                         @mouseenter="currentMode = 'expert'"
+                        @click="currentMode = 'expert'"
                         :class="{ 'active': props.chat_request.agent_use === 'expert-agent' }"
                       >
                         {{ t('messageInput.agent') }}
@@ -155,6 +190,7 @@
                       <div 
                         class="mode-item" 
                         @mouseenter="currentMode = 'select'"
+                        @click="currentMode = 'select'"
                         :class="{ 'active': props.chat_request.agent_use === 'select-agent' }"
                       >
                         {{ t('messageInput.multiAgent') }}
@@ -241,6 +277,7 @@
         </div>
         <div class="input-options-right">
           <button
+            v-if="!mobileLayout"
             class="voice-btn"
             :class="{
               'voice-btn--recording': isRecording,
@@ -278,15 +315,42 @@
     </form>
 
     <input type="file" multiple ref="fileInput" style="display: none;" @change="handleFileUpload" />
+
+    <!-- 手机端：按住说话时的提示 -->
+    <div
+      v-if="mobileLayout && voiceHolding"
+      class="hold-overlay"
+      :class="{ 'hold-overlay--cancel': voiceCancelZone }"
+    >
+      <svg v-if="!voiceCancelZone" class="voice-mic-icon hold-overlay-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
+      </svg>
+      <svg v-else class="hold-overlay-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+      <div class="hold-overlay-text">{{ voiceCancelZone ? t('mobile.releaseToCancel') : t('mobile.slideUpCancel') }}</div>
+      <div v-if="!voiceCancelZone" class="hold-overlay-time">{{ recordingCountdown }}s</div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AgentCard } from '../types/interface'
 
 const { t } = useI18n()
+
+/** 只有手机端页面会 provide('mobileLayout', true)；网页端没有，保持原样 */
+const mobileLayout = inject<boolean>('mobileLayout', false)
+/** 手机端：true 为长按说话，false 为打字 */
+const voiceMode = ref(false)
+const voiceHolding = ref(false)
+const voiceCancelZone = ref(false)
+let holdActive = false
+let holdStartedAt = 0
+let holdStartY = 0
+let discardRecording = false
 
 const StopIconUrl = new URL('@/assets/images/stop_icon.svg', import.meta.url).href
 const InputIconUrl = new URL('@/assets/images/mengya_input.svg', import.meta.url).href
@@ -831,6 +895,12 @@ function cleanupVoiceRecord() {
 async function onRecordStopped() {
   recordStream?.getTracks().forEach((t) => t.stop())
   recordStream = null
+  if (discardRecording) {
+    discardRecording = false
+    recordChunks = []
+    mediaRecorder = null
+    return
+  }
   if (!recordChunks.length) return
   isTranscribing.value = true
   try {
@@ -851,6 +921,8 @@ async function onRecordStopped() {
     const text = (data.text || '').trim()
     if (!text) throw new Error(t('messageInput.noSpeechDetected'))
     input.value = input.value ? `${input.value}${text}` : text
+    // 手机端：识别出的文字放进输入框，切回打字模式，方便确认后再发送
+    if (mobileLayout) voiceMode.value = false
     adjustHeight()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : t('messageInput.speechFailed')
@@ -897,6 +969,54 @@ async function toggleVoiceRecord() {
     recordingSec.value += 1
     if (recordingSec.value >= MAX_RECORD_SEC) void stopVoiceRecord()
   }, 1000)
+}
+
+function toggleVoiceMode() {
+  if (isRecording.value || isTranscribing.value) return
+  voiceMode.value = !voiceMode.value
+  showSettingsPanel.value = false
+  showAgentSelector.value = false
+  if (voiceMode.value) {
+    textareaRef.value?.blur()
+  } else {
+    adjustHeight()
+    nextTick(() => textareaRef.value?.focus())
+  }
+}
+
+async function onHoldStart(e: PointerEvent) {
+  if (isTranscribing.value || isRecording.value) return
+  holdActive = true
+  voiceHolding.value = true
+  voiceCancelZone.value = false
+  discardRecording = false
+  holdStartedAt = Date.now()
+  holdStartY = e.clientY
+  try {
+    ;(e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId)
+  } catch {
+    /* ignore */
+  }
+  await toggleVoiceRecord()
+  // 麦克风授权期间手已经松开：直接收掉
+  if (!holdActive && isRecording.value) await stopVoiceRecord()
+  // 没有成功开始录音（比如没授权），去掉按压状态
+  if (!isRecording.value && !holdActive) voiceHolding.value = false
+}
+
+function onHoldMove(e: PointerEvent) {
+  if (!holdActive) return
+  voiceCancelZone.value = holdStartY - e.clientY > 80
+}
+
+async function onHoldEnd(_e: PointerEvent, cancelled: boolean) {
+  if (!holdActive) return
+  holdActive = false
+  const tooShort = Date.now() - holdStartedAt < 500
+  discardRecording = cancelled || voiceCancelZone.value || tooShort
+  voiceHolding.value = false
+  voiceCancelZone.value = false
+  if (isRecording.value) await stopVoiceRecord()
 }
 
 onUnmounted(() => {
@@ -1846,5 +1966,270 @@ defineExpose({
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* =====================================================================
+ * 手机端输入栏：只有手机页面 provide('mobileLayout') 时才会带上 query--mobile，
+ * 网页端不受影响。
+ * 布局：上面一排「上传 / 对话设置 / 专家」，下面一排「语音切换 | 输入 | 发送」
+ * ===================================================================== */
+.query.query--mobile {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: none;
+  z-index: 3;
+  padding: 0 10px calc(8px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.query--mobile .query-form {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "files files files"
+    "tools tools tools"
+    "toggle input send";
+  align-items: end;
+  gap: 0 8px;
+  width: 100%;
+  max-width: none;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: 18px;
+  box-sizing: border-box;
+}
+
+.query--mobile .selected-files {
+  grid-area: files;
+  justify-content: flex-start;
+  margin-bottom: 8px;
+}
+
+.query--mobile .input-options {
+  display: contents;
+}
+
+.query--mobile .input-options-left {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.query--mobile .input-options-right {
+  display: contents;
+}
+
+.query--mobile .upload-option,
+.query--mobile .settings-select-btn,
+.query--mobile .agent-select-btn {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.query--mobile .voice-mode-toggle {
+  grid-area: toggle;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  background: #f4f5f7;
+  color: #374151;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.query--mobile .voice-mode-toggle .voice-mic-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.query--mobile .input-total {
+  grid-area: input;
+  min-width: 0;
+}
+
+.query--mobile .input_field {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: 16px;
+  border-radius: 12px;
+  background: #f4f5f7;
+}
+
+.query--mobile .input_button {
+  grid-area: send;
+  width: 40px;
+  height: 40px;
+}
+
+.query--mobile .hold-btn {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f4f5f7;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.query--mobile .hold-btn--active {
+  background: #dfe3e8;
+}
+
+.query--mobile .hold-btn--cancel {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.query--mobile .hold-btn:disabled {
+  color: #2b63ff;
+}
+
+/* 下拉：按整条输入栏的宽度展开，不再从按钮往右伸 */
+.query--mobile .settings-selector,
+.query--mobile .agent-selector {
+  position: static;
+}
+
+.query--mobile .settings-panel {
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  min-width: 0;
+}
+
+.query--mobile .settings-row-trigger {
+  width: 150px;
+  min-width: 150px;
+}
+
+.query--mobile .settings-right-dropdown,
+.query--mobile .settings-right-dropdown-fixed {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  margin-left: 0;
+  min-width: 0;
+  max-width: none;
+  max-height: 50vh;
+}
+
+.query--mobile .agent-dropdown {
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: min(60vh, 440px);
+  max-height: min(60vh, 440px);
+}
+
+.query--mobile .agent-dropdown-content {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.query--mobile .agent-dropdown-left {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.query--mobile .agent-dropdown-left.has-right {
+  padding-right: 0;
+  margin-right: 0;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-right: none;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.query--mobile .mode-selector {
+  width: 100%;
+}
+
+.query--mobile .mode-column {
+  width: 100%;
+  flex-direction: row;
+}
+
+.query--mobile .mode-item {
+  flex: 1;
+  text-align: center;
+}
+
+.query--mobile .agent-dropdown-right {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: auto;
+  flex: 1;
+  margin-left: 0;
+}
+
+/* 按住说话时的提示 */
+.hold-overlay {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 2000;
+  min-width: 150px;
+  padding: 18px 22px;
+  border-radius: 16px;
+  background: rgba(17, 17, 17, 0.84);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.hold-overlay--cancel {
+  background: rgba(185, 28, 28, 0.92);
+}
+
+.hold-overlay-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.hold-overlay-text {
+  font-size: 14px;
+}
+
+.hold-overlay-time {
+  font-size: 12px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
 }
 </style>

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Query
-from agent.services.auth import get_current_user
+from agent.services.auth import ensure_conversation_owner, require_user
 from agent.database.crud.message import get_message_by_conv_id
 from agent.api.models.message import ChatRequest, ChatResponse
 from agent.services.run_manager import run_manager
@@ -23,17 +23,6 @@ router = APIRouter()
 
 def _sse_data(event: dict) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-
-async def _require_user(request: Request):
-    token = request.cookies.get("token")
-    if not token:
-        auth = request.headers.get("authorization") or ""
-        if auth.lower().startswith("bearer "):
-            token = auth[7:].strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="未登录")
-    return await get_current_user(token)
 
 
 async def _iter_subscriber(request: Request, queue: asyncio.Queue, prelude: list[dict] | None = None):
@@ -63,13 +52,13 @@ async def get_models_list():
 
 @router.get("/message/runs")
 async def list_running_conversations(request: Request):
-    user = await _require_user(request)
+    user = await require_user(request)
     return run_manager.list_running(user.user_id)
 
 
 @router.get("/message/runs/stream")
 async def stream_running_conversations(request: Request):
-    user = await _require_user(request)
+    user = await require_user(request)
     queue = run_manager.subscribe_status(user.user_id)
 
     async def generate_stream():
@@ -84,7 +73,7 @@ async def stream_running_conversations(request: Request):
 
 @router.post("/message/stop")
 async def stop_conversation(request: Request):
-    user = await _require_user(request)
+    user = await require_user(request)
     try:
         payload = await request.json()
     except Exception:
@@ -100,7 +89,8 @@ async def stop_conversation(request: Request):
 
 @router.get("/message/{conversation_id}/stream")
 async def attach_conversation_stream(request: Request, conversation_id: str):
-    user = await _require_user(request)
+    user = await require_user(request)
+    await ensure_conversation_owner(conversation_id, user.user_id)
     try:
         _run, queue, snapshot = await run_manager.attach(conversation_id, user.user_id)
     except PermissionError:
@@ -119,10 +109,13 @@ async def attach_conversation_stream(request: Request, conversation_id: str):
 
 @router.get("/message/{conversation_id}")
 async def get_messages(
+        request: Request,
         conversation_id: str,
         limit: int | None = Query(None, ge=1, le=500),
         before: float | None = Query(None, description="Unix timestamp in milliseconds; return messages before this time"),
 ):
+    user = await require_user(request)
+    await ensure_conversation_owner(conversation_id, user.user_id)
     before_dt = None
     if before is not None:
         before_dt = datetime.fromtimestamp(before / 1000, tz=timezone.utc).replace(tzinfo=None)
@@ -136,7 +129,7 @@ async def chat_stream(
         chat_request: str = Form(...),
         files: list[UploadFile] = File(None),
 ):
-    user = await _require_user(request)
+    user = await require_user(request)
 
     chat_req_dict = json.loads(chat_request)
     chat_request = ChatRequest(**chat_req_dict)

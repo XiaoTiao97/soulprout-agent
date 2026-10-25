@@ -1,18 +1,14 @@
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from agent.database.models.user import UserInfo
 from agent.services.asr import transcribe
-from agent.services.auth import get_current_user
+from agent.services.auth import require_user
 
 router = APIRouter()
 
 
 @router.post("/asr/transcribe")
-async def asr_transcribe(request: Request, audio: UploadFile = File(...)):
-    token = request.cookies.get("token")
-    if not token:
-        raise HTTPException(status_code=401, detail="未登录")
-    await get_current_user(token)
-
+async def asr_transcribe(audio: UploadFile = File(...), _user: UserInfo = Depends(require_user)):
     audio_bytes = await audio.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="音频为空")

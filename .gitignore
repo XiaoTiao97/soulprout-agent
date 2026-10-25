@@ -245,3 +245,4 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+dist-mobile/

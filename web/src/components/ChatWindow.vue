@@ -1174,6 +1174,37 @@ function maybeRevealOlderAtTop() {
   }
 }
 
+let touchLastY = 0
+
+function handleHistoryTouchStart(event: TouchEvent) {
+  touchLastY = event.touches[0]?.clientY ?? 0
+}
+
+/** 手机上没有滚轮。滑到当前这段顶部后继续下拉，才和滚轮一样把更早的一轮接出来。 */
+function handleHistoryTouchMove(event: TouchEvent) {
+  const y = event.touches[0]?.clientY
+  if (y == null) return
+  const deltaY = touchLastY - y
+  touchLastY = y
+  if (deltaY >= -2) return
+
+  const container = answerContainer.value
+  if (!container) return
+  const start = eventElement(event.target)
+  if (!start || !container.contains(start)) return
+  const tag = start.tagName
+  if (tag === 'TEXTAREA' || tag === 'INPUT' || start.isContentEditable) return
+
+  const nested = nestedScrollables(start, container)
+  if (nested.some((node) => node.scrollTop > 1)) return
+  if (container.scrollTop > REVEAL_TOP_THRESHOLD) return
+  if (!hasHiddenOlderMessages.value && !(props.chatMode === 'soulprout' && props.soulMessagesHasMore && !props.soulMessagesLoadingMore)) {
+    return
+  }
+  event.preventDefault()
+  maybeRevealOlderAtTop()
+}
+
 function handleHistoryWheel(event: WheelEvent) {
   if (event.deltaY >= 0) return
   const container = answerContainer.value
@@ -1566,11 +1597,15 @@ const handleCodeCopy = (e) => {
 onMounted(() => {
   attachCopyListeners()
   answerContainer.value?.addEventListener('wheel', handleHistoryWheel, { passive: false })
+  answerContainer.value?.addEventListener('touchstart', handleHistoryTouchStart, { passive: true })
+  answerContainer.value?.addEventListener('touchmove', handleHistoryTouchMove, { passive: false })
 })
 onUpdated(attachCopyListeners)
 onUnmounted(() => {
   clearWelcomeAnimationTimers()
   answerContainer.value?.removeEventListener('wheel', handleHistoryWheel)
+  answerContainer.value?.removeEventListener('touchstart', handleHistoryTouchStart)
+  answerContainer.value?.removeEventListener('touchmove', handleHistoryTouchMove)
 })
 
 const hasMessages = computed(
