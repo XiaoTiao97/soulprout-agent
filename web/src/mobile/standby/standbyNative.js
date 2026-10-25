@@ -36,7 +36,8 @@ export function bytesToBase64(bytes) {
 
 // ---------------------------------------------------------------- 唤醒 / 采集 / 播放
 
-export const startWake = (keywords, source = 'auto') => WakeWord.start({ keywords, source })
+export const startWake = (keywords, source = 'auto', bargeIn = false) =>
+  WakeWord.start({ keywords, source, bargeIn })
 export const stopWake = () => WakeWord.stop()
 export const beginCapture = () => WakeWord.beginCapture()
 export const endCapture = () => WakeWord.endCapture()

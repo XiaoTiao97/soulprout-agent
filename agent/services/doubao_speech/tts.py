@@ -34,8 +34,8 @@ SAMPLE_RATE = 24000
 
 # 可选音色（2.0 音色）：key 是界面 / 接口传的音色 id，value 是豆包 speaker
 VOICES: dict[str, str] = {
-    "female": "zh_female_qingchezizi_uranus_bigtts",
-    "male": "zh_male_m191_uranus_bigtts",
+    "female": "zh_female_xiaohe_uranus_bigtts",
+    "male": "zh_male_ruyayichen_uranus_bigtts",
 }
 DEFAULT_VOICE = "female"
 

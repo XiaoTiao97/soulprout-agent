@@ -14,6 +14,20 @@ import * as native from './standbyNative'
 import { AsrClient, TtsClient } from './voiceClients'
 
 const MAX_UTTERANCE_MS = 60_000
+/** 连续聆听自动重连的频率保护：这段时间内重连超过 N 次就放弃，回到待命 */
+const RESTART_WINDOW_MS = 15_000
+const RESTART_MAX = 4
+/** 输出音量按这个粒度（毫秒）切片 */
+const OUT_LEVEL_STEP_MS = 60
+
+const DEFAULT_OPTIONS = {
+  source: 'auto',
+  endWindowMs: 500,
+  noSpeechSec: 4,
+  continuous: false,
+  bargeIn: true,
+  speechRate: 0,
+}
 /** 少于这么多个有效字的识别结果视为噪声，不发给 Agent */
 const MIN_VALID_CHARS = 2
 const TTS_SAMPLE_RATE = 24000
@@ -34,6 +48,7 @@ function validChars(text) {
  * @property {string} userId        当前用户 id（Soul 会话 id）
  * @property {number} endWindowMs   断句静音时长（毫秒）
  * @property {number} noSpeechSec   唤醒后多久没人说话就放弃
+ * @property {boolean} bargeIn      播报期间保持待命，可用唤醒词打断（依赖回声消除）
  * @property {boolean} continuous   播报后是否继续听（连续对话）
  * @property {number} followUpSec   连续对话窗口（秒）
  * @property {string} voice         合成音色，空=后端默认
@@ -51,6 +66,10 @@ export function createStandbyEngine() {
     input: '',
     level: 0,
     peakDb: -60,
+    /** 播放输出音量 0-100（按播放进度对齐，给光感动效用） */
+    outLevel: 0,
+    /** 每次唤醒自增，界面据此触发一次「被唤醒」的动效 */
+    wakePulse: 0,
     wakeCount: 0,
     partial: '',
     /** 本轮已发送给 Agent 的句子（最近在前） */
@@ -75,7 +94,13 @@ export function createStandbyEngine() {
   /** 播放分片按顺序写入原生，避免异步写入乱序 */
   let playChain = Promise.resolve()
   let playStarted = false
+  /** 本轮是否已经有句子送去合成（提前建通道时，没用到就不能当成「合成出错」处理） */
+  let ttsUsed = false
   let turnId = 0
+  /** 输出音量时间轴：播放起点与已排入的音频时长 */
+  let outT0 = 0
+  let outAcc = 0
+  let restartTimes = []
   const t = { final: 0, sent: 0, firstText: 0 }
 
   function log(msg) {
@@ -95,7 +120,8 @@ export function createStandbyEngine() {
 
   async function start(options) {
     if (state.phase !== 'off') return
-    opts = options
+    opts = { ...DEFAULT_OPTIONS, ...options }
+    restartTimes = []
     state.error = ''
     state.note = ''
     state.phase = 'starting'
@@ -109,15 +135,34 @@ export function createStandbyEngine() {
       const perm = await native.requestStandbyPermissions()
       if (!perm.microphone) throw new Error('没有麦克风权限，无法待命')
       await native.startStandbyService(opts.notification)
-      const res = await native.startWake(opts.keywords, opts.source)
+      const res = await native.startWake(opts.keywords, opts.source, !!opts.bargeIn)
       state.input = res?.input || ''
       state.note = res?.note || ''
       state.phase = 'standby'
       log(`待命已开始，麦克风：${state.input || '未知'}`)
+      if (opts.bargeIn) log(`语音打断：已开启，回声消除 ${res?.aec || '未知'}`)
     } catch (e) {
       state.error = e?.message || String(e)
       log(`启动失败：${state.error}`)
       await teardown()
+    }
+  }
+
+  /**
+   * 运行中改参数。音色 / 语速下一轮播报生效，断句时长下一次聆听生效，
+   * 连续对话开关立即生效。唤醒词、麦克风来源需要重启待命（由界面负责）。
+   */
+  async function updateOptions(partial) {
+    if (!opts) return
+    const prevContinuous = opts.continuous
+    opts = { ...opts, ...partial }
+    if (prevContinuous && !opts.continuous && state.phase === 'listening' && state.followUp) {
+      log('连续对话已关闭，回到待命')
+      await backToStandby()
+    } else if (prevContinuous && !opts.continuous && (state.phase === 'thinking' || state.phase === 'speaking')) {
+      // 本轮不再监听说话；之后靠唤醒词打断
+      closeAsr()
+      native.endCapture().catch(() => {})
     }
   }
 
@@ -142,7 +187,7 @@ export function createStandbyEngine() {
     handles = await Promise.all([
       native.onWake((e) => onWake(e)),
       native.onAudio((e) => {
-        if (state.phase !== 'listening' || !asr) return
+        if (!asr || (state.phase !== 'listening' && !monitoring())) return
         asr.sendAudio(native.base64ToBytes(e.pcm))
       }),
       native.onPlayEnd((e) => {
@@ -203,10 +248,67 @@ export function createStandbyEngine() {
   async function onWake(e) {
     if (state.phase === 'listening') return
     state.wakeCount = e.count || state.wakeCount + 1
+    state.wakePulse++
     log(`唤醒：${e.keyword}`)
-    // 思考 / 播报期间再次唤醒 = 语音打断
-    if (state.phase === 'thinking' || state.phase === 'speaking') await cancelTurn()
+    // 思考 / 播报期间再次唤醒 = 语音打断（播报中原生已先就地停掉了播放）
+    if (state.phase === 'thinking' || state.phase === 'speaking') {
+      log(e.interrupted ? '播报中被唤醒词打断' : '处理中被唤醒词打断')
+      await cancelTurn()
+    }
     await beginListening({ followUp: false, captureAlreadyOn: true })
+  }
+
+  /** 识别客户端：各阶段（聆听 / 连续对话里思考播报时的监听）共用同一套事件处理 */
+  function newAsrClient() {
+    const client = new AsrClient({
+      onReady: () => log('识别通道就绪'),
+      onPartial: (text) => {
+        if (asr !== client) return
+        // 连续对话里思考 / 播报时识别通道仍开着：听到人声就打断
+        if (monitoring()) {
+          maybeBargeIn(text)
+          return
+        }
+        heardSpeech = true
+        state.partial = text
+      },
+      onFinal: (text) => {
+        if (asr === client) onFinalSentence(text)
+      },
+      onError: (msg) => {
+        if (asr === client && monitoring()) {
+          restartMonitor(`识别通道断开（${msg}）`)
+          return
+        }
+        if (asr !== client || state.phase !== 'listening') return
+        // 连续对话里还没人说话时，识别通道被服务端因空闲断开很正常，悄悄重连即可
+        if (continuousIdle()) {
+          restartContinuous(`识别通道断开（${msg}）`)
+          return
+        }
+        log(`识别出错：${msg}`)
+        state.error = msg
+        backToStandby()
+      },
+      onEnd: () => {
+        if (asr === client && monitoring()) {
+          restartMonitor('识别已结束')
+          return
+        }
+        if (asr !== client || state.phase !== 'listening') return
+        if (opts.continuous && state.followUp) restartContinuous('识别已结束')
+        else backToStandby()
+      },
+      onClose: () => {
+        if (asr === client && monitoring()) {
+          restartMonitor('识别通道关闭')
+          return
+        }
+        if (asr !== client || state.phase !== 'listening') return
+        if (continuousIdle()) restartContinuous('识别通道关闭')
+      },
+    })
+    return client
   }
 
   async function beginListening({ followUp, captureAlreadyOn = false }) {
@@ -217,22 +319,9 @@ export function createStandbyEngine() {
     state.partial = ''
     heardSpeech = false
 
-    asr = new AsrClient({
-      onReady: () => log('识别通道就绪'),
-      onPartial: (text) => {
-        heardSpeech = true
-        state.partial = text
-      },
-      onFinal: (text) => onFinalSentence(text),
-      onError: (msg) => {
-        if (state.phase !== 'listening') return
-        log(`识别出错：${msg}`)
-        state.error = msg
-        backToStandby()
-      },
-      onClose: () => {},
-    })
-    asr.open({ endWindowMs: opts.endWindowMs })
+    const client = newAsrClient()
+    asr = client
+    client.open({ endWindowMs: opts.endWindowMs })
 
     try {
       if (!captureAlreadyOn) await native.beginCapture()
@@ -242,19 +331,128 @@ export function createStandbyEngine() {
       return
     }
 
-    const waitSec = followUp ? opts.followUpSec : opts.noSpeechSec
-    noSpeechTimer = setTimeout(() => {
-      if (state.phase === 'listening' && !heardSpeech) {
-        log(followUp ? '连续对话窗口内无人说话，回到待命' : '唤醒后没听到说话，回到待命')
-        backToStandby()
-      }
-    }, waitSec * 1000)
+    // 连续对话：没有等待窗口，一直听到用户说话或关掉开关；其余情况唤醒后只等 noSpeechSec 秒
+    if (!(followUp && opts.continuous)) {
+      noSpeechTimer = setTimeout(() => {
+        if (state.phase === 'listening' && !heardSpeech) {
+          log('唤醒后没听到说话，回到待命')
+          backToStandby()
+        }
+      }, opts.noSpeechSec * 1000)
+    }
+    armMaxUtterance()
+  }
+
+  function armMaxUtterance() {
+    clearTimeout(maxUtteranceTimer)
     maxUtteranceTimer = setTimeout(() => {
-      if (state.phase === 'listening') {
-        log('单次说话超过上限，结束聆听')
-        asr?.finish()
+      if (state.phase !== 'listening') return
+      if (continuousIdle()) {
+        restartContinuous('单次聆听到时，重新开始')
+        return
       }
+      log('单次说话超过上限，结束聆听')
+      asr?.finish()
     }, MAX_UTTERANCE_MS)
+  }
+
+  // ------------------------------------------------------------ 连续对话：说话打断
+
+  /** 连续对话里，思考 / 播报期间识别通道一直开着，用来听用户是不是开口了 */
+  function monitoring() {
+    return !!(asr && opts?.continuous && (state.phase === 'thinking' || state.phase === 'speaking'))
+  }
+
+  /** 去掉标点空白，只留文字，用来比较 */
+  function plain(text) {
+    return (text || '').replace(/[\s\p{P}\p{S}]/gu, '')
+  }
+
+  function bigrams(s) {
+    const out = new Set()
+    for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2))
+    return out
+  }
+
+  /**
+   * 听到的内容是不是扬声器漏回麦克风的回声：回声消除再好也会残留一点，识别出来的字
+   * 基本都在刚刚播的那段话里。和已播内容的双字重合度高，就当作回声，不打断。
+   */
+  function looksLikeEcho(text) {
+    const heard = plain(text)
+    const spoken = plain(state.reply)
+    if (!spoken) return false
+    if (heard.length < 2) return spoken.includes(heard)
+    const hb = bigrams(heard)
+    const sb = bigrams(spoken)
+    let hit = 0
+    for (const g of hb) if (sb.has(g)) hit++
+    return hit / hb.size >= 0.6
+  }
+
+  let promoting = false
+
+  async function maybeBargeIn(text) {
+    if (promoting || !monitoring()) return
+    if (validChars(text) < MIN_VALID_CHARS) return
+    if (looksLikeEcho(text)) return
+    promoting = true
+    try {
+      log(`听到说话，打断：「${text}」`)
+      clearTimers()
+      await cancelTurn()
+      if (state.phase === 'off' || !asr) return
+      // 沿用这条识别通道：已经识别到的内容接着往下听，断句后照常发给 Agent
+      state.phase = 'listening'
+      state.followUp = true
+      heardSpeech = true
+      state.partial = text
+      state.wakePulse++
+      armMaxUtterance()
+    } finally {
+      promoting = false
+    }
+  }
+
+  /** 监听通道断了：重连，但不改变思考 / 播报状态 */
+  function restartMonitor(reason) {
+    const now = Date.now()
+    restartTimes = restartTimes.filter((x) => now - x < RESTART_WINDOW_MS)
+    closeAsr()
+    if (restartTimes.length >= RESTART_MAX) {
+      log('说话监听反复断开，本轮不再监听')
+      return
+    }
+    restartTimes.push(now)
+    log(`${reason}，重新建立说话监听`)
+    openMonitor()
+  }
+
+  /** 思考 / 播报期间保持识别通道 */
+  function openMonitor() {
+    const client = newAsrClient()
+    asr = client
+    client.open({ endWindowMs: opts.endWindowMs })
+  }
+
+  /** 连续对话中、还没有人开口 */
+  function continuousIdle() {
+    return !!(opts.continuous && state.followUp && !heardSpeech)
+  }
+
+  /** 连续聆听里重新建立识别通道（原生采集不中断）；过于频繁说明有问题，退回待命 */
+  async function restartContinuous(reason) {
+    const now = Date.now()
+    restartTimes = restartTimes.filter((x) => now - x < RESTART_WINDOW_MS)
+    if (restartTimes.length >= RESTART_MAX) {
+      log('连续聆听反复断开，回到待命')
+      state.error = '识别通道反复断开'
+      await backToStandby()
+      return
+    }
+    restartTimes.push(now)
+    log(`${reason}，重新连接继续听`)
+    await beginListening({ followUp: true, captureAlreadyOn: true })
   }
 
   function onFinalSentence(text) {
@@ -262,15 +460,21 @@ export function createStandbyEngine() {
     if (validChars(text) < MIN_VALID_CHARS) {
       log(`忽略过短的识别结果：「${text}」`)
       state.partial = ''
+      heardSpeech = false
       return
     }
     t.final = performance.now()
     clearTimers()
     log(`断句：「${text}」`)
     state.partial = text
-    closeAsr()
-    native.endCapture().catch(() => {})
-    sendToAgent(text)
+    if (opts.continuous) {
+      // 连续对话：识别通道和采集都不关，思考 / 播报期间继续听，听到人声就打断
+      sendToAgent(text)
+    } else {
+      closeAsr()
+      native.endCapture().catch(() => {})
+      sendToAgent(text)
+    }
   }
 
   function closeAsr() {
@@ -308,15 +512,20 @@ export function createStandbyEngine() {
     t.firstText = 0
     state.metrics.endpointToSend = Math.round(t.sent - t.final)
     playStarted = false
+    ttsUsed = false
     playChain = Promise.resolve()
     abortCtl = new AbortController()
 
     splitter = createSentenceSplitter((sentence) => {
       if (myTurn !== turnId) return
+      ttsUsed = true
       ensureTts()
       state.reply += sentence
       tts.sendText(sentence)
     })
+
+    // 和请求 Agent 并行，提前把合成通道建好：等第一句出来时已经就绪，省掉建连的几百毫秒
+    ensureTts()
 
     try {
       await streamAgentReply({
@@ -334,9 +543,10 @@ export function createStandbyEngine() {
       })
       if (myTurn !== turnId) return
       splitter.flush()
-      if (tts) {
+      if (ttsUsed && tts) {
         tts.finish()
       } else {
+        // 没有任何可朗读的文字：提前建好的合成通道用不上，直接收尾
         log('Agent 没有可朗读的文字回复')
         await afterSpeak()
       }
@@ -352,19 +562,22 @@ export function createStandbyEngine() {
   function ensureTts() {
     if (tts) return
     const myTurn = turnId
-    tts = new TtsClient({
-      onReady: () => log('合成通道就绪'),
+    const openedAt = performance.now()
+    const client = new TtsClient({
+      onReady: () => log(`合成通道就绪（建连 ${Math.round(performance.now() - openedAt)} ms）`),
       onAudio: (buf) => {
         if (myTurn !== turnId) return
         const bytes = new Uint8Array(buf)
-        playChain = playChain.then(async () => {
-          if (myTurn !== turnId) return
+        enqueuePlay(myTurn, async () => {
           if (!playStarted) {
             playStarted = true
             await native.playStart(TTS_SAMPLE_RATE)
+            outT0 = performance.now()
+            outAcc = 0
             state.phase = 'speaking'
             state.metrics.firstTextToFirstAudio = Math.round(performance.now() - t.firstText)
           }
+          scheduleOutLevel(myTurn, bytes)
           await native.playWrite(bytes)
         })
       },
@@ -374,23 +587,71 @@ export function createStandbyEngine() {
       onDone: () => {
         if (myTurn !== turnId) return
         // 等已排队的音频都写进播放器，再告诉原生「没有更多了」
-        playChain = playChain.then(async () => {
-          if (myTurn !== turnId) return
+        enqueuePlay(myTurn, async () => {
           if (playStarted) await native.playFinish()
           else await afterSpeak()
         })
       },
       onCanceled: () => {},
       onError: async (msg) => {
-        if (myTurn !== turnId) return
+        if (myTurn !== turnId || tts !== client) return
+        if (!ttsUsed) {
+          // 提前建的通道在等 Agent 期间出错 / 被断开：还没用到，丢掉，等第一句出来时重建
+          log(`预建合成通道失效，稍后重连：${msg}`)
+          closeTts()
+          return
+        }
         log(`合成出错：${msg}`)
         state.error = msg
         await cancelTurn()
         await backToStandby()
       },
-      onClose: () => {},
+      onClose: () => {
+        if (tts === client && !ttsUsed) tts = null
+      },
     })
-    tts.open({ voice: opts.voice, speechRate: opts.speechRate })
+    tts = client
+    client.open({ voice: opts.voice, speechRate: opts.speechRate })
+  }
+
+  /**
+   * 按播放进度给输出音量打点：TTS 返回比实时播放快，音频先到先排队，
+   * 这里把每个 60ms 切片的响度延迟到它真正播放的时刻再写入 state.outLevel。
+   */
+  function scheduleOutLevel(myTurn, bytes) {
+    const samples = bytes.length >> 1
+    const step = Math.round((TTS_SAMPLE_RATE * OUT_LEVEL_STEP_MS) / 1000)
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    for (let i = 0; i < samples; i += step) {
+      const end = Math.min(samples, i + step)
+      let sum = 0
+      for (let j = i; j < end; j++) {
+        const v = view.getInt16(j * 2, true) / 32768
+        sum += v * v
+      }
+      const rms = Math.sqrt(sum / Math.max(1, end - i))
+      const level = Math.min(100, Math.round(rms * 600))
+      const delay = Math.max(0, outT0 + outAcc - performance.now())
+      outAcc += ((end - i) * 1000) / TTS_SAMPLE_RATE
+      setTimeout(() => {
+        if (myTurn === turnId && playStarted) state.outLevel = level
+      }, delay)
+    }
+  }
+
+  /**
+   * 把一步播放操作排进队列（保证顺序）。单步失败只记日志，不能让整条链报废，
+   * 否则后面的 playFinish 被跳过，界面会一直停在「播报中」。
+   */
+  function enqueuePlay(myTurn, step) {
+    playChain = playChain.then(async () => {
+      if (myTurn !== turnId) return
+      try {
+        await step()
+      } catch (e) {
+        log(`播放出错：${e?.message || e}`)
+      }
+    })
   }
 
   /** 一轮播报结束（自然播完 / 没有可播内容） */
@@ -399,8 +660,9 @@ export function createStandbyEngine() {
     turnId++
     closeTts()
     state.speaking = ''
-    if (opts?.continuous && opts.followUpSec > 0) {
-      log(`播报结束，继续听 ${opts.followUpSec} 秒`)
+    state.outLevel = 0
+    if (opts?.continuous) {
+      log('播报结束，连续对话继续听')
       await beginListening({ followUp: true })
     } else {
       await backToStandby()
@@ -434,7 +696,8 @@ export function createStandbyEngine() {
       }
     }
     state.speaking = ''
+    state.outLevel = 0
   }
 
-  return { state, start, stop, interrupt }
+  return { state, start, stop, interrupt, updateOptions }
 }

@@ -1,15 +1,35 @@
 <template>
   <div class="phone">
     <header class="topbar">
-      <button type="button" class="icon-btn" :aria-label="t('mobile.menu')" @click="drawerOpen = true">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 7h16M4 12h16M4 17h16" />
+      <button
+        type="button"
+        class="icon-btn"
+        :aria-label="chatMode === 'soulprout' ? t('mobile.swapToTask') : t('mobile.swapToSoul')"
+        @click="swapMode"
+      >
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 4L3.5 7.5 7 11" />
+          <path d="M3.5 7.5H17" />
+          <path d="M17 13l3.5 3.5L17 20" />
+          <path d="M20.5 16.5H7" />
         </svg>
       </button>
       <div class="topbar-title">
         <strong>{{ headerTitle }}</strong>
-        <span>{{ chatMode === 'soulprout' ? t('conversation.soulHint') : t('conversation.taskHint') }}</span>
+        <span>{{ chatMode === 'soulprout' ? t('mobile.soulSubtitle') : t('mobile.taskSubtitle') }}</span>
       </div>
+      <button v-if="chatMode === 'soulprout'" type="button" class="entry-btn entry-btn--yavis" @click="yavisOpen = true">
+        <span class="entry-glow"></span>
+        {{ t('mobile.yavis') }}
+      </button>
+      <button v-else type="button" class="entry-btn" @click="drawerOpen = true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+        {{ t('mobile.history') }}
+      </button>
+      <span class="topbar-spacer"></span>
       <button type="button" class="file-btn" @click="openFileList">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
@@ -58,22 +78,6 @@
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
-      </div>
-
-      <div class="mode-section">
-        <div class="mode-header">
-          <span>{{ t('conversation.chatMode') }}</span>
-          <span class="mode-hint">{{ chatMode === 'soulprout' ? t('conversation.soulHint') : t('conversation.taskHint') }}</span>
-        </div>
-        <div class="mode-switch" :data-active="chatMode">
-          <span class="mode-thumb"></span>
-          <button type="button" class="mode-option" :class="{ 'mode-option--active': chatMode === 'soulprout' }" @click="switchMode('soulprout')">
-            {{ t('conversation.soulLabel') }}
-          </button>
-          <button type="button" class="mode-option" :class="{ 'mode-option--active': chatMode === 'task' }" @click="switchMode('task')">
-            {{ t('conversation.taskLabel') }}
-          </button>
-        </div>
       </div>
 
       <template v-if="chatMode === 'task'">
@@ -139,6 +143,8 @@
       </div>
     </div>
 
+    <YavisPage v-if="yavisOpen" @close="yavisOpen = false" />
+
     <MobileFiles
       :open="filesOpen"
       :conversation-id="activeConversationId"
@@ -154,6 +160,7 @@ import { computed, nextTick, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ChatWindow from '@/components/ChatWindow.vue'
 import MobileFiles from './MobileFiles.vue'
+import YavisPage from './standby/YavisPage.vue'
 import { useChatSession } from './useChatSession'
 
 const emit = defineEmits(['logout'])
@@ -202,6 +209,7 @@ watch(unauthorized, (value) => {
 })
 
 const drawerOpen = ref(false)
+const yavisOpen = ref(false)
 const filesOpen = ref(false)
 const previewPath = ref('')
 const fileRefreshToken = ref(0)
@@ -236,8 +244,10 @@ watch(
   },
 )
 
-function switchMode(mode) {
-  handleSwitchMode(mode)
+/** 灵芽 <-> 任务 互换 */
+function swapMode() {
+  drawerOpen.value = false
+  handleSwitchMode(chatMode.value === 'soulprout' ? 'task' : 'soulprout')
 }
 
 function startNewTask() {
@@ -322,10 +332,9 @@ function openWebPreview(url) {
 
 .topbar {
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 44px 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-height: 52px;
   padding: env(safe-area-inset-top) 8px 0 4px;
   background: rgba(255, 255, 255, 0.94);
@@ -333,8 +342,67 @@ function openWebPreview(url) {
   z-index: 5;
 }
 
+.topbar-spacer {
+  flex: 1;
+}
+
+.icon-btn {
+  flex-shrink: 0;
+}
+
+.entry-btn {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #3a3a3c;
+  font-size: 12.5px;
+  font-weight: 560;
+  letter-spacing: 0.3px;
+  overflow: hidden;
+}
+
+.entry-btn:active {
+  transform: scale(0.97);
+}
+
+/* 芽维斯入口：极淡的彩色光晕，呼应待命页的「灵魂光感」 */
+.entry-btn--yavis {
+  padding-left: 14px;
+  border-color: rgba(30, 180, 140, 0.32);
+  color: #0f8f73;
+}
+
+.entry-glow {
+  position: absolute;
+  inset: -40% -10%;
+  background:
+    radial-gradient(60% 80% at 20% 50%, rgba(30, 180, 140, 0.26), transparent 70%),
+    radial-gradient(60% 80% at 85% 50%, rgba(111, 224, 189, 0.3), transparent 70%);
+  filter: blur(6px);
+  animation: entry-breathe 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes entry-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .topbar-title {
   min-width: 0;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
 }
@@ -587,66 +655,6 @@ function openWebPreview(url) {
 .drawer-logo {
   height: 28px;
   width: auto;
-}
-
-.mode-section {
-  margin: 12px 16px 8px;
-}
-
-.mode-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  color: #6e6e6e;
-  margin-bottom: 8px;
-}
-
-.mode-hint {
-  font-weight: 500;
-  color: #969696;
-  letter-spacing: 0;
-}
-
-.mode-switch {
-  position: relative;
-  display: flex;
-  padding: 4px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 12px;
-}
-
-.mode-thumb {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(50% - 4px);
-  height: calc(100% - 8px);
-  background: #212121;
-  border-radius: 9px;
-  transition: transform 0.28s ease;
-}
-
-.mode-switch[data-active='task'] .mode-thumb {
-  transform: translateX(100%);
-}
-
-.mode-option {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: #4b5563;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.mode-option--active {
-  color: #fff;
 }
 
 .new-task {

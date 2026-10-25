@@ -6,8 +6,11 @@
 const STRONG_END = /[。！？!?；;\n]/
 const WEAK_END = /[，,、：:]/
 
-/** 首句长到这个字数还没遇到句末标点，就在逗号处先放出去 */
-const FIRST_SENTENCE_SOFT_LIMIT = 14
+/**
+ * 首句长到这个字数还没遇到句末标点，就在逗号处先放出去。
+ * 取小一点让第一声更早出来；太小（比如 2~3 个字的「好的，」）会让开头一顿一顿。
+ */
+const FIRST_SENTENCE_SOFT_LIMIT = 6
 /** 任何一句超过这个字数都强制在弱标点处断开，避免一句话憋太久 */
 const SENTENCE_HARD_LIMIT = 60
 

@@ -43,6 +43,11 @@ export async function streamAgentReply({ message, userId, signal, onDelta }) {
   let buffer = ''
   let full = ''
   let followedTurnId = ''
+  /**
+   * 后端的聊天流在一轮回复结束后不会主动关闭连接（只会发一个 turn_done 事件，
+   * 之后一直挂着发心跳），所以必须靠这个事件判断「这一轮说完了」，不能等流结束。
+   */
+  let turnEnded = false
 
   const handleLine = (line) => {
     const trimmed = line.trim()
@@ -60,6 +65,10 @@ export async function streamAgentReply({ message, userId, signal, onDelta }) {
     else if (chunk.turn_id && followedTurnId && chunk.turn_id !== followedTurnId) return
     else if (!followedTurnId && chunk.turn_id) followedTurnId = chunk.turn_id
 
+    if (chunk.type === 'turn_done' || chunk.type === 'interrupted' || chunk.type === 'stopped') {
+      turnEnded = true
+      return
+    }
     if (chunk.type === 'error') throw new Error(chunk.content || 'Agent 回复异常')
     const content = chunk.content || ''
     if (!content) return
@@ -77,9 +86,16 @@ export async function streamAgentReply({ message, userId, signal, onDelta }) {
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''
       for (const line of lines) handleLine(line)
+      if (turnEnded) break
     }
-    if (buffer) handleLine(buffer)
+    if (!turnEnded && buffer) handleLine(buffer)
   } finally {
+    // 主动断开：否则这条连接会一直挂到服务端心跳超时
+    try {
+      await reader.cancel()
+    } catch {
+      /* ignore */
+    }
     reader.releaseLock()
   }
   return full

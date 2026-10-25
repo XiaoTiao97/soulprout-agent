@@ -10,7 +10,8 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
-import android.media.ToneGenerator;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.NoiseSuppressor;
 import android.os.Build;
 import android.util.Base64;
 import android.util.Log;
@@ -110,6 +111,13 @@ public class WakeWordPlugin extends Plugin {
     /** 从播报 / 采集切回待命时，需要先清空唤醒引擎的上下文（仅 worker 线程读写） */
     private boolean kwsDirty = false;
     private volatile boolean btMode = false;
+    /**
+     * 播报期间保持唤醒（语音打断）：录音源改用 VOICE_COMMUNICATION + 系统回声消除，
+     * 播报时不再静音，命中唤醒词就地停掉播放。
+     */
+    private volatile boolean bargeIn = false;
+    private AcousticEchoCanceler aec;
+    private NoiseSuppressor ns;
     private final ByteArrayOutputStream capBuf = new ByteArrayOutputStream(CAPTURE_PACKET_BYTES * 2);
     private int captureSeq = 0;
 
@@ -183,6 +191,7 @@ public class WakeWordPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         stopPlayback(true);
+        chimeExecutor.shutdownNow();
         synchronized (playLock) {
             if (playExecutor != null) {
                 playExecutor.shutdownNow();
@@ -230,7 +239,8 @@ public class WakeWordPlugin extends Plugin {
             int minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
             AudioAttributes attrs = new AudioAttributes.Builder()
                 // 耳机走通话链路时，播放也要走通话音量流，否则耳机里可能没声音
-                .setUsage(btMode ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
+                // 语音打断模式下也走通话流：回声消除需要和录音源配套才有参考信号
+                .setUsage((btMode || bargeIn) ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build();
             AudioFormat fmt = new AudioFormat.Builder()
@@ -363,7 +373,8 @@ public class WakeWordPlugin extends Plugin {
                 t.release();
             } catch (Throwable ignored) {
             }
-            muteUntilMs = System.currentTimeMillis() + POST_PLAY_MUTE_MS;
+            // 语音打断模式要保证打断后立刻能收到用户的话，不能再「捂耳朵」
+            if (!bargeIn) muteUntilMs = System.currentTimeMillis() + POST_PLAY_MUTE_MS;
         }
         playing = false;
     }
@@ -606,6 +617,120 @@ public class WakeWordPlugin extends Plugin {
         }
     }
 
+    // ------------------------------------------------------------ 唤醒提示音
+
+    private static final int CHIME_RATE = 22050;
+    private byte[] chimePcm;
+    private final ExecutorService chimeExecutor = Executors.newSingleThreadExecutor();
+
+    /** 合成一段柔和的上行双音（约 240ms）：正弦 + 一点泛音，快速淡入、指数衰减 */
+    private byte[] buildChime() {
+        // 手机扬声器对 800Hz~2kHz 最灵敏，这里取 G5 -> D6，并拉长时值、放慢衰减，保证听得清
+        final double[] freqs = {783.99, 1174.66};
+        final double[] starts = {0.0, 0.13};
+        final double total = 0.5;
+        int n = (int) (CHIME_RATE * total);
+        byte[] out = new byte[n * 2];
+        for (int i = 0; i < n; i++) {
+            double t = (double) i / CHIME_RATE;
+            double s = 0;
+            for (int k = 0; k < freqs.length; k++) {
+                double lt = t - starts[k];
+                if (lt < 0) continue;
+                double attack = Math.min(1.0, lt / 0.008);
+                double decay = Math.exp(-lt * 6.0);
+                double ph = 2 * Math.PI * freqs[k] * lt;
+                s += attack * decay * (Math.sin(ph) + 0.25 * Math.sin(2 * ph));
+            }
+            // 整体收尾淡出，避免尾部爆音
+            double tail = Math.min(1.0, (total - t) / 0.04);
+            // 峰值约 0.75 满量程（原来只有 0.25 左右），再软限幅防止削波
+            double x = s * 0.5 * tail;
+            int v = (int) (Math.tanh(x * 1.4) / Math.tanh(1.4) * 0.9 * 32767);
+            v = Math.max(-32768, Math.min(32767, v));
+            out[2 * i] = (byte) (v & 0xFF);
+            out[2 * i + 1] = (byte) ((v >> 8) & 0xFF);
+        }
+        return out;
+    }
+
+    /** 命中唤醒词后的提示音；独立线程播放，不阻塞录音循环 */
+    private void playChime() {
+        final boolean comm = btMode || bargeIn;
+        try {
+            chimeExecutor.execute(() -> {
+                AudioTrack t = null;
+                try {
+                    if (chimePcm == null) chimePcm = buildChime();
+                    AudioAttributes attrs = new AudioAttributes.Builder()
+                        .setUsage(comm ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build();
+                    AudioFormat fmt = new AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(CHIME_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build();
+                    t = new AudioTrack(attrs, fmt, chimePcm.length, AudioTrack.MODE_STATIC,
+                        AudioManager.AUDIO_SESSION_ID_GENERATE);
+                    if (t.getState() != AudioTrack.STATE_INITIALIZED) return;
+                    t.write(chimePcm, 0, chimePcm.length);
+                    t.play();
+                    Thread.sleep(chimePcm.length / 2 * 1000L / CHIME_RATE + 60);
+                } catch (Throwable e) {
+                    Log.w(TAG, "playChime failed", e);
+                } finally {
+                    if (t != null) {
+                        try {
+                            t.release();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+            });
+        } catch (Throwable e) {
+            Log.w(TAG, "playChime rejected", e);
+        }
+    }
+
+    /** 打开系统回声消除 / 降噪；返回 "on" 或 "on+ns" 或 "off:原因" */
+    private String attachEffects(int sessionId) {
+        String r;
+        try {
+            if (AcousticEchoCanceler.isAvailable()) {
+                aec = AcousticEchoCanceler.create(sessionId);
+                if (aec != null) {
+                    aec.setEnabled(true);
+                }
+            }
+            if (NoiseSuppressor.isAvailable()) {
+                ns = NoiseSuppressor.create(sessionId);
+                if (ns != null) {
+                    ns.setEnabled(true);
+                }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "attachEffects failed", e);
+        }
+        boolean aecOn = aec != null && aec.getEnabled();
+        // 即使没有显式的 AEC 效果器，VOICE_COMMUNICATION 源在不少机型上也自带处理，这里只如实报告
+        r = aecOn ? (ns != null ? "on+ns" : "on") : "off:效果器不可用";
+        return r;
+    }
+
+    private void releaseEffects() {
+        try {
+            if (aec != null) aec.release();
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (ns != null) ns.release();
+        } catch (Throwable ignored) {
+        }
+        aec = null;
+        ns = null;
+    }
+
     /** 当前录音实际用的是哪个麦克风，给界面显示 */
     private String describeInput(AudioRecord recorder) {
         AudioDeviceInfo d = recorder.getRoutedDevice();
@@ -664,8 +789,9 @@ public class WakeWordPlugin extends Plugin {
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
             int bufBytes = Math.max(minBuf, SAMPLE_RATE * 2);
             // 走蓝牙通话链路时用 VOICE_COMMUNICATION，系统才会把录音路由到耳机
+            bargeIn = Boolean.TRUE.equals(call.getBoolean("bargeIn", false));
             recorder = new AudioRecord(
-                btRequested ? MediaRecorder.AudioSource.VOICE_COMMUNICATION
+                (btRequested || bargeIn) ? MediaRecorder.AudioSource.VOICE_COMMUNICATION
                             : MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
@@ -682,6 +808,13 @@ public class WakeWordPlugin extends Plugin {
                         recorder.setPreferredDevice(d);
                         break;
                     }
+                }
+            }
+            String aecState = "";
+            if (bargeIn) {
+                aecState = attachEffects(recorder.getAudioSessionId());
+                if (!aecState.startsWith("on")) {
+                    note = (note.isEmpty() ? "" : note + "；") + "本机没有可用的回声消除，播报时喊唤醒词可能误触发或不灵";
                 }
             }
             recorder.startRecording();
@@ -704,6 +837,8 @@ public class WakeWordPlugin extends Plugin {
             result.put("input", describeInput(recorder));
             result.put("bluetooth", isRoutedToBluetooth(recorder));
             result.put("note", note);
+            result.put("bargeIn", bargeIn);
+            result.put("aec", aecState);
             call.resolve(result);
             resolved = true;
 
@@ -718,6 +853,7 @@ public class WakeWordPlugin extends Plugin {
         } finally {
             running = false;
             capturing = false;
+            releaseEffects();
             keepScreenOn(false);
             if (recorder != null) {
                 try {
@@ -742,14 +878,6 @@ public class WakeWordPlugin extends Plugin {
         capturing = false;
         kwsDirty = false;
         capBuf.reset();
-        ToneGenerator tone = null;
-        try {
-            // 通话链路下提示音要走通话音量流，否则耳机里可能听不到
-            tone = new ToneGenerator(btMode ? AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC, 80);
-        } catch (Throwable e) {
-            Log.w(TAG, "ToneGenerator unavailable", e);
-        }
-
         final short[] pcm = new short[CHUNK_SAMPLES];
         final float[] full = new float[CHUNK_SAMPLES];
         final long startMs = System.currentTimeMillis();
@@ -788,7 +916,7 @@ public class WakeWordPlugin extends Plugin {
 
             long now = System.currentTimeMillis();
             // 半双工：播报期间（及结束后一小段）不听，避免把自己的声音当成唤醒词或用户说话
-            boolean muted = playing || now < muteUntilMs;
+            boolean muted = (!bargeIn && playing) || now < muteUntilMs;
             String hit = null;
 
             if (muted) {
@@ -823,13 +951,19 @@ public class WakeWordPlugin extends Plugin {
             if (hit != null && now - lastWakeMs >= COOLDOWN_MS) {
                 lastWakeMs = now;
                 wakeCount++;
-                if (tone != null) {
-                    tone.startTone(ToneGenerator.TONE_PROP_BEEP);
-                }
+                playChime();
                 // 命中后立刻进入采集，后续音频直接上送，不丢「唤醒词 + 指令」连说的内容
                 capturing = true;
                 capBuf.reset();
+                // 播报中被唤醒词打断：原生就地停掉播放，不等 JS 来回一趟，避免把扬声器尾音录进去
+                boolean barged = false;
+                if (playing) {
+                    barged = true;
+                    stopPlayback(true);
+                    emitPlayEnd(true);
+                }
                 JSObject o = new JSObject();
+                o.put("interrupted", barged);
                 o.put("keyword", hit);
                 o.put("count", wakeCount);
                 o.put("tsMs", now);
@@ -868,10 +1002,6 @@ public class WakeWordPlugin extends Plugin {
                 winAudioNs = 0;
                 winChunks = 0;
             }
-        }
-
-        if (tone != null) {
-            tone.release();
         }
     }
 }
