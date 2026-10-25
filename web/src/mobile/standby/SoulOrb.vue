@@ -54,7 +54,7 @@ const ringEl = ref(null)
 const amp = computed(() => {
   let v = 0
   if (props.phase === 'listening') v = props.level / 100
-  else if (props.phase === 'speaking') v = (props.outLevel / 100) * 1.25
+  else if (props.phase === 'speaking') v = props.outLevel / 100
   return Math.max(0, Math.min(1, v)).toFixed(3)
 })
 
@@ -65,17 +65,17 @@ watch(
     flashEl.value?.animate(
       [
         { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
-        { transform: 'scale(1.25)', filter: 'brightness(1.1) saturate(1.5)', offset: 0.28 },
+        { transform: 'scale(1.1)', filter: 'brightness(1.05) saturate(1.2)', offset: 0.3 },
         { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
       ],
-      { duration: 1000, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      { duration: 1400, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
     )
     ringEl.value?.animate(
       [
-        { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 0.8 },
-        { transform: 'translate(-50%, -50%) scale(1.9)', opacity: 0 },
+        { transform: 'translate(-50%, -50%) scale(0.6)', opacity: 0.4 },
+        { transform: 'translate(-50%, -50%) scale(1.6)', opacity: 0 },
       ],
-      { duration: 1100, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { duration: 1600, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
     )
   },
 )
@@ -92,19 +92,19 @@ watch(
 }
 
 .orb--starting {
-  --base: 0.68;
+  --base: 0.72;
 }
 
 .orb--listening {
-  --base: 0.98;
+  --base: 0.88;
 }
 
 .orb--thinking {
-  --base: 0.76;
+  --base: 0.78;
 }
 
 .orb--speaking {
-  --base: 0.9;
+  --base: 0.85;
 }
 
 .orb-flash {
@@ -116,8 +116,8 @@ watch(
 .orb-field {
   position: absolute;
   inset: 0;
-  transform: scale(calc(var(--base) + var(--amp) * 0.34));
-  transition: transform 0.14s ease-out;
+  transform: scale(calc(var(--base) + var(--amp) * 0.12));
+  transition: transform 0.45s ease-out;
   will-change: transform;
 }
 
@@ -132,8 +132,8 @@ watch(
   width: 64%;
   height: 64%;
   border-radius: 50%;
-  filter: blur(34px);
-  opacity: 0.5;
+  filter: blur(36px);
+  opacity: 0.36;
   transition: opacity 0.7s ease;
 }
 
@@ -141,21 +141,21 @@ watch(
   top: 5%;
   left: 3%;
   background: radial-gradient(circle at 45% 45%, #6fe0bd 0%, rgba(111, 224, 189, 0) 72%);
-  animation: drift-1 11s ease-in-out infinite;
+  animation: drift-1 18s ease-in-out infinite;
 }
 
 .blob-2 {
   top: 12%;
   right: 2%;
   background: radial-gradient(circle at 55% 45%, #1eb48c 0%, rgba(30, 180, 140, 0) 72%);
-  animation: drift-2 13s ease-in-out infinite;
+  animation: drift-2 22s ease-in-out infinite;
 }
 
 .blob-3 {
   bottom: 2%;
   left: 20%;
   background: radial-gradient(circle at 50% 50%, #b9f1cf 0%, rgba(185, 241, 207, 0) 72%);
-  animation: drift-3 15s ease-in-out infinite;
+  animation: drift-3 26s ease-in-out infinite;
 }
 
 .core {
@@ -168,8 +168,8 @@ watch(
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 38%, rgba(255, 255, 255, 0) 72%);
   filter: blur(6px);
-  opacity: 0.7;
-  animation: core-glow 5.5s ease-in-out infinite;
+  opacity: 0.6;
+  animation: core-glow 9s ease-in-out infinite;
   transition: opacity 0.6s ease;
 }
 
@@ -192,10 +192,10 @@ watch(
 
 .mic {
   inset: 18%;
-  border: 2px solid rgba(var(--c-brand), 0.55);
-  box-shadow: 0 0 30px rgba(var(--c-brand), 0.3), inset 0 0 26px rgba(var(--c-brand), 0.14);
-  transform: scale(calc(0.86 + var(--amp) * 0.34));
-  transition: opacity 0.6s ease, transform 0.1s ease-out;
+  border: 1.5px solid rgba(var(--c-brand), 0.4);
+  box-shadow: 0 0 24px rgba(var(--c-brand), 0.16), inset 0 0 20px rgba(var(--c-brand), 0.08);
+  transform: scale(calc(0.92 + var(--amp) * 0.12));
+  transition: opacity 0.8s ease, transform 0.4s ease-out;
 }
 
 .swirl {
@@ -204,82 +204,82 @@ watch(
     from 0deg,
     rgba(var(--c-brand), 0) 0%,
     rgba(var(--c-brand), 0) 52%,
-    rgba(var(--c-brand), 0.85) 88%,
-    #d9fbec 100%
+    rgba(var(--c-brand), 0.6) 88%,
+    #e4fbf0 100%
   );
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  filter: blur(1px) drop-shadow(0 0 8px rgba(var(--c-brand), 0.7));
+  filter: blur(1.5px) drop-shadow(0 0 6px rgba(var(--c-brand), 0.4));
 }
 
 .wave {
   inset: 24%;
-  border: 1.5px solid rgba(var(--c-brand), 0.6);
+  border: 1px solid rgba(var(--c-brand), 0.4);
 }
 
 /* ---------- 待命 ---------- */
 .orb--standby .orb-field,
 .orb--starting .orb-field {
-  animation: orb-breathe 6.5s ease-in-out infinite;
+  animation: orb-breathe 10s ease-in-out infinite;
   transition: transform 1.2s ease;
 }
 
 .orb--standby .halo,
 .orb--starting .halo {
   opacity: 1;
-  animation: halo-breathe 6.5s ease-in-out infinite;
+  animation: halo-breathe 10s ease-in-out infinite;
 }
 
 /* ---------- 聆听 ---------- */
 .orb--listening .blob {
-  opacity: 0.88;
+  opacity: 0.55;
 }
 
 .orb--listening .core {
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .orb--listening .mic {
-  opacity: 1;
+  opacity: 0.55;
 }
 
 /* ---------- 思考 ---------- */
 .orb--thinking .orb-field {
-  animation: think-beat 1.9s ease-in-out infinite;
+  animation: think-beat 4.2s ease-in-out infinite;
 }
 
 .orb--thinking .blobs {
-  animation: orb-spin 5s linear infinite;
+  animation: orb-spin 16s linear infinite;
 }
 
 .orb--thinking .blob {
-  opacity: 0.75;
+  opacity: 0.5;
 }
 
 .orb--thinking .swirl {
-  opacity: 1;
-  animation: orb-spin 1.7s linear infinite;
+  opacity: 0.5;
+  animation: orb-spin 4.8s linear infinite;
 }
 
 /* ---------- 回答 ---------- */
 .orb--speaking .blob {
-  opacity: 0.85;
+  opacity: 0.55;
 }
 
 .orb--speaking .core {
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .orb--speaking .wave {
-  animation: wave-out 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  animation: wave-out 5s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
 }
 
 .orb--speaking .wave-2 {
-  animation-delay: 0.8s;
+  animation-delay: 1.7s;
 }
 
 .orb--speaking .wave-3 {
-  animation-delay: 1.6s;
+  animation-delay: 3.4s;
 }
 
 .ring {
@@ -290,7 +290,7 @@ watch(
   height: 52%;
   border-radius: 50%;
   border: 1.5px solid rgba(var(--c-brand), 0.6);
-  box-shadow: 0 0 28px rgba(var(--c-brand), 0.4);
+  box-shadow: 0 0 22px rgba(var(--c-brand), 0.22);
   transform: translate(-50%, -50%) scale(0.5);
   opacity: 0;
 }
@@ -299,38 +299,32 @@ watch(
 @keyframes orb-breathe {
   0%,
   100% {
-    transform: scale(0.76);
+    transform: scale(0.77);
   }
   50% {
-    transform: scale(0.88);
+    transform: scale(0.83);
   }
 }
 
 @keyframes halo-breathe {
   0%,
   100% {
-    opacity: 0.35;
-    transform: scale(0.96);
+    opacity: 0.18;
+    transform: scale(0.98);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.06);
+    opacity: 0.55;
+    transform: scale(1.03);
   }
 }
 
 @keyframes think-beat {
   0%,
   100% {
-    transform: scale(0.74);
-  }
-  18% {
-    transform: scale(0.84);
-  }
-  36% {
     transform: scale(0.76);
   }
-  54% {
-    transform: scale(0.8);
+  50% {
+    transform: scale(0.81);
   }
 }
 
@@ -343,10 +337,10 @@ watch(
 @keyframes wave-out {
   0% {
     transform: scale(0.7);
-    opacity: calc(0.35 + var(--amp) * 0.55);
+    opacity: calc(0.18 + var(--amp) * 0.25);
   }
   100% {
-    transform: scale(1.75);
+    transform: scale(1.5);
     opacity: 0;
   }
 }
