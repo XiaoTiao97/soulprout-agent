@@ -21,6 +21,7 @@ from fastapi import HTTPException, Request
 from agent.database.crud.conversation import get_conversation_by_id
 from agent.database.models.user import UserInfo
 from agent.services.email_service import verify_email_code
+from agent.services.prompt import default_username
 from agent.utils.jwt_utils import verify_token
 
 
@@ -79,11 +80,6 @@ async def _allocate_user_id() -> str:
     raise RuntimeError("无法分配新的 user_id，请稍后再试")
 
 
-def _username_from_email(email: str) -> str:
-    prefix = email.split("@", 1)[0]
-    return prefix[:64] if prefix else "Soulprout 用户"
-
-
 # ---------------------------------------------------------------------------
 # 邮箱登录/注册
 # ---------------------------------------------------------------------------
@@ -91,7 +87,6 @@ def _username_from_email(email: str) -> str:
 async def login_or_register_by_email(
     email: str,
     code: str,
-    username: Optional[str] = None,
 ) -> Tuple[Optional[UserInfo], bool, Optional[str]]:
     """
     邮箱验证码一体化登录/注册。
@@ -117,7 +112,7 @@ async def login_or_register_by_email(
     new_user_id = await _allocate_user_id()
     user = UserInfo(
         user_id=new_user_id,
-        username=(username or "").strip() or _username_from_email(norm_email),
+        username=default_username(new_user_id),
         email=norm_email,
     )
     await user.insert()
@@ -130,7 +125,6 @@ async def login_or_register_by_email(
 
 async def login_or_register_by_user_id(
     user_id: str,
-    username: Optional[str] = None,
 ) -> Optional[Tuple[UserInfo, bool]]:
     """
     企业 SSO 免密登录/注册：
@@ -147,7 +141,7 @@ async def login_or_register_by_user_id(
 
     user = UserInfo(
         user_id=str(user_id),
-        username=(username or "").strip() or str(user_id),
+        username=default_username(user_id),
     )
     await user.insert()
     return user, True
@@ -157,12 +151,12 @@ async def login_or_register_by_user_id(
 # 游客登录
 # ---------------------------------------------------------------------------
 
-async def create_guest_user(username: str = "不知姓名的远方朋友") -> UserInfo:
-    """生成一个随机 user_id 的游客账号。"""
+async def create_guest_user() -> UserInfo:
+    """生成一个随机 user_id 的游客账号，用户名为「未命名用户{user_id}」。"""
     guest_id = await _allocate_user_id()
     user = UserInfo(
         user_id=guest_id,
-        username=username,
+        username=default_username(guest_id),
     )
     await user.insert()
     return user

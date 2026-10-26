@@ -4,11 +4,12 @@
 
 - ``GET /voice/config``：是否已配置、默认参数。
 - ``WS  /voice/asr?token=&end_window_ms=``
-    上行：二进制 PCM（16k/16bit/单声道），文本 ``{"type":"finish"}``。
-    下行：``{"type":"ready"|"partial"|"final"|"error"|"end", ...}``。
+    上行：二进制 PCM（16k/16bit/单声道），文本 ``{"type":"finish"}``、``{"type":"ping"}``。
+    下行：``{"type":"ready"|"partial"|"final"|"error"|"end"|"pong", ...}``。
+    ping / pong 是应用层心跳：手机息屏后连接会被网络侧悄悄回收，靠它保活并发现死连接。
 - ``WS  /voice/tts?token=&voice=&speech_rate=``
-    上行：``{"type":"text","text":"..."}``、``{"type":"finish"}``、``{"type":"cancel"}``。
-    下行：二进制 PCM（24k/16bit/单声道）与 ``{"type":"ready"|"sentence_start"|"sentence_end"|"done"|"canceled"|"error"}``。
+    上行：``{"type":"text","text":"..."}``、``{"type":"finish"}``、``{"type":"cancel"}``、``{"type":"ping"}``。
+    下行：二进制 PCM（24k/16bit/单声道）与 ``{"type":"ready"|"sentence_start"|"sentence_end"|"done"|"canceled"|"error"|"pong"}``。
 """
 
 from __future__ import annotations
@@ -134,8 +135,11 @@ async def voice_asr(ws: WebSocket):
                     data = json.loads(msg["text"])
                 except json.JSONDecodeError:
                     continue
-                if data.get("type") == "finish":
+                kind = data.get("type")
+                if kind == "finish":
                     await asr.finish()
+                elif kind == "ping":
+                    await _send_json(ws, {"type": "pong"})
 
     async def forwarder():
         async for ev in asr.events():
@@ -197,6 +201,8 @@ async def voice_tts(ws: WebSocket):
                 await tts.finish()
             elif kind == "cancel":
                 await tts.cancel()
+            elif kind == "ping":
+                await _send_json(ws, {"type": "pong"})
 
     async def forwarder():
         async for ev in tts.events():

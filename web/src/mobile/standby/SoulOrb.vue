@@ -110,7 +110,6 @@ watch(
 .orb-flash {
   position: absolute;
   inset: 0;
-  will-change: transform, filter;
 }
 
 .orb-field {
@@ -132,29 +131,36 @@ watch(
   width: 64%;
   height: 64%;
   border-radius: 50%;
-  filter: blur(36px);
+  /* 渐变本身已经渐隐到透明，不再叠大半径模糊（每次栅格化都很贵） */
   opacity: 0.36;
   transition: opacity 0.7s ease;
+  will-change: transform;
 }
 
 .blob-1 {
-  top: 5%;
-  left: 3%;
-  background: radial-gradient(circle at 45% 45%, #6fe0bd 0%, rgba(111, 224, 189, 0) 72%);
+  top: 0%;
+  left: -2%;
+  width: 72%;
+  height: 72%;
+  background: radial-gradient(circle at 45% 45%, #6fe0bd 0%, rgba(111, 224, 189, 0.55) 26%, rgba(111, 224, 189, 0.18) 52%, rgba(111, 224, 189, 0) 74%);
   animation: drift-1 18s ease-in-out infinite;
 }
 
 .blob-2 {
-  top: 12%;
-  right: 2%;
-  background: radial-gradient(circle at 55% 45%, #1eb48c 0%, rgba(30, 180, 140, 0) 72%);
+  top: 6%;
+  right: -4%;
+  width: 72%;
+  height: 72%;
+  background: radial-gradient(circle at 55% 45%, #1eb48c 0%, rgba(30, 180, 140, 0.55) 26%, rgba(30, 180, 140, 0.18) 52%, rgba(30, 180, 140, 0) 74%);
   animation: drift-2 22s ease-in-out infinite;
 }
 
 .blob-3 {
-  bottom: 2%;
-  left: 20%;
-  background: radial-gradient(circle at 50% 50%, #b9f1cf 0%, rgba(185, 241, 207, 0) 72%);
+  bottom: -2%;
+  left: 16%;
+  width: 72%;
+  height: 72%;
+  background: radial-gradient(circle at 50% 50%, #b9f1cf 0%, rgba(185, 241, 207, 0.55) 26%, rgba(185, 241, 207, 0.18) 52%, rgba(185, 241, 207, 0) 74%);
   animation: drift-3 26s ease-in-out infinite;
 }
 
@@ -167,7 +173,6 @@ watch(
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 38%, rgba(255, 255, 255, 0) 72%);
-  filter: blur(6px);
   opacity: 0.6;
   animation: core-glow 9s ease-in-out infinite;
   transition: opacity 0.6s ease;
@@ -375,13 +380,14 @@ watch(
   }
 }
 
+/* 只动 transform，不再每帧改 filter */
 @keyframes core-glow {
   0%,
   100% {
-    filter: blur(6px) brightness(0.95);
+    transform: translate(-50%, -50%) scale(0.96);
   }
   50% {
-    filter: blur(6px) brightness(1.1);
+    transform: translate(-50%, -50%) scale(1.07);
   }
 }
 

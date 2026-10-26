@@ -14,16 +14,24 @@ class EmailLoginRequest(BaseModel):
 
     - ``email``：登录邮箱
     - ``code``：6 位验证码
-    - ``username``：可选昵称，仅在该邮箱首次登录（自动注册）时使用
+
+    用户名不在登录/注册时填写：新用户默认「未命名用户{user_id}」，之后通过对话或「个性化」修改。
     """
 
     email: str = Field(..., max_length=320)
     code: str = Field(..., min_length=4, max_length=12)
+
+
+class ProfileUpdateRequest(BaseModel):
+    """个性化设置：用户 / 智能体的名字与具体信息。未提供的字段保持不变。"""
+
     username: Optional[str] = Field(default=None, max_length=64)
+    userinfo: Optional[str] = Field(default=None, max_length=1024)
+    agentname: Optional[str] = Field(default=None, max_length=64)
+    agentinfo: Optional[str] = Field(default=None, max_length=1024)
 
 
 class SsoTokenRequest(BaseModel):
     """企业 SSO 通过 user_id 免密换取 JWT。"""
 
     user_id: str = Field(..., max_length=64)
-    username: Optional[str] = Field(default=None, max_length=64)

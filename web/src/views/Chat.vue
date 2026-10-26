@@ -21,6 +21,7 @@
         @updateConversationAbstract="updateConversationAbstract"
         @switchMode="handleSwitchMode"
         @openRunning="openRunningConversation"
+        @usernameUpdated="currentUsername = $event"
       />
 
       <div class="chat-main" :class="{ 'with-extra': showExtraInfo }">

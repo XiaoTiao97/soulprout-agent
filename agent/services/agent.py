@@ -664,10 +664,9 @@ class Chat:
         Soulprout 模式：
         - 强制 conversation_id = user_id（每个用户唯一的 Soulprout 会话），不存在则先建一条
         - 模型从环境变量 SOULPROUT_MODEL / SOULPROUT_MODEL_SOURCE 读取，忽略前端传入
-        - 拉取当前 user 的 userinfo / agentinfo
-        - 以 USERINFO: 和 AGENTINFO: 为前缀拼入 system_prompt
-        - 若 DB 中 agentinfo 已设置，则把它放到 AGENTINFO 段的开头；
-          否则用 AGENT_INFO_PERSONA_REMINDER 提醒用户可以个性化自己的 Soulprout
+        - 拉取当前 user 的 username / userinfo / agentname / agentinfo
+        - 以 User-name / User-info / Agent-name / Agent-info 分别拼入 system_prompt
+        - agentname 默认「小芽」，默认 agentinfo 里已说明「小芽」只是默认名字、可修改名字与说话方式
         - 工具集仅暴露 soulprout_tools
         """
         self.conversation_id = self.user_id
@@ -690,24 +689,27 @@ class Chat:
                 model=self.model,
             ))
 
-        userinfo_text = ""
-        agentinfo_text = ""
         user_name = ""
+        userinfo_text = ""
+        agent_name = prompt.DEFAULT_AGENT_NAME
+        agentinfo_text = ""
         try:
             user = await UserInfo.find_one(UserInfo.user_id == self.user_id)
             if user:
                 user_name = (getattr(user, "username", "") or "").strip()
                 userinfo_text = (getattr(user, "userinfo", "") or "").strip()
+                agent_name = (getattr(user, "agentname", "") or "").strip() or prompt.DEFAULT_AGENT_NAME
                 agentinfo_text = (getattr(user, "agentinfo", "") or "").strip()
         except Exception as e:
             print(f"加载 UserInfo 失败：{e}")
 
-        userinfo_section = f"User-name: {user_name}\nUser-info: {userinfo_text}" if userinfo_text else f"User-name: {user_name}\nUser-info: (empty)"
-        if agentinfo_text:
-            agentinfo_section = f"Agent-info: {agentinfo_text}"
-        else:
-            agentinfo_section = f"Agent-info: {prompt.AGENT_INFO_PERSONA_REMINDER}"
-        agent_info_section = f"""# PERSONAL INFO\n{userinfo_section}\n{agentinfo_section}"""
+        agent_info_section = (
+            "# PERSONAL INFO\n"
+            f"User-name: {user_name or '(empty)'}\n"
+            f"User-info: {userinfo_text or '(empty)'}\n"
+            f"Agent-name: {agent_name}\n"
+            f"Agent-info: {agentinfo_text or '(empty)'}"
+        )
         self.system_prompt = (
             f"{self.capabilities_prompt}\n"
             f"{prompt.AGENT_INFO}\n"

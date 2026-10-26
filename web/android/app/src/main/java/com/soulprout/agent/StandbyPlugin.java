@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.webkit.WebView;
 
 import androidx.core.app.NotificationManagerCompat;
 
@@ -151,11 +152,29 @@ public class StandbyPlugin extends Plugin {
         String stopLabel = call.getString("stopLabel", "停止待命");
         try {
             StandbyService.start(getContext(), title, text, stopLabel);
+            keepRendererImportant();
             call.resolve();
         } catch (Throwable e) {
             Log.e(TAG, "startService failed", e);
             call.reject("启动常驻服务失败: " + e.getMessage(), "SERVICE_START_FAILED");
         }
+    }
+
+    /**
+     * 待命的整条语音链路（识别 / 合成连接、Agent 流、状态机）都跑在 WebView 的渲染进程里。
+     * 前台服务只保住了 App 主进程；息屏后 Activity 不可见，系统会把 WebView 渲染进程当成
+     * 「看不见的后台进程」降权（CPU 受限、内存紧张时最先被杀），表现就是聊一会儿之后事件越来越慢直至停摆。
+     * 这里声明：该渲染进程在不可见时也保持重要优先级，不被降权。
+     */
+    private void keepRendererImportant() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            try {
+                getBridge().getWebView().setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+            } catch (Throwable e) {
+                Log.w(TAG, "setRendererPriorityPolicy failed", e);
+            }
+        });
     }
 
     @PluginMethod
@@ -187,6 +206,15 @@ public class StandbyPlugin extends Plugin {
             case "battery":
                 opened = openBatterySettings();
                 fallback = "app".equals(opened);
+                break;
+            case "batteryList":
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                    && startSafely(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))) {
+                    opened = "battery-list";
+                } else {
+                    opened = openAppDetails();
+                    fallback = true;
+                }
                 break;
             case "autostart":
                 opened = openAutoStart();

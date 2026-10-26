@@ -41,6 +41,11 @@ export const startWake = (keywords, source = 'auto', bargeIn = false) =>
 export const stopWake = () => WakeWord.stop()
 export const beginCapture = () => WakeWord.beginCapture()
 export const endCapture = () => WakeWord.endCapture()
+/** 播放一次唤醒提示音（手动唤醒用） */
+export const chime = () => WakeWord.chime()
+/** 思考中的浅背景音，循环直到 thinkStop */
+export const thinkStart = () => WakeWord.thinkStart()
+export const thinkStop = () => WakeWord.thinkStop()
 
 export const playStart = (sampleRate = 24000) => WakeWord.playStart({ sampleRate })
 /** @param {Uint8Array|ArrayBuffer} pcm 16bit 小端单声道 */
@@ -62,6 +67,6 @@ export const getStandbyStatus = () => Standby.getStatus()
 export const requestStandbyPermissions = () => Standby.requestPermissions()
 export const startStandbyService = (opts) => Standby.startService(opts)
 export const stopStandbyService = () => Standby.stopService()
-/** @param {'app'|'notification'|'battery'|'autostart'} target */
+/** @param {'app'|'notification'|'battery'|'batteryList'|'autostart'} target */
 export const openStandbySettings = (target) => Standby.openSettings({ target })
 export const onServiceStopped = (cb) => Standby.addListener('serviceStopped', cb)

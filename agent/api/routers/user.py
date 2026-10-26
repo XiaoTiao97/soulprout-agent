@@ -1,20 +1,21 @@
 # api/routers/user.py
 import os
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from agent.api.models.user import EmailCodeRequest, EmailLoginRequest, SsoTokenRequest
+from agent.api.models.user import EmailCodeRequest, EmailLoginRequest, ProfileUpdateRequest, SsoTokenRequest
 from agent.services.auth import (
     create_guest_user,
     get_current_user,
     login_or_register_by_email,
     login_or_register_by_user_id,
+    require_user,
 )
+from agent.services.prompt import DEFAULT_AGENT_NAME
 from agent.services.email_service import EmailSendError, is_valid_email, request_email_code
 from agent.utils.jwt_utils import create_access_token
 from agent.database.models.user import UserInfo
-from beanie.operators import Eq
 
 router = APIRouter()
 
@@ -59,7 +60,6 @@ async def email_login(data: EmailLoginRequest):
     user, is_new_user, err = await login_or_register_by_email(
         email=data.email,
         code=data.code,
-        username=data.username,
     )
     if not user:
         return JSONResponse(status_code=200, content={
@@ -124,6 +124,42 @@ async def get_me(request: Request):
     })
 
 
+def _profile_payload(user: UserInfo) -> dict:
+    return {
+        "success": True,
+        "username": user.username,
+        "userinfo": user.userinfo or "",
+        "agentname": (user.agentname or "").strip() or DEFAULT_AGENT_NAME,
+        "agentinfo": user.agentinfo or "",
+    }
+
+
+@router.get("/user/profile")
+async def get_profile(user: UserInfo = Depends(require_user)):
+    """读取个性化设置：用户名 / 用户信息 / 智能体名字 / 智能体信息。"""
+    return JSONResponse(status_code=200, content=_profile_payload(user))
+
+
+@router.put("/user/profile")
+async def update_profile(data: ProfileUpdateRequest, user: UserInfo = Depends(require_user)):
+    """更新个性化设置，仅修改请求中提供的字段；用户名、智能体名字不允许为空。"""
+    updates = data.model_dump(exclude_none=True)
+    for key in ("username", "agentname"):
+        if key in updates:
+            updates[key] = updates[key].strip()
+            if not updates[key]:
+                return JSONResponse(status_code=200, content={
+                    "success": False,
+                    "message": "名字不能为空",
+                    "code": 2020,
+                })
+    for key, value in updates.items():
+        setattr(user, key, value)
+    if updates:
+        await user.save()
+    return JSONResponse(status_code=200, content=_profile_payload(user))
+
+
 @router.post("/user/guest")
 async def guest_login():
     """生成一个临时游客账号（自动分配 user_id）。"""
@@ -161,23 +197,6 @@ async def app_config():
     return JSONResponse({"deployment_mode": mode})
 
 
-@router.get("/user/private-user")
-async def get_private_user():
-    """Private 模式专用：检查固定 user_id="private" 的账号是否已创建。
-
-    Private 部署永远只有一个用户，user_id 固定为 "private"。
-    前端据此判断是首次使用（需填写昵称）还是直接 SSO 登录。
-    """
-    if os.getenv("DEPLOYMENT_MODE", "saas").strip().lower() != "private":
-        return JSONResponse({"success": False, "message": "非私有部署模式"}, status_code=403)
-
-    user = await UserInfo.find_one(Eq(UserInfo.user_id, "private"))
-    if not user:
-        return JSONResponse({"success": False, "user_id": None, "username": None})
-
-    return JSONResponse({"success": True, "user_id": user.user_id, "username": user.username})
-
-
 # ---------------------------------------------------------------------------
 # 企业 SSO 入口
 # ---------------------------------------------------------------------------
@@ -189,17 +208,17 @@ def _is_sso_enabled() -> bool:
 
 
 @router.get("/sso-entrance")
-async def sso_entrance(request: Request, user_id: str, username: str = None):
+async def sso_entrance(request: Request, user_id: str):
     """
     企业门户 SSO 入口（浏览器跳转版本）。
 
-    URL 形如：``https://your-system.com/sso-entrance?user_id=xxx&username=xxx``
+    URL 形如：``https://your-system.com/sso-entrance?user_id=xxx``
     成功后写入 cookie 并 302 跳转到前端 ``/chat``。
     """
     if not _is_sso_enabled():
         raise HTTPException(status_code=403, detail="SSO功能未开启，请联系管理员配置")
 
-    result = await login_or_register_by_user_id(user_id, username)
+    result = await login_or_register_by_user_id(user_id)
     if not result:
         raise HTTPException(status_code=500, detail="登录失败")
 
@@ -233,7 +252,7 @@ async def sso_token(data: SsoTokenRequest):
             "code": 2010,
         })
 
-    result = await login_or_register_by_user_id(data.user_id, data.username)
+    result = await login_or_register_by_user_id(data.user_id)
     if not result:
         return JSONResponse(status_code=200, content={
             "success": False,

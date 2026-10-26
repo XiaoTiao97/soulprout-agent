@@ -15,6 +15,29 @@ function wsUrl(path, params = {}) {
 
 /** 连接建立前最多缓存的音频包数（200ms 一包，约 10 秒） */
 const MAX_PENDING_AUDIO = 50
+/** 建连后这么久还没收到 ready，当作连接失败（息屏 / 切网后连接可能一直挂着既不成功也不报错） */
+const READY_TIMEOUT_MS = 8000
+/**
+ * 应用层心跳（浏览器 WebSocket 发不了协议层 ping）。由上层按固定节奏调用，
+ * 见 standbyEngine 的 tick：隔一段时间发一个 ping，对端回 pong；
+ * 太久没有收到对端任何消息，就判定连接已死（息屏后连接被 NAT / 省电回收但没有任何通知）。
+ */
+function runHeartbeat(c, now, intervalMs, deadMs) {
+  if (c.closed || !c.ws || c.ws.readyState !== WebSocket.OPEN || c.dead) return
+  if (now - c.lastMsgAt > deadMs) {
+    c.dead = true
+    c.h.onError?.('语音通道心跳超时，连接已断')
+    return
+  }
+  if (now - c.lastPingAt >= intervalMs) {
+    c.lastPingAt = now
+    try {
+      c.ws.send(JSON.stringify({ type: 'ping' }))
+    } catch {
+      /* 发送失败会由 onerror / onclose 处理 */
+    }
+  }
+}
 
 /**
  * 流式识别。
@@ -28,13 +51,27 @@ export class AsrClient {
     this.closed = false
     this.pending = []
     this.finishRequested = false
+    /** 最近一次收到服务端消息的时间（含 pong），心跳据此判断连接是否还活着 */
+    this.lastMsgAt = Date.now()
+    this.lastPingAt = 0
+    this.dead = false
+    this.readyTimer = null
+  }
+
+  heartbeat(now, intervalMs, deadMs) {
+    runHeartbeat(this, now, intervalMs, deadMs)
   }
 
   open({ endWindowMs = 800 } = {}) {
+    this.lastMsgAt = Date.now()
     this.ws = new WebSocket(wsUrl('/api/voice/asr', { end_window_ms: String(endWindowMs) }))
     this.ws.binaryType = 'arraybuffer'
+    this.readyTimer = setTimeout(() => {
+      if (!this.ready && !this.closed) this.h.onError?.('识别通道连接超时')
+    }, READY_TIMEOUT_MS)
     this.ws.onmessage = (e) => {
       if (typeof e.data !== 'string') return
+      this.lastMsgAt = Date.now()
       let ev
       try {
         ev = JSON.parse(e.data)
@@ -43,6 +80,7 @@ export class AsrClient {
       }
       if (ev.type === 'ready') {
         this.ready = true
+        clearTimeout(this.readyTimer)
         for (const chunk of this.pending) this.ws.send(chunk)
         this.pending = []
         if (this.finishRequested) this.ws.send(JSON.stringify({ type: 'finish' }))
@@ -55,6 +93,7 @@ export class AsrClient {
     this.ws.onerror = () => this.h.onError?.('识别通道连接失败')
     this.ws.onclose = () => {
       this.closed = true
+      clearTimeout(this.readyTimer)
       this.h.onClose?.()
     }
   }
@@ -79,6 +118,7 @@ export class AsrClient {
   close() {
     this.closed = true
     this.pending = []
+    clearTimeout(this.readyTimer)
     try {
       this.ws?.close()
     } catch {
@@ -98,14 +138,27 @@ export class TtsClient {
     this.ready = false
     this.closed = false
     this.queue = []
+    this.lastMsgAt = Date.now()
+    this.lastPingAt = 0
+    this.dead = false
+    this.readyTimer = null
+  }
+
+  heartbeat(now, intervalMs, deadMs) {
+    runHeartbeat(this, now, intervalMs, deadMs)
   }
 
   open({ voice = '', speechRate = 0 } = {}) {
     const params = { speech_rate: String(speechRate) }
     if (voice) params.voice = voice
+    this.lastMsgAt = Date.now()
     this.ws = new WebSocket(wsUrl('/api/voice/tts', params))
     this.ws.binaryType = 'arraybuffer'
+    this.readyTimer = setTimeout(() => {
+      if (!this.ready && !this.closed) this.h.onError?.('合成通道连接超时')
+    }, READY_TIMEOUT_MS)
     this.ws.onmessage = (e) => {
+      this.lastMsgAt = Date.now()
       if (typeof e.data !== 'string') {
         this.h.onAudio?.(e.data)
         return
@@ -118,6 +171,7 @@ export class TtsClient {
       }
       if (ev.type === 'ready') {
         this.ready = true
+        clearTimeout(this.readyTimer)
         for (const m of this.queue) this.ws.send(m)
         this.queue = []
         this.h.onReady?.()
@@ -129,6 +183,7 @@ export class TtsClient {
     this.ws.onerror = () => this.h.onError?.('合成通道连接失败')
     this.ws.onclose = () => {
       this.closed = true
+      clearTimeout(this.readyTimer)
       this.h.onClose?.()
     }
   }
@@ -157,6 +212,7 @@ export class TtsClient {
   close() {
     this.closed = true
     this.queue = []
+    clearTimeout(this.readyTimer)
     try {
       this.ws?.close()
     } catch {

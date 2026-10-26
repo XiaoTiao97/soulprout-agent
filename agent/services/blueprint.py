@@ -262,7 +262,7 @@ class Blueprint:
         return history_summarize_info
 
     async def _get_user_info_brief(self):
-        """读取用户画像简要信息（username / userinfo / agentinfo）。"""
+        """读取用户画像简要信息（username / userinfo / agentname / agentinfo）。"""
         if not self.user_id:
             return "No user profile available."
         try:
@@ -272,6 +272,7 @@ class Blueprint:
             return (
                 f"User-name: {(getattr(user, 'username', '') or '').strip()}\n"
                 f"User-info: {(getattr(user, 'userinfo', '') or '').strip()}\n"
+                f"Agent-name: {(getattr(user, 'agentname', '') or '').strip()}\n"
                 f"Agent-info: {(getattr(user, 'agentinfo', '') or '').strip()}"
             )
         except Exception as e:

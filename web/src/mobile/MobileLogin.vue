@@ -27,13 +27,6 @@
           {{ codeBtnLabel }}
         </button>
       </div>
-      <input
-        v-model="username"
-        class="field"
-        type="text"
-        maxlength="32"
-        :placeholder="t('register.usernamePlaceholder')"
-      />
       <span class="message" :class="{ ok: messageOk }">{{ message }}</span>
       <button class="submit" type="submit" :disabled="submitting">
         {{ submitting ? t('register.submitting') : t('register.submit') }}
@@ -52,7 +45,6 @@ const { t } = useI18n()
 
 const email = ref('')
 const code = ref('')
-const username = ref('')
 const message = ref('')
 const messageOk = ref(false)
 const sending = ref(false)
@@ -137,7 +129,6 @@ async function submitForm() {
       body: JSON.stringify({
         email: email.value.trim(),
         code: code.value.trim(),
-        username: username.value.trim() || null,
       }),
     })
     const data = await res.json()

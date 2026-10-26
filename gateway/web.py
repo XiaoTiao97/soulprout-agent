@@ -1083,7 +1083,6 @@ async def api_email_login(request: Request):
 
     email = (body.get("email") or "").strip()
     code = (body.get("code") or "").strip()
-    username = (body.get("username") or "").strip() or None
     if not email or not code:
         return JSONResponse({"success": False, "message": "邮箱与验证码不能为空"})
 
@@ -1095,7 +1094,7 @@ async def api_email_login(request: Request):
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 api_path(auth_url, "/user/email/login"),
-                json={"email": email, "code": code, "username": username},
+                json={"email": email, "code": code},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 data = await resp.json()
@@ -1136,7 +1135,6 @@ async def api_sso_login(request: Request):
         return JSONResponse({"success": False, "message": "请求体不是合法 JSON"}, status_code=400)
 
     user_id = (body.get("user_id") or "").strip()
-    username = (body.get("username") or "").strip() or None
     if not user_id:
         return JSONResponse({"success": False, "message": "请填写 user_id"})
 
@@ -1147,7 +1145,7 @@ async def api_sso_login(request: Request):
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 api_path(agent_url, "/user/sso-token"),
-                json={"user_id": user_id, "username": username},
+                json={"user_id": user_id},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 data = await resp.json()

@@ -1,7 +1,7 @@
 <template>
-  <div class="yavis">
-    <!-- ============ 权限引导 ============ -->
-    <div v-if="stage === 'gate'" class="gate">
+  <div class="yavis" :class="rootClass">
+    <!-- ============ 权限引导：溶到一半时浮在画面上，不占满屏 ============ -->
+    <div v-if="stage === 'gate' && gateVisible" class="gate">
       <header class="gate-head">
         <div>
           <h1>{{ t('standby.title') }}</h1>
@@ -72,7 +72,7 @@
     </div>
 
     <!-- ============ 待命页 ============ -->
-    <div v-else class="stage">
+    <div v-else-if="stage === 'standby'" class="stage">
       <div class="stage-bg"></div>
 
       <div class="stage-actions">
@@ -120,11 +120,11 @@
             <div class="group">
               <div class="field">
                 <label>{{ t('standby.settingsSheet.word') }}</label>
-                <input v-model.trim="wordDraft" class="text-input" maxlength="8" autocomplete="off" />
-                <p v-if="!draftCheck.ok" class="field-err">{{ draftCheck.message }}</p>
+                <input v-model.trim="wordDraft" class="text-input" maxlength="32" autocomplete="off" autocapitalize="off" />
+                <p v-if="!draftCheck.ok" class="field-err">{{ t('standby.settingsSheet.wordError.' + draftCheck.reason) }}</p>
                 <div v-else class="chips">
-                  <span v-for="(s, i) in draftSyllables" :key="i" class="chip">
-                    {{ wordDraft[i] }}<small>{{ s }}</small>
+                  <span v-for="(p, i) in draftPieces" :key="i" class="chip">
+                    {{ p.text }}<small>{{ p.note }}</small>
                   </span>
                 </div>
                 <p class="field-hint">{{ t('standby.settingsSheet.wordHint') }} {{ t('standby.settingsSheet.restartHint') }}</p>
@@ -181,6 +181,19 @@
                 </div>
               </div>
             </div>
+
+            <div class="group">
+              <div class="field">
+                <label>{{ t('standby.settingsSheet.revoke') }}</label>
+                <p class="field-hint">{{ t('standby.settingsSheet.revokeHint') }}</p>
+              </div>
+              <div v-for="item in revokeItems" :key="item.target" class="field field--line">
+                <label>{{ t(`standby.gate.${item.key}.title`) }}</label>
+                <button type="button" class="text-action" @click="revokePermission(item.target)">
+                  {{ t('standby.settingsSheet.revokeGo') }}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       </Transition>
@@ -192,13 +205,22 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { http } from '../api'
-import { buildKeywordLine, toSyllables, validateWakeWord } from '../wake/ppinyin'
+import { buildKeywordLine, normalizeWakeWord, validateWakeWord, wakeWordPieces } from '../wake/ppinyin'
 import SoulOrb from './SoulOrb.vue'
 import { createStandbyEngine } from './standbyEngine'
 import * as native from './standbyNative'
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'reveal'])
 const { t } = useI18n()
+
+const props = defineProps({
+  /** 溶到一半之后才把权限卡片显示出来 */
+  gateVisible: { type: Boolean, default: true },
+  /** 溶解过半，可以画出待命页，但先不占麦克风 */
+  present: { type: Boolean, default: false },
+  /** 画面停稳后再启动引擎 */
+  commit: { type: Boolean, default: false },
+})
 
 const supported = native.isStandbySupported()
 const engine = createStandbyEngine()
@@ -220,14 +242,24 @@ function loadJson(key, fallback) {
 
 const cfg = reactive(
   loadJson(CFG_KEY, {
-    word: '你好小芽',
+    // 空表示「跟随默认」：默认唤醒词是「你好」+ 用户名
+    word: '',
     endWindowMs: 500,
-    continuous: false,
+    continuous: true,
     voice: 'female',
     speechRate: 0,
   }),
 )
 if (cfg.voice !== 'female' && cfg.voice !== 'male') cfg.voice = 'female'
+// 旧版本默认写死的「你好小芽」不是用户主动设置的，迁移成「跟随默认」
+if (cfg.word === '你好小芽') cfg.word = ''
+// 连续对话的默认值改成了开启。已经保存过设置的手机里它还是旧的关闭，这里一次性迁移过来；
+// 之后用户自己在设置里关掉就会保持关闭。
+const CONT_MIGRATED_KEY = 'yavis_cont_default_on'
+if (!localStorage.getItem(CONT_MIGRATED_KEY)) {
+  cfg.continuous = true
+  localStorage.setItem(CONT_MIGRATED_KEY, '1')
+}
 const manual = reactive(loadJson(MANUAL_KEY, { autostart: false, lock: false }))
 watch(cfg, () => localStorage.setItem(CFG_KEY, JSON.stringify(cfg)), { deep: true })
 watch(manual, () => localStorage.setItem(MANUAL_KEY, JSON.stringify(manual)), { deep: true })
@@ -244,6 +276,32 @@ watch(
     })
   },
 )
+
+// ---------------------------------------------------------------- 默认唤醒词（你好 + 用户名）
+
+const FALLBACK_WORD = '你好小芽'
+const defaultWord = ref(FALLBACK_WORD)
+// 用户自己在设置里填过唤醒词就用它，否则用默认唤醒词
+const effectiveWord = computed(() => cfg.word || defaultWord.value)
+
+/** 「你好」+ 用户名；用户名不适合做唤醒词（过长、含数字符号等）时退回「你好」+ 智能体名字，再不行用兜底 */
+function buildDefaultWord(profile) {
+  const candidates = [profile?.username, profile?.agentname]
+  for (const name of candidates) {
+    const word = normalizeWakeWord(`你好${(name || '').trim()}`)
+    if ((name || '').trim() && validateWakeWord(word).ok) return word
+  }
+  return FALLBACK_WORD
+}
+
+async function loadDefaultWord() {
+  try {
+    const res = await http.get('/api/user/profile')
+    if (res.data?.success) defaultWord.value = buildDefaultWord(res.data)
+  } catch {
+    /* 取不到就沿用上一次的默认值 */
+  }
+}
 
 // ---------------------------------------------------------------- 服务端语音配置
 
@@ -263,7 +321,7 @@ async function checkVoiceConfig() {
 
 // ---------------------------------------------------------------- 权限引导
 
-const stage = ref('gate')
+const stage = ref('checking')
 const status = ref(null)
 const busy = ref(false)
 const startError = ref('')
@@ -327,13 +385,81 @@ const canStart = computed(
 )
 
 function onVisible() {
-  if (document.visibilityState === 'visible') refreshStatus()
+  if (document.visibilityState !== 'visible') return
+  clearTimeout(resumeTimer)
+  resumeTimer = setTimeout(() => {
+    refreshStatus().then(applyResume)
+  }, 280)
+}
+
+function applyResume() {
+  if (pausingForSettings) {
+    pausingForSettings = false
+    transitioning = false
+    if (stage.value !== 'standby' || busy.value) return
+    if (pendingCount.value > 0) {
+      dropToGate()
+      return
+    }
+    if (state.phase === 'off') startStandby()
+    return
+  }
+  if (transitioning || busy.value || stage.value !== 'standby') return
+  if (pendingCount.value === 0 && state.phase === 'off') startStandby()
 }
 
 // ---------------------------------------------------------------- 启动 / 退出
 
 /** 启动或重启期间，引擎会短暂回到 off，不能当成「被外部停止」 */
 let transitioning = false
+/** 去系统页关权限时先停引擎，回来之前不要把页面关掉 */
+let pausingForSettings = false
+let resumeTimer = 0
+
+const revokeItems = [
+  { key: 'mic', target: 'app' },
+  { key: 'notification', target: 'notification' },
+  { key: 'battery', target: 'batteryList' },
+]
+
+async function revokePermission(target) {
+  sheetOpen.value = false
+  pausingForSettings = true
+  transitioning = true
+  try {
+    await engine.stop()
+    await native.openStandbySettings(target)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    if (document.visibilityState === 'visible') {
+      pausingForSettings = false
+      transitioning = false
+      if (stage.value === 'standby' && state.phase === 'off' && pendingCount.value === 0) startStandby()
+    }
+  } catch {
+    pausingForSettings = false
+    transitioning = false
+    if (stage.value === 'standby' && state.phase === 'off' && pendingCount.value === 0) {
+      startStandby()
+    }
+  }
+}
+
+async function dropToGate() {
+  if (transitioning || stage.value !== 'standby') return
+  transitioning = true
+  try {
+    await engine.stop()
+  } catch {
+    /* ignore */
+  }
+  stage.value = 'gate'
+  transitioning = false
+}
+
+watch(pendingCount, (n) => {
+  if (!status.value || n === 0 || stage.value !== 'standby' || transitioning || busy.value) return
+  dropToGate()
+})
 
 async function resolveUserId() {
   const res = await http.get('/api/user/me')
@@ -343,7 +469,7 @@ async function resolveUserId() {
 
 function buildOptions(userId) {
   return {
-    keywords: buildKeywordLine(cfg.word, { score: 1.5, threshold: 0.25, syllables: toSyllables(cfg.word) }),
+    keywords: buildKeywordLine(effectiveWord.value, { score: 1.5, threshold: 0.25 }),
     userId,
     // 固定默认：连蓝牙用蓝牙否则手机麦克风；播报中可语音打断；唤醒后等 4 秒
     source: 'auto',
@@ -363,14 +489,20 @@ function buildOptions(userId) {
 
 async function startStandby() {
   if (busy.value) return
+  if (!props.commit) {
+    emit('reveal', 'standby')
+    return
+  }
   busy.value = true
   transitioning = true
   startError.value = ''
   try {
-    const userId = await resolveUserId()
+    const [userId] = await Promise.all([resolveUserId(), loadDefaultWord()])
     localStorage.setItem(GATE_SEEN_KEY, '1')
     stage.value = 'standby'
+    console.log('[yavis-perf] ' + Math.round(performance.now()) + ' engine.start begin')
     await engine.start(buildOptions(userId))
+    console.log('[yavis-perf] ' + Math.round(performance.now()) + ' engine.start end')
     if (engine.state.phase === 'off') {
       startError.value = engine.state.error || ''
       stage.value = 'gate'
@@ -397,8 +529,12 @@ async function restartStandby() {
 
 async function exitStandby() {
   transitioning = true
-  await engine.stop()
   emit('close')
+  try {
+    await engine.stop()
+  } catch {
+    /* ignore */
+  }
 }
 
 // 用户在通知栏点了「停止」等外部原因导致引擎停下：直接收起页面
@@ -409,19 +545,25 @@ watch(
   },
 )
 
+watch(stage, (s) => {
+  if (s === 'standby' || s === 'gate') emit('reveal', s)
+})
+
+const rootClass = computed(() => (stage.value === 'standby' ? 'yavis--live' : 'yavis--gate'))
+
 // ---------------------------------------------------------------- 待命页文案与光感
 
 const orbPhase = computed(() => (state.phase === 'off' ? 'starting' : state.phase))
 
 // 只有这一行提示，状态变化交给光感表达
-const line = computed(() => t('standby.wakeLine', { word: cfg.word }))
+const line = computed(() => t('standby.wakeLine', { word: effectiveWord.value }))
 
 // ---------------------------------------------------------------- 设置弹层
 
 const sheetOpen = ref(false)
 const wordDraft = ref('')
 const draftCheck = computed(() => validateWakeWord(wordDraft.value))
-const draftSyllables = computed(() => (draftCheck.value.ok ? toSyllables(wordDraft.value) : []))
+const draftPieces = computed(() => (draftCheck.value.ok ? wakeWordPieces(wordDraft.value) : []))
 
 const rateText = computed(() => {
   const v = Number(cfg.speechRate) || 0
@@ -430,32 +572,62 @@ const rateText = computed(() => {
 })
 
 function openSheet() {
-  wordDraft.value = cfg.word
+  wordDraft.value = effectiveWord.value
   sheetOpen.value = true
 }
 
 async function closeSheet() {
   sheetOpen.value = false
-  const next = wordDraft.value
-  // 唤醒词有效且改了才重启；无效就保留原来的
-  if (validateWakeWord(next).ok && next !== cfg.word) {
-    cfg.word = next
-    await restartStandby()
+  const next = normalizeWakeWord(wordDraft.value)
+  const prev = effectiveWord.value
+  if (!next) {
+    // 清空 = 恢复默认（你好 + 用户名）
+    cfg.word = ''
+  } else if (validateWakeWord(next).ok) {
+    // 和默认值一样就继续跟随默认，之后改了用户名唤醒词会跟着变
+    cfg.word = next === defaultWord.value ? '' : next
   }
+  // 唤醒词有效且改了才重启；无效就保留原来的
+  if (effectiveWord.value !== prev) await restartStandby()
 }
 
 // ---------------------------------------------------------------- 生命周期
 
+watch(
+  () => props.present,
+  (v) => {
+    if (v && canStart.value && stage.value !== 'standby') stage.value = 'standby'
+  },
+)
+
+watch(
+  () => props.commit,
+  (v) => {
+    if (v && stage.value === 'standby' && state.phase === 'off' && !busy.value) startStandby()
+  },
+)
+
 onMounted(async () => {
+  console.log('[yavis-perf] ' + Math.round(performance.now()) + ' page onMounted')
   document.addEventListener('visibilitychange', onVisible)
-  await Promise.all([refreshStatus(), checkVoiceConfig()])
-  // 第一次一定先展示引导；之后必须项都满足就直接进入待命
-  if (localStorage.getItem(GATE_SEEN_KEY) && canStart.value) startStandby()
+  await Promise.all([refreshStatus(), checkVoiceConfig(), loadDefaultWord()])
+  console.log('[yavis-perf] ' + Math.round(performance.now()) + ' page checks done canStart=' + canStart.value)
+  // 先只告诉外面该溶进去还是停在权限卡片。引擎等画面停稳再开。
+  if (canStart.value) {
+    if (props.present && stage.value !== 'standby') stage.value = 'standby'
+    else emit('reveal', 'standby')
+    if (props.commit && state.phase === 'off') startStandby()
+  } else {
+    stage.value = 'gate'
+    transitioning = false
+  }
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisible)
+  clearTimeout(resumeTimer)
   transitioning = true
+  pausingForSettings = false
   engine.stop()
 })
 </script>
@@ -465,11 +637,64 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #f5f5f7;
   color: #1d1d1f;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+}
+
+.yavis--gate {
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(22px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom));
+  pointer-events: auto;
+  overflow: visible;
+}
+
+.yavis--live {
+  background: #f5f5f7;
+}
+
+.yavis--gate .gate {
+  pointer-events: auto;
+  width: min(100%, 430px);
+  max-height: 100%;
+  height: auto;
+  margin: 0;
+  padding-top: 0;
+  border-radius: 28px;
+  overflow: hidden;
+  background: rgba(247, 250, 249, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 28px 70px rgba(16, 42, 36, 0.22);
+  animation: yavis-card-in 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.yavis--gate .gate-head {
+  padding: 16px 16px 0 18px;
+}
+
+.yavis--gate .gate-head h1 {
+  font-size: 22px;
+}
+
+.yavis--gate .gate-foot {
+  border-radius: 0 0 28px 28px;
+  background: linear-gradient(to top, rgba(247, 250, 249, 0.98) 68%, rgba(247, 250, 249, 0));
+}
+
+@keyframes yavis-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ---------- 通用 ---------- */
@@ -918,6 +1143,23 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   font-size: 11px;
   color: #8e8e93;
+}
+
+.field--line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.text-action {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 8px 2px;
+  color: #c45c5c;
+  font-size: 14px;
+  letter-spacing: 0.04em;
 }
 
 .field--switch {

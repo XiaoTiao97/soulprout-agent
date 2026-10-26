@@ -11,9 +11,10 @@ import { apiFetch } from '../api'
  * @param {string} opts.userId 当前用户 id（Soul 会话 id）
  * @param {AbortSignal} [opts.signal]
  * @param {(delta: string) => void} opts.onDelta 每收到一段回复文本
+ * @param {() => void} [opts.onActivity] 每次从连接读到数据（包括心跳）
  * @returns {Promise<string>} 完整回复文本
  */
-export async function streamAgentReply({ message, userId, signal, onDelta }) {
+export async function streamAgentReply({ message, userId, signal, onDelta, onActivity }) {
   const payload = {
     message,
     conversation_id: userId,
@@ -82,6 +83,8 @@ export async function streamAgentReply({ message, userId, signal, onDelta }) {
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
+      // 任何字节（含服务端每 15 秒一次的心跳）都算「连接还活着」，上层据此判断是否断流
+      onActivity?.()
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''

@@ -1,5 +1,6 @@
 <template>
-  <div class="phone">
+  <div class="phone" :class="{ 'phone--yavis': yavisOpen }">
+    <div ref="surfaceEl" class="phone-surface">
     <header class="topbar">
       <button
         type="button"
@@ -18,7 +19,7 @@
         <strong>{{ headerTitle }}</strong>
         <span>{{ chatMode === 'soulprout' ? t('mobile.soulSubtitle') : t('mobile.taskSubtitle') }}</span>
       </div>
-      <button v-if="chatMode === 'soulprout'" type="button" class="entry-btn entry-btn--yavis" @click="yavisOpen = true">
+      <button v-if="chatMode === 'soulprout'" type="button" class="entry-btn entry-btn--yavis" @click="openYavis">
         <span class="entry-glow"></span>
         {{ t('mobile.yavis') }}
       </button>
@@ -142,8 +143,20 @@
         </div>
       </div>
     </div>
+    </div>
 
-    <YavisPage v-if="yavisOpen" @close="yavisOpen = false" />
+    <div ref="washEl" class="water-wash"></div>
+
+    <div v-if="yavisOpen" ref="slotEl" class="yavis-slot">
+      <YavisPage
+        v-if="yavisMounted"
+        :gate-visible="showGate"
+        :present="yavisPresent"
+        :commit="yavisCommit"
+        @reveal="onYavisReveal"
+        @close="closeYavis"
+      />
+    </div>
 
     <MobileFiles
       :open="filesOpen"
@@ -156,7 +169,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ChatWindow from '@/components/ChatWindow.vue'
 import MobileFiles from './MobileFiles.vue'
@@ -210,6 +223,347 @@ watch(unauthorized, (value) => {
 
 const drawerOpen = ref(false)
 const yavisOpen = ref(false)
+const showGate = ref(false)
+/** 芽维斯页面本体延后挂载：它的初始化和权限检测不能和点击、动画首帧挤在一起 */
+const yavisMounted = ref(false)
+/** 先把待命页画出来，但先别启动引擎 */
+const yavisPresent = ref(false)
+/** 溶解结束后才真正开麦克风 */
+const yavisCommit = ref(false)
+const surfaceEl = ref(null)
+const washEl = ref(null)
+const slotEl = ref(null)
+/** '' | standby | gate | close */
+let revealKind = ''
+let runId = 0
+let held = false
+let emerging = false
+const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)'
+
+// ---- 临时性能日志（定位进场卡顿用，查完删除）----
+let perfPhase = 'idle'
+let perfRaf = 0
+let perfLast = 0
+function perf(msg) {
+  console.log('[yavis-perf] ' + Math.round(performance.now()) + ' ' + msg)
+}
+function setPhase(p) {
+  perfPhase = p
+  perf('phase ' + p)
+}
+function perfStart() {
+  cancelAnimationFrame(perfRaf)
+  perfLast = 0
+  const tick = (t) => {
+    if (perfLast && t - perfLast > 24) perf(`frame gap ${Math.round(t - perfLast)}ms in ${perfPhase}`)
+    perfLast = t
+    perfRaf = requestAnimationFrame(tick)
+  }
+  perfRaf = requestAnimationFrame(tick)
+}
+function perfStop() {
+  cancelAnimationFrame(perfRaf)
+}
+try {
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) {
+      const scripts = (e.scripts || [])
+        .map((s) => `${s.invoker || s.sourceFunctionName || '?'}:${Math.round(s.duration)}`)
+        .join(',')
+      perf(
+        `LoAF ${Math.round(e.duration)}ms block=${Math.round(e.blockingDuration || 0)} ` +
+          `renderStart=${Math.round(e.renderStart ? e.startTime + e.duration - e.renderStart : 0)} ` +
+          `scripts=[${scripts}] phase=${perfPhase}`,
+      )
+    }
+  }).observe({ type: 'long-animation-frame' })
+} catch {
+  /* 不支持就算了 */
+}
+try {
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) perf(`longtask ${Math.round(e.duration)}ms phase=${perfPhase}`)
+  }).observe({ type: 'longtask' })
+} catch {
+  /* ignore */
+}
+
+function opacityOf(el, fallback) {
+  if (!el) return fallback
+  const n = parseFloat(getComputedStyle(el).opacity)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function fade(el, to, ms, delay = 0, easing = EASE) {
+  if (!el) return Promise.resolve()
+  const from = opacityOf(el, to)
+  for (const anim of el.getAnimations()) anim.cancel()
+  // 完全透明的层浏览器不会预先栅格化，首帧才画会掉帧；起点用接近 0 的值
+  el.style.visibility = ''
+  el.style.opacity = String(from)
+  if (Math.abs(from - to) < 0.01 || ms <= 0) {
+    el.style.opacity = String(to)
+    if (to === 0) el.style.visibility = 'hidden'
+    return Promise.resolve()
+  }
+  const anim = el.animate([{ opacity: from }, { opacity: to }], {
+    duration: ms,
+    delay,
+    easing,
+    fill: 'both',
+  })
+  return anim.finished.then(() => {
+    el.style.opacity = String(to)
+    // 已经完全看不见的层不再参与合成，省掉后面光球动画时的开销
+    if (to === 0) el.style.visibility = 'hidden'
+    anim.cancel()
+  })
+}
+
+function clearDissolveStyle() {
+  for (const el of [surfaceEl.value, washEl.value, slotEl.value]) {
+    if (!el) continue
+    for (const anim of el.getAnimations()) anim.cancel()
+    el.style.opacity = ''
+    el.style.visibility = ''
+  }
+}
+
+function afterFrames(n = 2) {
+  return new Promise((resolve) => {
+    const step = () => (n-- <= 0 ? resolve() : requestAnimationFrame(step))
+    requestAnimationFrame(step)
+  })
+}
+
+function openYavis() {
+  if (yavisOpen.value) return
+  drawerOpen.value = false
+  revealKind = ''
+  held = false
+  emerging = false
+  showGate.value = false
+  yavisMounted.value = false
+  yavisPresent.value = false
+  yavisCommit.value = false
+  prepPromise = null
+  perfStart()
+  setPhase('tap')
+  revealedPromise = new Promise((resolve) => {
+    revealResolve = resolve
+  })
+  yavisOpen.value = true
+  yavisMounted.value = true
+  const id = ++runId
+  // 点击后立刻开始淡出，不等权限检测。检测和光球的准备并行做，
+  // 结果出来再决定：进待命页就接着走，权限没齐就改道停在一半。
+  nextTick(async () => {
+    // 让整页先提升成独立图层，只等两帧
+    await afterFrames(2)
+    if (id === runId) play(id)
+  })
+}
+
+let revealResolve = null
+let revealedPromise = null
+
+const OUT = 'cubic-bezier(0.2, 0.8, 0.3, 1)'
+const SLOT_IN = 'cubic-bezier(0.25, 0.1, 0.25, 1)'
+
+// 只播透明度，交给合成线程。一条连续的时间轴，起步就有明显变化，中间没有停顿点。
+async function play(id) {
+  setPhase('play')
+  const t0 = performance.now()
+  const bg = Promise.all([
+    fade(surfaceEl.value, 0, 850, 0, OUT),
+    fade(washEl.value, 1, 850, 0, OUT),
+  ])
+  // 被改道时这两条动画会被取消，属于预期
+  bg.catch(() => {})
+
+  await Promise.race([revealedPromise, new Promise((resolve) => setTimeout(resolve, 900))])
+  if (id !== runId) return
+  perf('play: decision=' + (revealKind || 'none'))
+
+  if (revealKind === 'gate') {
+    // 权限没齐：从当前位置改道，停在一半。这时动画才起步很短，看不出来。
+    try {
+      await Promise.all([fade(surfaceEl.value, 0.4, 420), fade(washEl.value, 0.9, 420)])
+    } catch {
+      return
+    }
+    if (id !== runId) return
+    revealGate()
+    return
+  }
+
+  if (revealKind === 'standby') {
+    if (emerging) return
+    emerging = true
+    held = false
+    try {
+      await prepareStandby()
+      if (id !== runId) {
+        emerging = false
+        return
+      }
+      const elapsed = performance.now() - t0
+      await Promise.all([bg, fade(slotEl.value, 1, 560, Math.max(0, 230 - elapsed), SLOT_IN)])
+    } catch {
+      emerging = false
+      return
+    }
+    emerging = false
+    if (id !== runId) return
+    await finishEmerge(id)
+    return
+  }
+
+  // 900ms 内还没有结果（网络慢）：等背景走完，再按结果接着走
+  try {
+    await bg
+  } catch {
+    return
+  }
+  if (id !== runId) return
+  if (revealKind === 'standby') emerge(id)
+  else if (revealKind === 'gate') revealGate()
+  else held = true
+}
+
+/**
+ * 待命页提前挂好并栅格化。放在第一段淡出期间做，
+ * 这样第二段开始时不需要再等任何准备，两段之间没有空档。
+ */
+let prepPromise = null
+function prepareStandby() {
+  if (prepPromise) return prepPromise
+  perf('prepare standby (mount stage + orb)')
+  yavisPresent.value = true
+  prepPromise = (async () => {
+    await nextTick()
+    perf('prepare: nextTick done')
+    // 起点给一个肉眼看不见的透明度，让光球提前栅格化
+    if (slotEl.value && !slotEl.value.getAnimations().length && opacityOf(slotEl.value, 0) < 0.05) {
+      slotEl.value.style.visibility = ''
+      slotEl.value.style.opacity = '0.01'
+    }
+    await afterFrames(3)
+  })()
+  return prepPromise
+}
+
+async function emerge(id) {
+  if (emerging || id !== runId) return
+  emerging = true
+  held = false
+  try {
+    setPhase('emerge-wait-prep')
+    await prepareStandby()
+    perf('prep ready')
+    if (id !== runId) {
+      emerging = false
+      return
+    }
+    setPhase('emerge-fade')
+    // 三层同时起步：聊天页继续淡出，水色铺满，芽维斯稍晚一点浮上来，交叠着过渡
+    await Promise.all([
+      fade(surfaceEl.value, 0, 760),
+      fade(washEl.value, 1, 760),
+      fade(slotEl.value, 1, 620, 220),
+    ])
+  } catch {
+    emerging = false
+    return
+  }
+  emerging = false
+  if (id !== runId) return
+  await finishEmerge(id)
+}
+
+async function finishEmerge(id) {
+  // 淡入结束后再留一小会儿，让光球动画先稳住，再去开麦克风和加载唤醒模型
+  setPhase('settle-wait')
+  await new Promise((resolve) => setTimeout(resolve, 240))
+  if (id !== runId) return
+  setPhase('engine-start')
+  yavisCommit.value = true
+  setTimeout(() => {
+    setPhase('idle')
+    perfStop()
+  }, 2500)
+}
+
+function revealGate() {
+  held = false
+  showGate.value = true
+  fade(slotEl.value, 1, 320)
+}
+
+function onYavisReveal(kind) {
+  if (!yavisOpen.value || revealKind === 'close') return
+  const prev = revealKind
+  revealKind = kind
+  perf(`reveal ${kind} (prev=${prev || 'none'}, held=${held})`)
+  revealResolve?.()
+  revealResolve = null
+  if (kind === 'standby') {
+    showGate.value = false
+    // 一知道要进待命页就开始准备，趁第一段淡出还在播的时候把重活做完
+    prepareStandby()
+    if (emerging) return
+    if (held || prev === 'gate') emerge(++runId)
+    return
+  }
+  if (emerging) return
+  if (prev === 'standby') {
+    retreat(++runId)
+    return
+  }
+  if (held) revealGate()
+}
+
+async function retreat(id) {
+  yavisCommit.value = false
+  showGate.value = false
+  try {
+    await Promise.all([fade(surfaceEl.value, 0.4, 560), fade(washEl.value, 0.9, 560), fade(slotEl.value, 0, 320)])
+  } catch {
+    return
+  }
+  if (id !== runId) return
+  showGate.value = true
+  fade(slotEl.value, 1, 280)
+}
+
+async function closeYavis() {
+  if (!yavisOpen.value || revealKind === 'close') return
+  const id = ++runId
+  revealKind = 'close'
+  emerging = false
+  held = false
+  yavisCommit.value = false
+  showGate.value = false
+  try {
+    await fade(slotEl.value, 0, 280)
+    if (id !== runId) return
+    await Promise.all([fade(surfaceEl.value, 1, 520), fade(washEl.value, 0, 520)])
+  } catch {
+    return
+  }
+  if (id !== runId) return
+  clearDissolveStyle()
+  revealKind = ''
+  yavisPresent.value = false
+  yavisMounted.value = false
+  prepPromise = null
+  yavisOpen.value = false
+}
+
+onBeforeUnmount(() => {
+  runId += 1
+  clearDissolveStyle()
+})
 const filesOpen = ref(false)
 const previewPath = ref('')
 const fileRefreshToken = ref(0)
@@ -328,6 +682,39 @@ function openWebPreview(url) {
   background: #f2f2f2;
   position: relative;
   overflow: hidden;
+}
+
+.phone--yavis .phone-surface,
+.phone--yavis .water-wash,
+.phone--yavis .yavis-slot {
+  will-change: opacity;
+}
+
+.phone-surface {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.water-wash {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(80% 55% at 50% 115%, rgba(72, 176, 150, 0.55), transparent 62%),
+    radial-gradient(46% 38% at 18% 24%, rgba(255, 255, 255, 0.42), transparent 70%),
+    radial-gradient(40% 34% at 84% 16%, rgba(168, 224, 206, 0.48), transparent 72%),
+    linear-gradient(180deg, rgba(236, 248, 244, 0.2), rgba(176, 214, 200, 0.34));
+}
+
+.yavis-slot {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  opacity: 0;
 }
 
 .topbar {

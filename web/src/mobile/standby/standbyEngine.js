@@ -14,6 +14,17 @@ import * as native from './standbyNative'
 import { AsrClient, TtsClient } from './voiceClients'
 
 const MAX_UTTERANCE_MS = 60_000
+/** Agent 流这么久没有任何字节（服务端每 15 秒发一次心跳），视为断流 */
+const AGENT_STALL_MS = 50_000
+/** 语音通道（识别 / 合成）的应用层心跳：多久发一次 ping，多久没收到任何消息就判定连接已死 */
+const VOICE_PING_INTERVAL_MS = 10_000
+const VOICE_DEAD_MS = 30_000
+/** 合成通道这么久没有收发，豆包那边的会话会被回收（Agent 查网页时很常见），下一句换新通道 */
+const TTS_IDLE_REFRESH_MS = 8_000
+/** 一轮里合成通道最多自动重建几次 */
+const TTS_MAX_RECOVER = 2
+/** 原生状态事件本应每秒一次，间隔超过这个值说明 WebView 被挂起 / 降频了，记一条日志留证 */
+const JS_STALL_LOG_MS = 3_000
 /** 连续聆听自动重连的频率保护：这段时间内重连超过 N 次就放弃，回到待命 */
 const RESTART_WINDOW_MS = 15_000
 const RESTART_MAX = 4
@@ -24,7 +35,7 @@ const DEFAULT_OPTIONS = {
   source: 'auto',
   endWindowMs: 500,
   noSpeechSec: 4,
-  continuous: false,
+  continuous: true,
   bargeIn: true,
   speechRate: 0,
 }
@@ -97,6 +108,18 @@ export function createStandbyEngine() {
   /** 本轮是否已经有句子送去合成（提前建通道时，没用到就不能当成「合成出错」处理） */
   let ttsUsed = false
   let turnId = 0
+  // ---- 本轮 Agent / 合成的健康度（看门狗用）
+  let agentRunning = false
+  let agentStalled = false
+  let lastAgentAt = 0
+  /** 已送去合成、但还没有收到任何回应的句子；合成通道出问题时用它们在新通道上续播 */
+  let unacked = []
+  /** 送了文字后，等第一个回应的起始时间；0 = 没有在等 */
+  /** 合成通道最近一次收发的时间 */
+  let ttsIoAt = 0
+  /** Agent 已说完，合成通道已发过 finish */
+  let ttsFinishSent = false
+  let ttsRecovers = 0
   /** 输出音量时间轴：播放起点与已排入的音频时长 */
   let outT0 = 0
   let outAcc = 0
@@ -139,6 +162,8 @@ export function createStandbyEngine() {
       state.input = res?.input || ''
       state.note = res?.note || ''
       state.phase = 'standby'
+      lastTickAt = 0
+      document.addEventListener('visibilitychange', onVisibility)
       log(`待命已开始，麦克风：${state.input || '未知'}`)
       if (opts.bargeIn) log(`语音打断：已开启，回声消除 ${res?.aec || '未知'}`)
     } catch (e) {
@@ -198,6 +223,7 @@ export function createStandbyEngine() {
         state.peakDb = e.peakDb
       }),
       native.onStatus((e) => {
+        tick()
         if (e.input) state.input = e.input
         if (e.running === false && state.phase !== 'off') {
           log('原生录音引擎已停止')
@@ -217,6 +243,7 @@ export function createStandbyEngine() {
 
   async function teardown({ skipService = false } = {}) {
     clearTimers()
+    document.removeEventListener('visibilitychange', onVisibility)
     await cancelTurn()
     closeAsr()
     handles.forEach((h) => h?.remove?.())
@@ -246,12 +273,18 @@ export function createStandbyEngine() {
   // ------------------------------------------------------------ 聆听 + 断句
 
   async function onWake(e) {
-    if (state.phase === 'listening') return
+    if (state.phase === 'off' || state.phase === 'starting') return
     state.wakeCount = e.count || state.wakeCount + 1
     state.wakePulse++
     log(`唤醒：${e.keyword}`)
-    // 思考 / 播报期间再次唤醒 = 语音打断（播报中原生已先就地停掉了播放）
-    if (state.phase === 'thinking' || state.phase === 'speaking') {
+    // 唤醒事件是原生唤醒引擎发的，不依赖云端识别，在任何阶段都以它为准：
+    // 此刻识别通道里已经收进去的内容就是「唤醒词本身」，不是指令，整段丢掉，
+    // 从唤醒之后的音频重新开一轮识别。连续对话里采集一直开着，这一步才能保证
+    // 唤醒词不会被当成指令发给 Agent，通道卡住时也能靠唤醒词恢复。
+    if (state.phase === 'listening') {
+      log('聆听中被唤醒词重置，丢弃唤醒词本身的识别内容')
+    } else if (state.phase === 'thinking' || state.phase === 'speaking') {
+      // 思考 / 播报期间再次唤醒 = 语音打断（播报中原生已先就地停掉了播放）
       log(e.interrupted ? '播报中被唤醒词打断' : '处理中被唤醒词打断')
       await cancelTurn()
     }
@@ -305,7 +338,11 @@ export function createStandbyEngine() {
           return
         }
         if (asr !== client || state.phase !== 'listening') return
-        if (continuousIdle()) restartContinuous('识别通道关闭')
+        // 通道被直接掐断（没有 end 事件）。以前只有「还没人开口」才会重连，用户说到一半断开就会
+        // 一直停在聆听里，唤醒词也不再处理。现在不管有没有开口，都重连或回到待命。
+        if (opts.continuous && state.followUp) restartContinuous('识别通道关闭')
+        else if (continuousIdle()) restartContinuous('识别通道关闭')
+        else backToStandby()
       },
     })
     return client
@@ -501,9 +538,27 @@ export function createStandbyEngine() {
 
   // ------------------------------------------------------------ Agent + 合成播报
 
+  /** 思考期间的浅背景音。失败不影响对话本身。 */
+  async function startThinkingBed() {
+    try {
+      await native.thinkStart()
+    } catch {
+      /* 背景音失败不影响对话 */
+    }
+  }
+
+  async function stopThinkingBed() {
+    try {
+      await native.thinkStop()
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function sendToAgent(text) {
     const myTurn = ++turnId
     state.phase = 'thinking'
+    await startThinkingBed()
     state.sent.unshift({ time: nowStr(), text })
     state.reply = ''
     state.speaking = ''
@@ -513,14 +568,28 @@ export function createStandbyEngine() {
     state.metrics.endpointToSend = Math.round(t.sent - t.final)
     playStarted = false
     ttsUsed = false
+    unacked = []
+    ttsFinishSent = false
+    ttsRecovers = 0
+    agentStalled = false
+    agentRunning = true
+    lastAgentAt = Date.now()
     playChain = Promise.resolve()
     abortCtl = new AbortController()
 
     splitter = createSentenceSplitter((sentence) => {
       if (myTurn !== turnId) return
+      state.reply += sentence
+      // Agent 先去查网页、隔了很久才出下一句时，合成会话多半已被服务端回收；
+      // 往死通道里发字不会报错，只会永远没声音。闲置太久就先换一条新通道。
+      if (tts && Date.now() - ttsIoAt > TTS_IDLE_REFRESH_MS) {
+        log(`合成通道闲置 ${Math.round((Date.now() - ttsIoAt) / 1000)} 秒，换新通道`)
+        reopenTts()
+      }
       ttsUsed = true
       ensureTts()
-      state.reply += sentence
+      unacked.push(sentence)
+      ttsIoAt = Date.now()
       tts.sendText(sentence)
     })
 
@@ -532,6 +601,9 @@ export function createStandbyEngine() {
         message: text,
         userId: opts.userId,
         signal: abortCtl.signal,
+        onActivity: () => {
+          if (myTurn === turnId) lastAgentAt = Date.now()
+        },
         onDelta: (delta) => {
           if (myTurn !== turnId) return
           if (!t.firstText) {
@@ -542,8 +614,11 @@ export function createStandbyEngine() {
         },
       })
       if (myTurn !== turnId) return
+      agentRunning = false
       splitter.flush()
       if (ttsUsed && tts) {
+        ttsFinishSent = true
+        ttsIoAt = Date.now()
         tts.finish()
       } else {
         // 没有任何可朗读的文字：提前建好的合成通道用不上，直接收尾
@@ -551,12 +626,43 @@ export function createStandbyEngine() {
         await afterSpeak()
       }
     } catch (e) {
-      if (myTurn !== turnId || e?.name === 'AbortError') return
-      log(`Agent 请求失败：${e?.message || e}`)
-      state.error = e?.message || String(e)
+      if (myTurn !== turnId) return
+      if (e?.name === 'AbortError' && !agentStalled) return
+      agentRunning = false
+      const msg = agentStalled ? 'Agent 连接中断（长时间没有数据，可能是息屏 / 切换网络导致）' : e?.message || String(e)
+      log(`Agent 请求失败：${msg}`)
+      state.error = msg
       await cancelTurn()
       await backToStandby()
+    } finally {
+      if (myTurn === turnId) agentRunning = false
     }
+  }
+
+  /**
+   * 合成通道坏了（服务端回收 / 断网 / 无响应）：在新通道上把还没得到回应的句子补发，
+   * 已经说完的 Agent 回复也要补发 finish，这样本轮才能正常收尾，而不是静默卡住。
+   */
+  function reopenTts() {
+    const resend = unacked.slice()
+    closeTts()
+    ensureTts()
+    ttsIoAt = Date.now()
+    for (const s of resend) tts.sendText(s)
+    if (ttsFinishSent) tts.finish()
+  }
+
+  function recoverTts(reason) {
+    if (!ttsUsed) return
+    if (ttsRecovers >= TTS_MAX_RECOVER) {
+      log(`合成通道反复出错（${reason}），放弃本轮播报`)
+      state.error = reason
+      cancelTurn().then(() => backToStandby())
+      return
+    }
+    ttsRecovers++
+    log(`合成通道异常（${reason}），重建并续播（第 ${ttsRecovers} 次）`)
+    reopenTts()
   }
 
   function ensureTts() {
@@ -564,13 +670,18 @@ export function createStandbyEngine() {
     const myTurn = turnId
     const openedAt = performance.now()
     const client = new TtsClient({
-      onReady: () => log(`合成通道就绪（建连 ${Math.round(performance.now() - openedAt)} ms）`),
+      onReady: () => {
+        if (tts === client) ttsIoAt = Date.now()
+        log(`合成通道就绪（建连 ${Math.round(performance.now() - openedAt)} ms）`)
+      },
       onAudio: (buf) => {
-        if (myTurn !== turnId) return
+        if (myTurn !== turnId || tts !== client) return
+        ttsIoAt = Date.now()
         const bytes = new Uint8Array(buf)
         enqueuePlay(myTurn, async () => {
           if (!playStarted) {
             playStarted = true
+            await stopThinkingBed()
             await native.playStart(TTS_SAMPLE_RATE)
             outT0 = performance.now()
             outAcc = 0
@@ -582,10 +693,15 @@ export function createStandbyEngine() {
         })
       },
       onSentenceStart: (s) => {
-        if (myTurn === turnId) state.speaking = s
+        if (myTurn !== turnId || tts !== client) return
+        ttsIoAt = Date.now()
+        // 这一句已经有回应，不用在换通道时补发
+        unacked.shift()
+        state.speaking = s
       },
       onDone: () => {
-        if (myTurn !== turnId) return
+        if (myTurn !== turnId || tts !== client) return
+        client.doneSeen = true
         // 等已排队的音频都写进播放器，再告诉原生「没有更多了」
         enqueuePlay(myTurn, async () => {
           if (playStarted) await native.playFinish()
@@ -593,21 +709,22 @@ export function createStandbyEngine() {
         })
       },
       onCanceled: () => {},
-      onError: async (msg) => {
-        if (myTurn !== turnId || tts !== client) return
+      onError: (msg) => {
+        if (myTurn !== turnId || tts !== client || client.doneSeen) return
         if (!ttsUsed) {
           // 提前建的通道在等 Agent 期间出错 / 被断开：还没用到，丢掉，等第一句出来时重建
           log(`预建合成通道失效，稍后重连：${msg}`)
           closeTts()
           return
         }
-        log(`合成出错：${msg}`)
-        state.error = msg
-        await cancelTurn()
-        await backToStandby()
+        recoverTts(msg)
       },
       onClose: () => {
-        if (tts === client && !ttsUsed) tts = null
+        if (myTurn !== turnId || tts !== client || client.doneSeen) return
+        if (!ttsUsed) tts = null
+        // 已经在用却被关了（没有 error 事件的静默断开）：以前这里什么都不做，
+        // 之后的文字和 finish 都被丢弃，界面就一直停在「思考 / 播报」里。
+        else recoverTts('合成通道被关闭')
       },
     })
     tts = client
@@ -656,8 +773,11 @@ export function createStandbyEngine() {
 
   /** 一轮播报结束（自然播完 / 没有可播内容） */
   async function afterSpeak() {
+    await stopThinkingBed()
     if (state.phase === 'off') return
     turnId++
+    agentRunning = false
+    unacked = []
     closeTts()
     state.speaking = ''
     state.outLevel = 0
@@ -678,7 +798,10 @@ export function createStandbyEngine() {
 
   /** 作废当前这一轮：断开 Agent 流与合成，停止播放 */
   async function cancelTurn() {
+    await stopThinkingBed()
     turnId++
+    agentRunning = false
+    unacked = []
     abortCtl?.abort()
     abortCtl = null
     splitter?.reset()
@@ -697,6 +820,43 @@ export function createStandbyEngine() {
     }
     state.speaking = ''
     state.outLevel = 0
+  }
+
+  // ------------------------------------------------------------ 看门狗
+
+  /**
+   * 后台 / 息屏时的连接保活与存活检查。由原生状态事件（原生线程每秒一次）驱动，
+   * 不用 JS 定时器：WebView 隐藏后 JS 定时器会被降频到每秒甚至每分钟一次，
+   * 而原生事件的节奏不受影响。
+   *
+   * 根因：息屏后手机的无线电进入省电、运营商 / 路由器的 NAT 会回收长时间没有数据的连接，
+   * TCP 连接就变成「两头都以为还连着」的半死状态——不报错、不关闭，往里发数据像石沉大海。
+   * 浏览器 WebSocket 发不了协议层 ping，所以语音通道在应用层互发 ping / pong：
+   *   1. 周期性的小包让连接保持活跃；
+   *   2. 一旦超时没有回应，就能确认连接已死，立刻走重连，而不是静默卡住。
+   */
+  function onVisibility() {
+    log(`页面${document.visibilityState === 'hidden' ? '进入后台 / 息屏' : '回到前台'}`)
+  }
+
+  let lastTickAt = 0
+  function tick() {
+    const now = Date.now()
+    if (lastTickAt && now - lastTickAt > JS_STALL_LOG_MS) {
+      log(`JS 事件停顿了 ${Math.round((now - lastTickAt) / 1000)} 秒（WebView 被系统挂起或降频）`)
+    }
+    lastTickAt = now
+    if (state.phase === 'off' || state.phase === 'starting') return
+    for (const c of [asr, tts]) {
+      if (!c || c.closed) continue
+      c.heartbeat(now, VOICE_PING_INTERVAL_MS, VOICE_DEAD_MS)
+    }
+    // Agent 流：服务端每 15 秒发一次心跳，连心跳都没有了，说明连接已断
+    if (agentRunning && abortCtl && now - lastAgentAt > AGENT_STALL_MS) {
+      log(`Agent 连接 ${Math.round((now - lastAgentAt) / 1000)} 秒没有任何数据，判定断流`)
+      agentStalled = true
+      abortCtl.abort()
+    }
   }
 
   return { state, start, stop, interrupt, updateOptions }

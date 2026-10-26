@@ -248,6 +248,10 @@ export function getToolSummaryLabel(
       const mod = str(args.module)
       const info = str(args.info_type) === 'agentinfo' ? '智能体配置' : '用户档案'
       if (mod === 'view') return hasResult ? `已查看${info}` : `正在查看${info}…`
+      if (mod === 'set_name') {
+        const who = str(args.info_type) === 'agentinfo' ? '智能体名字' : '用户名'
+        return hasResult ? `已更新${who}` : `正在更新${who}…`
+      }
       if (mod === 'add') return hasResult ? `已更新${info}` : `正在更新${info}…`
       if (mod === 'edit') return hasResult ? `已修改${info}` : `正在修改${info}…`
       return hasResult ? `${info}操作完成` : `正在处理${info}…`

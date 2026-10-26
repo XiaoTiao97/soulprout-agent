@@ -48,14 +48,6 @@
             </button>
           </div>
 
-          <input
-            class="input-field"
-            type="text"
-            v-model="username"
-            :placeholder="t('register.usernamePlaceholder')"
-            maxlength="32"
-          />
-
           <span class="error-text" :class="{ ok: messageOk }">{{ message }}</span>
 
           <button class="submit-btn" type="submit" :disabled="submitting">
@@ -90,7 +82,6 @@ const router = useRouter()
 const { t } = useI18n()
 const email = ref('')
 const code = ref('')
-const username = ref('')
 
 const message = ref('')
 const messageOk = ref(false)
@@ -191,7 +182,6 @@ async function submitForm() {
       body: JSON.stringify({
         email: email.value.trim(),
         code: code.value.trim(),
-        username: username.value.trim() || null,
       }),
     })
     const data = await res.json()

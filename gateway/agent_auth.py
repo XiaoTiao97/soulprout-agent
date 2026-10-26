@@ -92,7 +92,6 @@ async def login_with_email_code(
     email: str,
     code: str,
     agent_url: Optional[str] = None,
-    username: Optional[str] = None,
 ) -> Dict[str, Any]:
     from gateway.config_store import api_path, get_auth_url, normalize_agent_url, update_settings
 
@@ -114,7 +113,7 @@ async def login_with_email_code(
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 api_path(auth_url, "/user/email/login"),
-                json={"email": email, "code": code, "username": username},
+                json={"email": email, "code": code},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 data = await resp.json(content_type=None)

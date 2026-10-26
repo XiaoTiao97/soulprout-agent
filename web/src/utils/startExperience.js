@@ -1,4 +1,4 @@
-/** 首页「立即体验」：SaaS 走邮箱登录，Private 走固定 user_id="private" 的 SSO 登录 */
+/** 首页「立即体验」：SaaS 走邮箱登录，Private 直接用固定 user_id="private" 做 SSO 登录 */
 export async function startExperience(router) {
   let deployMode = 'saas'
   try {
@@ -14,24 +14,19 @@ export async function startExperience(router) {
   }
 
   try {
-    const res = await fetch('/api/user/private-user').then(r => r.json())
-    if (res.success) {
-      const loginRes = await fetch('/api/user/sso-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ user_id: 'private' }),
-      })
-      const loginData = await loginRes.json()
-      if (loginData.success) {
-        window.location.href = '/chat'
-      } else {
-        router.push('/setup')
-      }
-    } else {
-      router.push('/setup')
+    const loginRes = await fetch('/api/user/sso-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ user_id: 'private' }),
+    })
+    const loginData = await loginRes.json()
+    if (loginData.success) {
+      window.location.href = '/chat'
+      return
     }
   } catch {
-    router.push('/setup')
+    /* 登录失败降级到邮箱登录页 */
   }
+  router.push('/register')
 }

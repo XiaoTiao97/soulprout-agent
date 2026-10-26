@@ -242,6 +242,13 @@
                 <img width="14" height="14" src="@/assets/images/product_file.svg" alt="" />
                 <span>{{ t('conversation.docs') }}</span>
               </button>
+              <button type="button" class="user-menu-item" @click="openPersonalize">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="round" />
+                </svg>
+                <span>{{ t('conversation.personalize') }}</span>
+              </button>
               <button type="button" class="user-menu-item" @click="downloadGatewayConnect">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <path d="M12 3v12" stroke-linecap="round" />
@@ -267,6 +274,7 @@
             </div>
           </div>
         </div>
+        <PersonalizeDialog v-model="showPersonalize" @saved="(p) => emit('usernameUpdated', p.username)" />
     </div>
 </template>
 
@@ -276,7 +284,14 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
 import { downloadGatewayClient } from '@/constants/gateway';
+import PersonalizeDialog from './PersonalizeDialog.vue';
 import type { ConversationBase, ChatRequest } from '../types/interface';
+
+const showPersonalize = ref(false);
+const openPersonalize = () => {
+  showMenu.value = false;
+  showPersonalize.value = true;
+};
 
 const downloadGatewayConnect = () => {
   showMenu.value = false;
@@ -297,6 +312,7 @@ const emit = defineEmits([
   'updateConversationAbstract',
   'switchMode',
   'openRunning',
+  'usernameUpdated',
 ]);
 
 const props = withDefaults(defineProps<{

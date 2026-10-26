@@ -437,18 +437,23 @@ TOOL_SCHEMAS = [
             "name": "user_option",
             "description": (
                 "User personalization configuration tool. Persist the 'user personal information' and the "
-                "'agent persona desired by the user' exposed during the conversation into that user's profile.\n"
-                "- info_type=userinfo: call when the user reveals personal information such as identity, occupation, "
-                "location, interests, hobbies, or taste preferences; store the information in the userinfo field "
-                "to maintain memory and personalization in subsequent conversations.\n"
-                "- info_type=agentinfo: call when the user expresses expectations for the current Soulprout agent "
-                "(such as what name they want it to be called, personality, tone, speaking style, positioning, etc.); "
-                "store the information in the agentinfo field.\n"
-                "- module=view: view the existing content of the field corresponding to the current info_type, then "
-                "decide whether to use add or edit.\n"
-                "- module=add: append content to the end of the original content (write directly on first entry).\n"
-                "- module=edit: exactly replace old_text in the original content with content; old_text is required in this case.\n"
-                "Note: each of the userinfo and agentinfo fields has a 1024-character limit"
+                "'agent persona desired by the user' exposed during the conversation into that user's profile. "
+                "Each side has a separately stored name and detailed info.\n"
+                "- info_type=userinfo: the user's side = User-name (what the user wants to be called) + User-info. "
+                "Call when the user tells you what to call them, or reveals personal information such as identity, "
+                "occupation, location, interests, hobbies, or taste preferences. "
+                "Do NOT put the name into User-info; use set_name for it.\n"
+                "- info_type=agentinfo: the agent's side = Agent-name (the name you go by) + Agent-info. "
+                "Call when the user expresses expectations for the current Soulprout agent "
+                "(such as what name they want it to be called, personality, tone, speaking style, positioning, etc.). "
+                "The name goes to Agent-name via set_name; the rest goes to Agent-info. "
+                "Do NOT put the name into Agent-info.\n"
+                "- module=view: return both the name and the detailed info of the current info_type as JSON "
+                "{\"name\": ..., \"info\": ...}, then decide whether to use set_name, add or edit.\n"
+                "- module=set_name: overwrite the name with content (old_text not needed).\n"
+                "- module=add: append content to the end of the detailed info (write directly on first entry).\n"
+                "- module=edit: exactly replace old_text in the detailed info with content; old_text is required in this case.\n"
+                "Note: the userinfo and agentinfo detailed info each have a 1024-character limit; names are limited to 64 characters"
             ),
             "parameters": {
                 "type": "object",
@@ -457,20 +462,20 @@ TOOL_SCHEMAS = [
                     "info_type": {
                         "type": "string",
                         "enum": ["userinfo", "agentinfo"],
-                        "description": "Target field: userinfo (user personal information) / agentinfo (agent personalization information)",
+                        "description": "Target side: userinfo (user name + user personal information) / agentinfo (agent name + agent persona information)",
                     },
                     "module": {
                         "type": "string",
-                        "enum": ["view", "add", "edit"],
-                        "description": "Operation: view current content / add append to the end / edit exact replacement",
+                        "enum": ["view", "set_name", "add", "edit"],
+                        "description": "Operation: view name and info / set_name overwrite the name / add append to the end of the info / edit exact replacement in the info",
                     },
                     "content": {
                         "type": "string",
-                        "description": "[Required for module=add or edit] For add, the content to append; for edit, the new replacement text",
+                        "description": "[Required for module=set_name, add or edit] For set_name, the new name; for add, the content to append; for edit, the new replacement text",
                     },
                     "old_text": {
                         "type": "string",
-                        "description": "[Required for module=edit] Text in the original content that needs to be replaced",
+                        "description": "[Required for module=edit] Text in the original info that needs to be replaced",
                     },
                 },
             },

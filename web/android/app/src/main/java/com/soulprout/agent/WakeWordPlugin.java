@@ -190,6 +190,7 @@ public class WakeWordPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        haltThinkBed();
         stopPlayback(true);
         chimeExecutor.shutdownNow();
         synchronized (playLock) {
@@ -211,6 +212,7 @@ public class WakeWordPlugin extends Plugin {
 
     /** 供 StandbyPlugin / 通知栏「停止」联动：停掉录音与播报 */
     public void stopEngine() {
+        haltThinkBed();
         stopPlayback(true);
         stopWorker();
     }
@@ -231,9 +233,31 @@ public class WakeWordPlugin extends Plugin {
         call.resolve();
     }
 
+    /** 手动唤醒（双击）时播放同一个提示音 */
+    @PluginMethod
+    public void chime(PluginCall call) {
+        playChime();
+        call.resolve();
+    }
+
+    /** 进入思考：开始很浅的持续背景音。已经在放就不动。 */
+    @PluginMethod
+    public void thinkStart(PluginCall call) {
+        startThinkBed();
+        call.resolve();
+    }
+
+    /** 离开思考：背景音自行淡出，不阻塞调用方 */
+    @PluginMethod
+    public void thinkStop(PluginCall call) {
+        stopThinkBed();
+        call.resolve();
+    }
+
     @PluginMethod
     public void playStart(PluginCall call) {
         int rate = call.getInt("sampleRate", PLAY_SAMPLE_RATE_DEFAULT);
+        stopThinkBed();
         stopPlayback(false);
         try {
             int minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
@@ -414,6 +438,11 @@ public class WakeWordPlugin extends Plugin {
         }
 
         stopWorker();
+
+        // 预先合成提示音（48k 混响计算量不小，别等到第一次唤醒才算）
+        chimeExecutor.execute(() -> {
+            if (chimePcm == null) chimePcm = buildChime();
+        });
 
         final boolean wantBt = wantsBluetooth(call);
         final boolean btPermitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
@@ -619,44 +648,127 @@ public class WakeWordPlugin extends Plugin {
 
     // ------------------------------------------------------------ 唤醒提示音
 
-    private static final int CHIME_RATE = 22050;
+    private static final int CHIME_RATE = 48000;
     private byte[] chimePcm;
     private final ExecutorService chimeExecutor = Executors.newSingleThreadExecutor();
 
-    /** 合成一段柔和的上行双音（约 240ms）：正弦 + 一点泛音，快速淡入、指数衰减 */
+    /** 思考背景音。token 用来区分「正在启动」和「启动过程中又被要求停掉」。 */
+    private volatile boolean thinkRun;
+    private int thinkToken;
+    private Thread thinkThread;
+    private final Object thinkLock = new Object();
+
+    /**
+     * 唤醒提示音，音质向 Apple 系统音效靠拢：
+     *  - 48kHz 采样（手机原生输出采样率，不经过系统重采样）
+     *  - 每个音由两个只差约 1.5 音分的振荡器叠成（合唱效果），音色温润、有「活」的微颤，而不是死板的电子正弦
+     *  - 和声：C4 与主音 G4 同时起（纯五度），C5 作为很轻的八度光泽；三个音重叠成一个音；起音为 75ms 以上的柔和渐起，没有拨弦式的瞬态
+     *  - 混响用施罗德结构（四路带阻尼的梳状滤波 + 两级全通），尾音平滑细腻；
+     *    不再用几次离散回声，那种会带来金属感、听起来廉价
+     */
     private byte[] buildChime() {
-        // 手机扬声器对 800Hz~2kHz 最灵敏，这里取 G5 -> D6，并拉长时值、放慢衰减，保证听得清
-        final double[] freqs = {783.99, 1174.66};
-        final double[] starts = {0.0, 0.13};
-        final double total = 0.5;
-        int n = (int) (CHIME_RATE * total);
-        byte[] out = new byte[n * 2];
-        for (int i = 0; i < n; i++) {
-            double t = (double) i / CHIME_RATE;
+        final int rate = CHIME_RATE;
+        final double[] freqs = {261.63, 392.00, 523.25}; // C4, G4, C5
+        final double[] starts = {0.0, 0.0, 0.0};
+        final double[] gains = {0.85, 1.0, 0.14};
+        final double[] attacks = {0.075, 0.075, 0.10};
+        final double dryLen = 0.7;
+        final double tail = 0.25;
+        final int n = (int) (rate * (dryLen + tail));
+        final int dryN = (int) (rate * dryLen);
+        final double detune = 0.0005; // 约 0.9 音分
+
+        double[] dry = new double[n];
+        for (int i = 0; i < dryN; i++) {
+            double t = (double) i / rate;
             double s = 0;
             for (int k = 0; k < freqs.length; k++) {
                 double lt = t - starts[k];
                 if (lt < 0) continue;
-                double attack = Math.min(1.0, lt / 0.008);
-                double decay = Math.exp(-lt * 6.0);
-                double ph = 2 * Math.PI * freqs[k] * lt;
-                s += attack * decay * (Math.sin(ph) + 0.25 * Math.sin(2 * ph));
+                double a = Math.min(1.0, lt / attacks[k]);
+                double attack = a * a * (3 - 2 * a);
+                double env = Math.exp(-lt * 3.2);
+                double w = 2 * Math.PI * freqs[k] * lt;
+                double w1 = w * (1 + detune);
+                double w2 = w * (1 - detune);
+                double tone = 0.5 * (Math.sin(w1) + Math.sin(w2))
+                    + 0.28 * 0.5 * (Math.sin(2 * w1) + Math.sin(2 * w2)) * Math.exp(-lt * 3.5)
+                    + 0.08 * 0.5 * (Math.sin(3 * w1) + Math.sin(3 * w2)) * Math.exp(-lt * 4.5);
+                s += gains[k] * attack * env * tone;
             }
-            // 整体收尾淡出，避免尾部爆音
-            double tail = Math.min(1.0, (total - t) / 0.04);
-            // 峰值约 0.75 满量程（原来只有 0.25 左右），再软限幅防止削波
-            double x = s * 0.5 * tail;
-            int v = (int) (Math.tanh(x * 1.4) / Math.tanh(1.4) * 0.9 * 32767);
-            v = Math.max(-32768, Math.min(32767, v));
-            out[2 * i] = (byte) (v & 0xFF);
-            out[2 * i + 1] = (byte) ((v >> 8) & 0xFF);
+            // 末端淡出，保证送进混响的信号是干净收尾的
+            int left = dryN - i;
+            int dfade = (int) (0.05 * rate);
+            if (left < dfade) {
+                double f = (double) left / dfade;
+                s *= f;
+            }
+            dry[i] = s;
+        }
+
+        // 施罗德混响：四路梳状（带高频阻尼） + 两级全通
+        final double[] combMs = {29.7, 37.1, 41.1, 43.7};
+        final double combG = 0.60;
+        final double damp = 0.45;
+        double[] wet = new double[n];
+        for (double ms : combMs) {
+            int d = (int) (ms * rate / 1000.0);
+            double[] buf = new double[d];
+            int idx = 0;
+            double lp = 0;
+            for (int i = 0; i < n; i++) {
+                double y = buf[idx];
+                lp = y * (1 - damp) + lp * damp;
+                buf[idx] = dry[i] + lp * combG;
+                idx = (idx + 1) % d;
+                wet[i] += y * 0.25;
+            }
+        }
+        final double[] apMs = {5.0, 1.7};
+        for (double ms : apMs) {
+            int d = Math.max(1, (int) (ms * rate / 1000.0));
+            double[] buf = new double[d];
+            int idx = 0;
+            final double g = 0.5;
+            for (int i = 0; i < n; i++) {
+                double x = wet[i];
+                double v = buf[idx];
+                wet[i] = v - g * x;
+                buf[idx] = x + g * v;
+                idx = (idx + 1) % d;
+            }
+        }
+
+        double[] mix = new double[n];
+        double peak = 1e-9;
+        for (int i = 0; i < n; i++) {
+            double v = dry[i] * 1.0 + wet[i] * 0.28;
+            mix[i] = v;
+            peak = Math.max(peak, Math.abs(v));
+        }
+
+        final double target = 0.5; // 峰值（满量程的比例）
+        final int fade = (int) (0.25 * rate);
+        byte[] out = new byte[n * 2];
+        for (int i = 0; i < n; i++) {
+            double v = mix[i] / peak * target;
+            int left = n - i;
+            if (left < fade) {
+                double f = (double) left / fade;
+                v *= f * f * (3 - 2 * f);
+            }
+            int q = (int) Math.round(v * 32767);
+            q = Math.max(-32768, Math.min(32767, q));
+            out[2 * i] = (byte) (q & 0xFF);
+            out[2 * i + 1] = (byte) ((q >> 8) & 0xFF);
         }
         return out;
     }
 
     /** 命中唤醒词后的提示音；独立线程播放，不阻塞录音循环 */
     private void playChime() {
-        final boolean comm = btMode || bargeIn;
+        // 提示音走媒体音量（和原来的蜂鸣一致）；只有蓝牙耳机走通话链路时才必须用通话流
+        final boolean comm = btMode;
         try {
             chimeExecutor.execute(() -> {
                 AudioTrack t = null;
@@ -673,9 +785,16 @@ public class WakeWordPlugin extends Plugin {
                         .build();
                     t = new AudioTrack(attrs, fmt, chimePcm.length, AudioTrack.MODE_STATIC,
                         AudioManager.AUDIO_SESSION_ID_GENERATE);
-                    if (t.getState() != AudioTrack.STATE_INITIALIZED) return;
-                    t.write(chimePcm, 0, chimePcm.length);
+                    // 注意：MODE_STATIC 的轨道在写入数据之前状态是 STATE_NO_STATIC_DATA，
+                    // 不能在 write 之前判断 STATE_INITIALIZED，否则永远判失败而不出声
+                    int w = t.write(chimePcm, 0, chimePcm.length);
+                    if (t.getState() != AudioTrack.STATE_INITIALIZED) {
+                        Log.w(TAG, "playChime: AudioTrack 不可用，state=" + t.getState() + " written=" + w);
+                        return;
+                    }
+                    t.setVolume(1.0f);
                     t.play();
+                    Log.i(TAG, "playChime: 写入 " + w + " 字节, 媒体流=" + !comm);
                     Thread.sleep(chimePcm.length / 2 * 1000L / CHIME_RATE + 60);
                 } catch (Throwable e) {
                     Log.w(TAG, "playChime failed", e);
@@ -690,6 +809,210 @@ public class WakeWordPlugin extends Plugin {
             });
         } catch (Throwable e) {
             Log.w(TAG, "playChime rejected", e);
+        }
+    }
+
+    // ------------------------------------------------------------ 思考背景音
+
+    /**
+     * 思考状态的持续背景音。音高固定、不滑动，在 C 大调上用四组纯五度慢慢交接：
+     * C–G、E–B、D–A、G–D，大约 16 秒走一圈。同一时刻主要听到两个音。
+     * 开头就是唤醒音那组 C、G，随后换和声；音量大约是提示音的九分之一。
+     * 进来先淡入，离开思考后再淡出，没有起音的敲击。
+     */
+    private void startThinkBed() {
+        int token;
+        Thread old;
+        synchronized (thinkLock) {
+            if (thinkRun && thinkThread != null && thinkThread.isAlive()) return;
+            token = ++thinkToken;
+            thinkRun = false;
+            old = thinkThread;
+        }
+        if (old != null) {
+            try {
+                old.join(1500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        synchronized (thinkLock) {
+            if (token != thinkToken) return;
+            thinkRun = true;
+            thinkThread = new Thread(this::runThinkBed, "think-bed");
+            thinkThread.setDaemon(true);
+            thinkThread.start();
+        }
+    }
+
+    /** 让背景音开始淡出。播放线程自己收尾，这里不等。 */
+    private void stopThinkBed() {
+        synchronized (thinkLock) {
+            thinkToken++;
+            thinkRun = false;
+        }
+    }
+
+    /** 停掉并等到播放线程退出。销毁和解散引擎时用，避免 AudioTrack 泄漏。 */
+    private void haltThinkBed() {
+        Thread t;
+        synchronized (thinkLock) {
+            thinkToken++;
+            thinkRun = false;
+            t = thinkThread;
+        }
+        if (t != null) {
+            try {
+                t.join(1500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void runThinkBed() {
+        final int rate = CHIME_RATE;
+        final int block = rate / 20;
+        AudioTrack track = null;
+        try {
+            final boolean comm = btMode;
+            int minBuf = AudioTrack.getMinBufferSize(
+                rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+            if (minBuf <= 0) {
+                Log.w(TAG, "thinkBed: 缓冲大小不可用 " + minBuf);
+                return;
+            }
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(comm ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+            AudioFormat fmt = new AudioFormat.Builder()
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(rate)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .build();
+            int bufBytes = Math.max(minBuf, block * 2 * 2);
+            track = new AudioTrack(attrs, fmt, bufBytes, AudioTrack.MODE_STREAM,
+                AudioManager.AUDIO_SESSION_ID_GENERATE);
+            if (track.getState() != AudioTrack.STATE_INITIALIZED) {
+                Log.w(TAG, "thinkBed: AudioTrack 初始化失败");
+                return;
+            }
+            track.play();
+            Log.i(TAG, "thinkBed: 开始, 媒体流=" + !comm);
+
+            // C4 E4 G4 B4 D4 A4 D5。音高固定，靠包络交接，不在音高上滑动。
+            final double[] freqs = {261.63, 329.63, 392.00, 493.88, 293.66, 440.00, 587.33};
+            final double[] gains = {0.72, 0.62, 0.90, 0.48, 0.58, 0.46, 0.20};
+            final int[] bloomNote = {0, 2, 1, 3, 4, 5, 2, 6};
+            final double[] bloomAt = {0, 0, 4, 4, 8, 8, 12, 12};
+            final double loop = 16.0;
+            final double half = 3.4;
+            final double detune = 0.0005;
+            // 两组五度叠满时加权和约 1.6，压到唤醒音峰值（0.5）的大约九分之一
+            final double norm = 0.055 / 1.7;
+            final double[] ph = new double[freqs.length * 2];
+            final double[] noteEnv = new double[freqs.length];
+            double sec = 0;
+            double in = 0;
+            double out = 1;
+            final double inStep = 1.0 / (rate * 0.7);
+            final double outStep = 1.0 / (rate * 0.45);
+            boolean stopping = false;
+            final short[] pcm = new short[block];
+
+            while (true) {
+                if (!thinkRun) stopping = true;
+                boolean done = false;
+                for (int i = 0; i < block; i++) {
+                    if (!thinkRun) stopping = true;
+                    if (in < 1) in = Math.min(1.0, in + inStep);
+                    if (stopping) {
+                        out -= outStep;
+                        if (out <= 0) {
+                            out = 0;
+                            done = true;
+                        }
+                    }
+                    for (int k = 0; k < noteEnv.length; k++) noteEnv[k] = 0;
+                    for (int b = 0; b < bloomNote.length; b++) {
+                        double dist = sec - bloomAt[b];
+                        dist -= loop * Math.floor((dist + loop / 2) / loop);
+                        dist = Math.abs(dist);
+                        if (dist >= half) continue;
+                        double x = dist / half;
+                        double coss = Math.cos(x * Math.PI / 2);
+                        double envN = coss * coss;
+                        int ni = bloomNote[b];
+                        if (envN > noteEnv[ni]) noteEnv[ni] = envN;
+                    }
+                    sec += 1.0 / rate;
+                    if (sec >= loop) sec -= loop;
+                    double env = (in * in * (3 - 2 * in)) * (out * out * (3 - 2 * out));
+                    double s = 0;
+                    for (int k = 0; k < freqs.length; k++) {
+                        if (noteEnv[k] < 0.001) continue;
+                        double d1 = 2 * Math.PI * freqs[k] * (1 + detune) / rate;
+                        double d2 = 2 * Math.PI * freqs[k] * (1 - detune) / rate;
+                        int i1 = k * 2;
+                        int i2 = i1 + 1;
+                        ph[i1] += d1;
+                        ph[i2] += d2;
+                        if (ph[i1] > 2 * Math.PI) ph[i1] -= 2 * Math.PI;
+                        if (ph[i2] > 2 * Math.PI) ph[i2] -= 2 * Math.PI;
+                        double a = Math.sin(ph[i1]);
+                        double bsin = Math.sin(ph[i2]);
+                        s += gains[k] * noteEnv[k] * (0.5 * (a + bsin)
+                            + 0.08 * 0.5 * (Math.sin(ph[i1] * 2) + Math.sin(ph[i2] * 2)));
+                    }
+                    int q = (int) Math.round(s * env * norm * 32767);
+                    if (q > 32767) q = 32767;
+                    else if (q < -32768) q = -32768;
+                    pcm[i] = (short) q;
+                    if (done) {
+                        for (int j = i + 1; j < block; j++) pcm[j] = 0;
+                        break;
+                    }
+                }
+                int off = 0;
+                while (off < block) {
+                    int wrote = track.write(pcm, off, block - off);
+                    if (wrote < 0) {
+                        Log.w(TAG, "thinkBed: write 失败 " + wrote);
+                        done = true;
+                        break;
+                    }
+                    if (wrote == 0) {
+                        try {
+                            Thread.sleep(5);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            done = true;
+                            break;
+                        }
+                        continue;
+                    }
+                    off += wrote;
+                }
+                if (done) break;
+            }
+            try {
+                Thread.sleep(bufBytes / 2 * 1000L / rate + 40);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            Log.i(TAG, "thinkBed: 结束");
+        } catch (Throwable e) {
+            Log.w(TAG, "thinkBed failed", e);
+        } finally {
+            if (track != null) {
+                try {
+                    track.pause();
+                    track.flush();
+                    track.release();
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 
@@ -922,14 +1245,17 @@ public class WakeWordPlugin extends Plugin {
             if (muted) {
                 kwsDirty = true;
                 capBuf.reset();
-            } else if (capturing) {
-                // 采集模式：把 PCM 打包上送给 JS（识别由云端完成），此时不再跑唤醒
-                kwsDirty = true;
-                appendCapture(pcm, n);
             } else {
-                capBuf.reset();
+                // 采集模式：把 PCM 打包上送给 JS（识别由云端完成）。
+                // 注意唤醒引擎在采集期间也要照常跑：连续对话时采集会一直开着，
+                // 以前这里直接跳过唤醒，一旦 JS 侧识别通道卡住，唤醒词就彻底失效。
+                if (capturing) {
+                    appendCapture(pcm, n);
+                } else {
+                    capBuf.reset();
+                }
                 if (kwsDirty) {
-                    // 刚从播报 / 采集切回待命：清掉唤醒引擎里残留的上下文
+                    // 刚从播报静音切回来：清掉唤醒引擎里残留的上下文
                     kws.reset(stream);
                     kwsDirty = false;
                 }
@@ -951,10 +1277,13 @@ public class WakeWordPlugin extends Plugin {
             if (hit != null && now - lastWakeMs >= COOLDOWN_MS) {
                 lastWakeMs = now;
                 wakeCount++;
+                stopThinkBed();
                 playChime();
                 // 命中后立刻进入采集，后续音频直接上送，不丢「唤醒词 + 指令」连说的内容
+                final boolean wasCapturing = capturing;
                 capturing = true;
-                capBuf.reset();
+                // 已经在采集（连续对话中喊唤醒词）时不能清缓冲，否则会丢掉正在上送的那一小段音频
+                if (!wasCapturing) capBuf.reset();
                 // 播报中被唤醒词打断：原生就地停掉播放，不等 JS 来回一趟，避免把扬声器尾音录进去
                 boolean barged = false;
                 if (playing) {
@@ -964,6 +1293,7 @@ public class WakeWordPlugin extends Plugin {
                 }
                 JSObject o = new JSObject();
                 o.put("interrupted", barged);
+                o.put("capturing", wasCapturing);
                 o.put("keyword", hit);
                 o.put("count", wakeCount);
                 o.put("tsMs", now);

@@ -901,8 +901,9 @@ class SoulproutToolFunction:
 
     # ─────────────────────────────────────────────────────────────────────────
     # 用户个性化配置工具：user_option
-    #   - info_type=userinfo / agentinfo
-    #   - module=view（查看当前内容）/ add（末尾追加）/ edit（按 old_text 精确替换）
+    #   - info_type=userinfo（username + userinfo）/ agentinfo（agentname + agentinfo）
+    #   - module=view（同时返回名字与具体信息）/ add（末尾追加信息）/ edit（按 old_text 精确替换信息）
+    #     / set_name（覆盖名字）
     # ─────────────────────────────────────────────────────────────────────────
 
     USER_OPTION_MAX_LEN = 1024
@@ -1207,27 +1208,52 @@ class SoulproutToolFunction:
         except Exception as exc:
             return f"错误：定时任务操作失败，失败原因：{exc}"
 
+    USER_OPTION_NAME_MAX_LEN = 64
+
+    # info_type -> (名字字段, 详细信息字段)
+    _USER_OPTION_FIELDS = {
+        "userinfo": ("username", "userinfo"),
+        "agentinfo": ("agentname", "agentinfo"),
+    }
+
     async def user_option(self, info_type, module, conversation_id, content=None, old_text=None):
-        if info_type not in ("userinfo", "agentinfo"):
+        if info_type not in self._USER_OPTION_FIELDS:
             return "错误：info_type 仅支持 userinfo 或 agentinfo"
-        if module not in ("view", "add", "edit"):
-            return "错误：module 仅支持 view、add 或 edit"
+        if module not in ("view", "add", "edit", "set_name"):
+            return "错误：module 仅支持 view、add、edit 或 set_name"
         if module == "edit" and not old_text:
             return "错误：module=edit 时必须填写 old_text"
         if module != "view" and content is None:
-            return "错误：module=add 或 edit 时 content 不能为空"
+            return "错误：module=add、edit 或 set_name 时 content 不能为空"
 
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         if not user_id:
             return "错误：无法获取用户信息"
+        name_field, info_field = self._USER_OPTION_FIELDS[info_type]
         try:
             user = await UserInfo.find_one(UserInfo.user_id == user_id)
             if not user:
                 return f"错误：未找到用户 {user_id}"
 
-            current = getattr(user, info_type, "") or ""
+            current_name = (getattr(user, name_field, "") or "").strip()
+            current = getattr(user, info_field, "") or ""
+
             if module == "view":
-                return current
+                return json.dumps(
+                    {"name": current_name, "info": current},
+                    ensure_ascii=False,
+                )
+
+            if module == "set_name":
+                new_name = str(content).strip()
+                if not new_name:
+                    return "错误：名字不能为空"
+                if len(new_name) > self.USER_OPTION_NAME_MAX_LEN:
+                    return f"错误：名字不能超过 {self.USER_OPTION_NAME_MAX_LEN} 个字符"
+                setattr(user, name_field, new_name)
+                await user.save()
+                return f"成功更新{'用户' if info_type == 'userinfo' else '智能体'}名字为：{new_name}"
+
             if module == "add":
                 new_value = f"{current}\n{content}" if current else content
             else:
