@@ -139,6 +139,17 @@ public class StandbyPlugin extends Plugin {
         call.resolve(buildStatus());
     }
 
+    /**
+     * JS 侧诊断日志落到 logcat，tag 固定为 Yavis，方便电脑上过滤：
+     *   adb logcat -s Yavis:D Chromium:I
+     */
+    @PluginMethod
+    public void debugLog(PluginCall call) {
+        String msg = call.getString("message", "");
+        Log.i("Yavis", msg != null ? msg : "");
+        call.resolve();
+    }
+
     // ------------------------------------------------------------------ 前台服务
 
     @PluginMethod

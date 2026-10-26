@@ -13,9 +13,9 @@ import android.media.MediaRecorder;
 import android.media.audiofx.AcousticEchoCanceler;
 import android.media.audiofx.NoiseSuppressor;
 import android.os.Build;
-import android.util.Base64;
 import android.util.Log;
 import android.view.WindowManager;
+import android.webkit.WebView;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -103,8 +103,88 @@ public class WakeWordPlugin extends Plugin {
     private static final long POST_PLAY_MUTE_MS = 300;
     private static final int PLAY_SAMPLE_RATE_DEFAULT = 24000;
 
-    /** 采集模式：命中唤醒词或 JS 调 beginCapture 后置位，PCM 以 audio 事件上送 */
+    /**
+     * 采集模式：命中唤醒词或编排器 beginCapture 后置位。
+     * PCM 送给原生识别通道（NativeAsrSession）。
+     */
     private volatile boolean capturing = false;
+    /** 由 configurePipeline 写入；唤醒后原生层自己建识别通道 */
+    private volatile String asrUrl = null;
+    private NativeAsrSession asrSession;
+    private final Object asrLock = new Object();
+    /** 全原生对话编排：Agent + TTS 不经 WebView，息屏也能跑完一轮 */
+    private final StandbyOrchestrator orchestrator = new StandbyOrchestrator(new StandbyOrchestrator.Host() {
+        @Override
+        public void openAsr() {
+            String url = orchestrator.getAsrUrl();
+            if (url == null || url.isEmpty()) url = asrUrl;
+            if (url != null && !url.isEmpty()) {
+                asrUrl = url;
+                openAsrSession(url);
+            }
+        }
+
+        @Override
+        public void closeAsr() {
+            closeAsrSession();
+        }
+
+        @Override
+        public void beginCapture() {
+            capBuf.reset();
+            capturing = true;
+        }
+
+        @Override
+        public void endCapture() {
+            capturing = false;
+        }
+
+        @Override
+        public void thinkStart() {
+            startThinkBed();
+        }
+
+        @Override
+        public void thinkStop() {
+            stopThinkBed();
+        }
+
+        @Override
+        public void playStart(int sampleRate) {
+            doPlayStart(sampleRate);
+        }
+
+        @Override
+        public void playWrite(byte[] pcm) {
+            doPlayWrite(pcm);
+        }
+
+        @Override
+        public void playFinish() {
+            doPlayFinish();
+        }
+
+        @Override
+        public void playStop() {
+            boolean was = playing;
+            stopPlayback(true);
+            if (was) emitPlayEnd(true);
+        }
+
+        @Override
+        public void emitPipeline(String phase, String key, String value) {
+            JSObject o = new JSObject();
+            o.put("phase", phase);
+            o.put("key", key);
+            o.put("value", value != null ? value : "");
+            // 界面更新尽力而为；冻住也不影响原生对话
+            try {
+                notifyListeners("pipeline", o);
+            } catch (Throwable ignored) {
+            }
+        }
+    });
     /** 正在播报：此时既不唤醒也不采集 */
     private volatile boolean playing = false;
     private volatile long muteUntilMs = 0;
@@ -119,7 +199,6 @@ public class WakeWordPlugin extends Plugin {
     private AcousticEchoCanceler aec;
     private NoiseSuppressor ns;
     private final ByteArrayOutputStream capBuf = new ByteArrayOutputStream(CAPTURE_PACKET_BYTES * 2);
-    private int captureSeq = 0;
 
     private AudioTrack track;
     private int trackSampleRate = PLAY_SAMPLE_RATE_DEFAULT;
@@ -177,6 +256,10 @@ public class WakeWordPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
+        try {
+            orchestrator.stop();
+        } catch (Throwable ignored) {
+        }
         stopWorker();
         call.resolve();
     }
@@ -212,107 +295,153 @@ public class WakeWordPlugin extends Plugin {
 
     /** 供 StandbyPlugin / 通知栏「停止」联动：停掉录音与播报 */
     public void stopEngine() {
+        try {
+            orchestrator.stop();
+        } catch (Throwable ignored) {
+        }
         haltThinkBed();
         stopPlayback(true);
         stopWorker();
     }
 
-    /** 不经唤醒词直接进入采集（连续对话：播报结束后继续听用户说） */
+    /**
+     * 配置全原生对话管线（识别 / Agent / 合成 URL + 用户 token）。
+     * 之后断句→回复→播报全部在原生完成，不依赖 WebView。
+     */
     @PluginMethod
-    public void beginCapture(PluginCall call) {
-        capBuf.reset();
-        captureSeq = 0;
-        capturing = true;
-        call.resolve();
-    }
-
-    /** 结束采集，回到唤醒词待命 */
-    @PluginMethod
-    public void endCapture(PluginCall call) {
-        capturing = false;
-        call.resolve();
-    }
-
-    /** 手动唤醒（双击）时播放同一个提示音 */
-    @PluginMethod
-    public void chime(PluginCall call) {
-        playChime();
-        call.resolve();
-    }
-
-    /** 进入思考：开始很浅的持续背景音。已经在放就不动。 */
-    @PluginMethod
-    public void thinkStart(PluginCall call) {
-        startThinkBed();
-        call.resolve();
-    }
-
-    /** 离开思考：背景音自行淡出，不阻塞调用方 */
-    @PluginMethod
-    public void thinkStop(PluginCall call) {
-        stopThinkBed();
+    public void configurePipeline(PluginCall call) {
+        String asr = call.getString("asrUrl", "");
+        String tts = call.getString("ttsUrl", "");
+        String chat = call.getString("chatUrl", "");
+        String token = call.getString("token", "");
+        String userId = call.getString("userId", "");
+        boolean continuous = Boolean.TRUE.equals(call.getBoolean("continuous", true));
+        String voice = call.getString("voice", "female");
+        int speechRate = call.getInt("speechRate", 0);
+        if (asr != null && !asr.trim().isEmpty()) asrUrl = asr.trim();
+        orchestrator.configure(
+            asrUrl,
+            tts != null ? tts.trim() : "",
+            chat != null ? chat.trim() : "",
+            token != null ? token : "",
+            userId != null ? userId : "",
+            continuous,
+            voice,
+            speechRate
+        );
+        Log.i("Yavis", "configurePipeline ok enabled=" + orchestrator.isEnabled());
         call.resolve();
     }
 
     @PluginMethod
-    public void playStart(PluginCall call) {
-        int rate = call.getInt("sampleRate", PLAY_SAMPLE_RATE_DEFAULT);
-        stopThinkBed();
-        stopPlayback(false);
-        try {
-            int minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                // 耳机走通话链路时，播放也要走通话音量流，否则耳机里可能没声音
-                // 语音打断模式下也走通话流：回声消除需要和录音源配套才有参考信号
-                .setUsage((btMode || bargeIn) ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build();
-            AudioFormat fmt = new AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setSampleRate(rate)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .build();
-            AudioTrack t = new AudioTrack(attrs, fmt, Math.max(minBuf, rate * 2),
-                AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
-            if (t.getState() != AudioTrack.STATE_INITIALIZED) {
-                t.release();
-                call.reject("播放器初始化失败", "PLAY_INIT_FAILED");
-                return;
+    public void setPipelineContinuous(PluginCall call) {
+        orchestrator.setContinuous(Boolean.TRUE.equals(call.getBoolean("continuous", true)));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void pipelineInterrupt(PluginCall call) {
+        orchestrator.interrupt();
+        call.resolve();
+    }
+
+    private void openAsrSession(String url) {
+        closeAsrSession();
+        NativeAsrSession session = new NativeAsrSession(new NativeAsrSession.Listener() {
+            @Override
+            public void onReady() {
+                Log.i(TAG, "asr ready");
             }
-            synchronized (playLock) {
-                track = t;
-                trackSampleRate = rate;
-                trackFramesWritten = 0;
-                if (playExecutor == null || playExecutor.isShutdown()) {
-                    playExecutor = Executors.newSingleThreadExecutor();
+
+            @Override
+            public void onPartial(String text) {
+                if (!orchestrator.isEnabled()) return;
+                try {
+                    orchestrator.onAsrPartial(text);
+                } catch (Throwable e) {
+                    Log.w(TAG, "orchestrator onAsrPartial", e);
                 }
             }
-            playGen.incrementAndGet();
-            playing = true;
-            t.play();
-            call.resolve();
-        } catch (Throwable e) {
-            Log.e(TAG, "playStart failed", e);
-            playing = false;
-            call.reject("播放器启动失败: " + e.getMessage(), "PLAY_INIT_FAILED");
+
+            @Override
+            public void onFinal(String text) {
+                if (!orchestrator.isEnabled()) return;
+                try {
+                    orchestrator.onAsrFinal(text);
+                } catch (Throwable e) {
+                    Log.w(TAG, "orchestrator onAsrFinal", e);
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                Log.w(TAG, "asr error " + message);
+            }
+
+            @Override
+            public void onEnd() {
+            }
+
+            @Override
+            public void onClose() {
+            }
+        });
+        synchronized (asrLock) {
+            asrSession = session;
         }
+        session.connect(url);
+        Log.i(TAG, "asr session opening");
     }
 
-    /** pcm：base64 编码的 16bit 小端单声道，采样率同 playStart */
-    @PluginMethod
-    public void playWrite(PluginCall call) {
-        String b64 = call.getString("pcm", "");
+    private void closeAsrSession() {
+        NativeAsrSession session;
+        synchronized (asrLock) {
+            session = asrSession;
+            asrSession = null;
+        }
+        if (session != null) session.close();
+    }
+
+    private void doPlayStart(int rate) {
+        stopThinkBed();
+        stopPlayback(false);
+        int minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        AudioAttributes attrs = new AudioAttributes.Builder()
+            .setUsage((btMode || bargeIn) ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build();
+        AudioFormat fmt = new AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(rate)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .build();
+        AudioTrack t = new AudioTrack(attrs, fmt, Math.max(minBuf, rate * 2),
+            AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
+        if (t.getState() != AudioTrack.STATE_INITIALIZED) {
+            t.release();
+            throw new IllegalStateException("播放器初始化失败");
+        }
+        synchronized (playLock) {
+            track = t;
+            trackSampleRate = rate;
+            trackFramesWritten = 0;
+            if (playExecutor == null || playExecutor.isShutdown()) {
+                playExecutor = Executors.newSingleThreadExecutor();
+            }
+        }
+        playGen.incrementAndGet();
+        playing = true;
+        t.play();
+    }
+
+    private void doPlayWrite(byte[] data) {
         final AudioTrack t;
         final ExecutorService ex;
         synchronized (playLock) {
             t = track;
             ex = playExecutor;
         }
-        if (t == null || ex == null || b64 == null || b64.isEmpty()) {
-            call.resolve();
-            return;
-        }
-        final byte[] data = Base64.decode(b64, Base64.DEFAULT);
+        if (t == null || ex == null || data == null || data.length == 0) return;
         final int gen = playGen.get();
         ex.execute(() -> {
             if (gen != playGen.get()) return;
@@ -330,19 +459,15 @@ public class WakeWordPlugin extends Plugin {
                 Log.w(TAG, "playWrite failed", e);
             }
         });
-        call.resolve();
     }
 
-    /** 文本都送完了：等已写入的音频播完，再发 playEnd */
-    @PluginMethod
-    public void playFinish(PluginCall call) {
+    private void doPlayFinish() {
         final AudioTrack t;
         final ExecutorService ex;
         synchronized (playLock) {
             t = track;
             ex = playExecutor;
         }
-        call.resolve();
         if (t == null || ex == null) {
             emitPlayEnd(false);
             return;
@@ -355,28 +480,18 @@ public class WakeWordPlugin extends Plugin {
                 frames = trackFramesWritten;
                 rate = trackSampleRate;
             }
-            long deadline = System.currentTimeMillis() + frames * 1000L / rate + 3000;
+            long deadline = System.currentTimeMillis() + frames * 1000L / Math.max(1, rate) + 3000;
             try {
                 while (gen == playGen.get() && System.currentTimeMillis() < deadline) {
-                    // 头位置是无符号 32 位，这里按 int 比较足够（单次播报远小于 2^31 帧）
                     if ((t.getPlaybackHeadPosition() & 0xFFFFFFFFL) >= frames) break;
                     Thread.sleep(40);
                 }
             } catch (Throwable ignored) {
             }
-            if (gen != playGen.get()) return; // 已被 playStop 接管
+            if (gen != playGen.get()) return;
             stopPlayback(false);
             emitPlayEnd(false);
         });
-    }
-
-    /** 立刻打断播报 */
-    @PluginMethod
-    public void playStop(PluginCall call) {
-        boolean wasPlaying = playing;
-        stopPlayback(true);
-        call.resolve();
-        if (wasPlaying) emitPlayEnd(true);
     }
 
     private void stopPlayback(boolean invalidate) {
@@ -404,9 +519,37 @@ public class WakeWordPlugin extends Plugin {
     }
 
     private void emitPlayEnd(boolean interrupted) {
+        if (orchestrator.isEnabled()) {
+            try {
+                orchestrator.onPlayEnd(interrupted);
+            } catch (Throwable e) {
+                Log.w(TAG, "orchestrator onPlayEnd", e);
+            }
+        }
         JSObject o = new JSObject();
         o.put("interrupted", interrupted);
-        notifyListeners("playEnd", o);
+        notifyJs("playEnd", o);
+    }
+
+    /**
+     * 息屏后 WebView 定时器 / 事件循环会被系统挂起，notifyListeners 发出的事件会在 JS 里堆着不跑，
+     * 表现就是「原生已经 asr final 了，但 Agent 完全没动静」，直到用户点亮屏幕才一次性回放。
+     * 关键事件发出前先 resumeTimers，尽量把 JS 叫醒处理。
+     */
+    private void notifyJs(String event, JSObject data) {
+        if (getActivity() == null) {
+            notifyListeners(event, data);
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            try {
+                WebView wv = getBridge() != null ? getBridge().getWebView() : null;
+                if (wv != null) wv.resumeTimers();
+            } catch (Throwable e) {
+                Log.w(TAG, "resumeTimers failed", e);
+            }
+            notifyListeners(event, data);
+        });
     }
 
     /** 把 100ms 的 short PCM 追加进缓冲，凑满 200ms 就上送一包（worker 线程调用） */
@@ -421,10 +564,17 @@ public class WakeWordPlugin extends Plugin {
             byte[] all = capBuf.toByteArray();
             capBuf.reset();
             capBuf.write(all, CAPTURE_PACKET_BYTES, all.length - CAPTURE_PACKET_BYTES);
-            JSObject o = new JSObject();
-            o.put("pcm", Base64.encodeToString(all, 0, CAPTURE_PACKET_BYTES, Base64.NO_WRAP));
-            o.put("seq", captureSeq++);
-            notifyListeners("audio", o);
+            byte[] packet = new byte[CAPTURE_PACKET_BYTES];
+            System.arraycopy(all, 0, packet, 0, CAPTURE_PACKET_BYTES);
+            // 原生识别通道优先：息屏时 PCM 不能再绕道 WebView
+            NativeAsrSession session;
+            synchronized (asrLock) {
+                session = asrSession;
+            }
+            if (session != null && session.isOpen()) {
+                session.sendPcm(packet);
+            }
+            // 识别通道未就绪时丢弃 PCM；对话不再经 WebView
         }
     }
 
@@ -462,6 +612,7 @@ public class WakeWordPlugin extends Plugin {
             worker = null;
         }
         running = false;
+        closeAsrSession();
         if (t != null) {
             try {
                 t.join(2000);
@@ -1279,11 +1430,24 @@ public class WakeWordPlugin extends Plugin {
                 wakeCount++;
                 stopThinkBed();
                 playChime();
-                // 命中后立刻进入采集，后续音频直接上送，不丢「唤醒词 + 指令」连说的内容
+                // 命中后立刻进入采集，并在原生层建识别通道——不等 JS / WebView。
+                // 息屏时 WebView 可能要好几秒才醒，这段时间用户已经在说话，必须由原生接住。
                 final boolean wasCapturing = capturing;
                 capturing = true;
-                // 已经在采集（连续对话中喊唤醒词）时不能清缓冲，否则会丢掉正在上送的那一小段音频
-                if (!wasCapturing) capBuf.reset();
+                capBuf.reset();
+                if (orchestrator.isEnabled()) {
+                    Log.i("Yavis", "wake → native pipeline keyword=" + hit);
+                    try {
+                        orchestrator.onWake(hit);
+                    } catch (Throwable e) {
+                        Log.w(TAG, "orchestrator onWake", e);
+                    }
+                } else if (asrUrl != null && !asrUrl.isEmpty()) {
+                    Log.i("Yavis", "wake → open native ASR keyword=" + hit);
+                    openAsrSession(asrUrl);
+                } else {
+                    Log.w("Yavis", "wake but asrUrl empty, cannot open ASR");
+                }
                 // 播报中被唤醒词打断：原生就地停掉播放，不等 JS 来回一趟，避免把扬声器尾音录进去
                 boolean barged = false;
                 if (playing) {
@@ -1297,7 +1461,7 @@ public class WakeWordPlugin extends Plugin {
                 o.put("keyword", hit);
                 o.put("count", wakeCount);
                 o.put("tsMs", now);
-                notifyListeners("wake", o);
+                notifyJs("wake", o);
             }
 
             if (now - lastLevelMs >= LEVEL_INTERVAL_MS) {

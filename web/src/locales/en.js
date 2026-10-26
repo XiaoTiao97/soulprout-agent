@@ -541,7 +541,7 @@ export default {
       continuousHint: 'Keeps listening after each reply without the wake word. You can still interrupt with the wake word anytime.',
       voice: 'Voice',
       voiceFemale: 'Female (Xiaohe)',
-      voiceMale: 'Male (Yuanbo Xiaoshu)',
+      voiceMale: 'Male (Liufei)',
       speechRate: 'Speech rate',
       rateSlow: 'Slow',
       rateNormal: 'Normal',

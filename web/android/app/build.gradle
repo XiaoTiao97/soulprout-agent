@@ -52,6 +52,9 @@ dependencies {
     // 离线唤醒词：sherpa-onnx（JNI + onnxruntime + Kotlin API）。
     // AAR 不进 git，先执行 web/android/fetch-wake-deps.ps1 下载到 app/libs/。
     implementation(name: 'sherpa-onnx-2.0.0', ext: 'aar')
+
+    // 待命语音通道：息屏后 WebView 网络会被冻，识别 / 合成 WebSocket 必须走原生 OkHttp
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
 
 apply from: 'capacitor.build.gradle'

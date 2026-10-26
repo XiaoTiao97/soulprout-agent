@@ -541,7 +541,7 @@ export default {
       continuousHint: '开启后回答完会一直听你说，不用再喊唤醒词；随时可以喊唤醒词打断。',
       voice: '音色',
       voiceFemale: '女声（小何）',
-      voiceMale: '男声（渊博小叔）',
+      voiceMale: '男声（刘飞）',
       speechRate: '语速',
       rateSlow: '慢',
       rateNormal: '正常',

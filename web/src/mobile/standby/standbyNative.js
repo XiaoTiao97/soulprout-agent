@@ -1,6 +1,6 @@
 /**
  * 待命（Standby）原生能力封装。
- *  - WakeWord 插件：麦克风 + 离线唤醒 + 采集上送 + AudioTrack 播放
+ *  - WakeWord 插件：麦克风 + 离线唤醒 + 全原生对话管线
  *  - Standby 插件：前台服务、权限状态、设置页跳转
  * 只在 Capacitor 原生环境可用。
  */
@@ -15,51 +15,24 @@ export function isStandbySupported() {
   )
 }
 
-// ---------------------------------------------------------------- base64 <-> bytes
-
-export function base64ToBytes(b64) {
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
-}
-
-export function bytesToBase64(bytes) {
-  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  let bin = ''
-  const step = 0x8000
-  for (let i = 0; i < u8.length; i += step) {
-    bin += String.fromCharCode.apply(null, u8.subarray(i, i + step))
-  }
-  return btoa(bin)
-}
-
-// ---------------------------------------------------------------- 唤醒 / 采集 / 播放
+// ---------------------------------------------------------------- 唤醒
 
 export const startWake = (keywords, source = 'auto', bargeIn = false) =>
   WakeWord.start({ keywords, source, bargeIn })
 export const stopWake = () => WakeWord.stop()
-export const beginCapture = () => WakeWord.beginCapture()
-export const endCapture = () => WakeWord.endCapture()
-/** 播放一次唤醒提示音（手动唤醒用） */
-export const chime = () => WakeWord.chime()
-/** 思考中的浅背景音，循环直到 thinkStop */
-export const thinkStart = () => WakeWord.thinkStart()
-export const thinkStop = () => WakeWord.thinkStop()
-
-export const playStart = (sampleRate = 24000) => WakeWord.playStart({ sampleRate })
-/** @param {Uint8Array|ArrayBuffer} pcm 16bit 小端单声道 */
-export const playWrite = (pcm) => WakeWord.playWrite({ pcm: bytesToBase64(pcm) })
-export const playFinish = () => WakeWord.playFinish()
-export const playStop = () => WakeWord.playStop()
 
 export const onWake = (cb) => WakeWord.addListener('wake', cb)
-/** { pcm: base64 的 200ms PCM16 16k 单声道, seq } */
-export const onAudio = (cb) => WakeWord.addListener('audio', cb)
-export const onPlayEnd = (cb) => WakeWord.addListener('playEnd', cb)
 export const onLevel = (cb) => WakeWord.addListener('level', cb)
 export const onStatus = (cb) => WakeWord.addListener('status', cb)
 export const onNativeError = (cb) => WakeWord.addListener('error', cb)
+
+// ---------------------------------------------------------------- 全原生对话管线
+
+export const configurePipeline = (opts) => WakeWord.configurePipeline(opts)
+export const setPipelineContinuous = (continuous) => WakeWord.setPipelineContinuous({ continuous: !!continuous })
+export const pipelineInterrupt = () => WakeWord.pipelineInterrupt()
+/** { phase, key, value } — 仅供界面；对话本身不依赖这些事件 */
+export const onPipeline = (cb) => WakeWord.addListener('pipeline', cb)
 
 // ---------------------------------------------------------------- 常驻 / 权限
 
@@ -67,6 +40,8 @@ export const getStandbyStatus = () => Standby.getStatus()
 export const requestStandbyPermissions = () => Standby.requestPermissions()
 export const startStandbyService = (opts) => Standby.startService(opts)
 export const stopStandbyService = () => Standby.stopService()
+/** 写入 Android logcat（tag=Yavis），供电脑 adb 调试 */
+export const debugLog = (message) => Standby.debugLog({ message: String(message || '') })
 /** @param {'app'|'notification'|'battery'|'batteryList'|'autostart'} target */
 export const openStandbySettings = (target) => Standby.openSettings({ target })
 export const onServiceStopped = (cb) => Standby.addListener('serviceStopped', cb)

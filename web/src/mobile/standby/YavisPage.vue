@@ -242,7 +242,7 @@ function loadJson(key, fallback) {
 
 const cfg = reactive(
   loadJson(CFG_KEY, {
-    // 空表示「跟随默认」：默认唤醒词是「你好」+ 用户名
+    // 空表示「跟随默认」：默认唤醒词是「你好」+ 智能体名字
     word: '',
     endWindowMs: 500,
     continuous: true,
@@ -277,20 +277,18 @@ watch(
   },
 )
 
-// ---------------------------------------------------------------- 默认唤醒词（你好 + 用户名）
+// ---------------------------------------------------------------- 默认唤醒词（你好 + 智能体名字）
 
 const FALLBACK_WORD = '你好小芽'
 const defaultWord = ref(FALLBACK_WORD)
 // 用户自己在设置里填过唤醒词就用它，否则用默认唤醒词
 const effectiveWord = computed(() => cfg.word || defaultWord.value)
 
-/** 「你好」+ 用户名；用户名不适合做唤醒词（过长、含数字符号等）时退回「你好」+ 智能体名字，再不行用兜底 */
+/** 「你好」+ 智能体名字；名字不适合做唤醒词时退回兜底 */
 function buildDefaultWord(profile) {
-  const candidates = [profile?.username, profile?.agentname]
-  for (const name of candidates) {
-    const word = normalizeWakeWord(`你好${(name || '').trim()}`)
-    if ((name || '').trim() && validateWakeWord(word).ok) return word
-  }
+  const name = (profile?.agentname || '').trim()
+  const word = normalizeWakeWord(`你好${name}`)
+  if (name && validateWakeWord(word).ok) return word
   return FALLBACK_WORD
 }
 
@@ -581,10 +579,10 @@ async function closeSheet() {
   const next = normalizeWakeWord(wordDraft.value)
   const prev = effectiveWord.value
   if (!next) {
-    // 清空 = 恢复默认（你好 + 用户名）
+    // 清空 = 恢复默认（你好 + 智能体名字）
     cfg.word = ''
   } else if (validateWakeWord(next).ok) {
-    // 和默认值一样就继续跟随默认，之后改了用户名唤醒词会跟着变
+    // 和默认值一样就继续跟随默认，之后改了智能体名字唤醒词会跟着变
     cfg.word = next === defaultWord.value ? '' : next
   }
   // 唤醒词有效且改了才重启；无效就保留原来的
