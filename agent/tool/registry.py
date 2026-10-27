@@ -41,6 +41,18 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "soulprout_info",
+            "description": (
+                "Return the detailed capability introduction of this Soulprout Agent. "
+                "Call when the user asks what you can do, requests a self-introduction, "
+                "or asks about features, strengths, or how to use you."
+            ),
+            "parameters": {"type": "object", "required": [], "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read",
             "description": (
                 "Read files within the workspace. Supported file types include docx/doc/pdf/pptx/xlsx/txt/md/"
@@ -676,6 +688,10 @@ TOOL_SCHEMAS = [
                 "- module=compress: immediately perform one context compression\n"
                 "- module=now: get the current Beijing time (Asia/Shanghai, UTC+8). "
                 "Use this before creating or interpreting scheduled tasks, reminders, or any time-sensitive request.\n"
+                "- module=silent: stay silent and end this turn with no user-facing reply. Use when (1) the user "
+                "explicitly asks you not to reply / keep quiet, or (2) the input is garbled, incomplete, or clearly "
+                "not addressed to you (e.g. the user seems to be talking to someone else). Call this alone—"
+                "do not produce any assistant text in the same turn.\n"
                 "- module=research_start: turn ON Deep Research for complex, hard problems. Returns the full Deep Research "
                 "protocol (write goal & acceptance criteria to RESEARCH.md -> explore & solve -> mandatory verification by the "
                 "soulprout_research_reviewer sub-agent -> revise until it is as good as it can be). While ON, the turn cannot end with a plain answer.\n"
@@ -688,8 +704,8 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "module": {
                         "type": "string",
-                        "enum": ["clear", "compress", "now", "research_start", "research_end"],
-                        "description": "clear / compress / now (current Beijing time) / research_start / research_end",
+                        "enum": ["clear", "compress", "now", "silent", "research_start", "research_end"],
+                        "description": "clear / compress / now (current Beijing time) / silent (no reply) / research_start / research_end",
                     }
                 },
             },

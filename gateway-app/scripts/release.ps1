@@ -54,8 +54,8 @@ if (-not $NoUpload) {
         $template = [ordered]@{
             accessKeyId     = ''
             accessKeySecret = ''
-            bucket          = 'soulprout-gateway-app'
-            region          = 'cn-hongkong'
+            bucket          = 'soulprout'
+            region          = 'cn-hangzhou'
         }
         [System.IO.File]::WriteAllText(
             $ConfigPath,

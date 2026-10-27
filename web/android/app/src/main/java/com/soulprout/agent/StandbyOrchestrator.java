@@ -96,6 +96,13 @@ final class StandbyOrchestrator {
 
     void setContinuous(boolean continuous) {
         this.continuous = continuous;
+        // 关掉连续对话时：若正在「免唤醒聆听」，立刻回到待命，避免未唤醒仍继续收音发消息
+        if (!continuous && "listening".equals(phase)) {
+            host.closeAsr();
+            host.endCapture();
+            setPhase("standby");
+            host.emitPipeline(phase, "standby", "");
+        }
     }
 
     void updateUrls(String asrUrl, String ttsUrl, String chatUrl, String token) {
@@ -137,8 +144,10 @@ final class StandbyOrchestrator {
     /** 识别断句：交给 Agent */
     void onAsrFinal(String text) {
         if (!enabled) return;
+        // 待命/关闭态即使有残留识别结果也不能发消息，必须先唤醒
         if (!"listening".equals(phase) && !"thinking".equals(phase) && !"speaking".equals(phase)) {
-            // 待命态不应收到 final；容错：当作新一轮
+            Log.i(TAG, "pipeline ignore final in phase=" + phase + " 「" + text + "」");
+            return;
         }
         if (SentenceSplitter.validChars(text) < MIN_VALID_CHARS) {
             Log.i(TAG, "pipeline ignore short 「" + text + "」");

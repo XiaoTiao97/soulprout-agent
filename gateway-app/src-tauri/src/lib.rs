@@ -147,7 +147,7 @@ fn cleanup_children(
 /// 版本清单地址，发版脚本会往这个位置覆盖上传。
 #[cfg(not(debug_assertions))]
 const UPDATE_MANIFEST_URL: &str =
-    "https://soulprout-gateway-app.oss-cn-hongkong.aliyuncs.com/updates/version.json";
+    "https://oss.soulprout.com/updates/version.json";
 
 /// 启动后延迟一会儿再查更新，先把窗口和 gateway 让给用户。
 #[cfg(not(debug_assertions))]

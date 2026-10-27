@@ -87,6 +87,7 @@ class Chat:
         self.picture_base64_result = []
         self.pause_for_user_feedback = False
         self.stop_after_conversation_clear = False
+        self.stop_after_silent = False
         self.cancel_cleanup = False
         self._partial_text = ""
         self._partial_reasoning = ""
@@ -116,6 +117,7 @@ class Chat:
             "create_memory",
             "edit_memory",
             "get_action_blueprint",
+            "soulprout_info",
             "ask_user_feedback",
             "conversation_option",
         ]
@@ -980,6 +982,10 @@ class Chat:
                     f"(Asia/Shanghai, UTC+8)"
                 )
                 reload = False
+            elif module == "silent":
+                content = "已选择静默，本轮不回复用户。"
+                reload = False
+                self.stop_after_silent = True
             elif module == "research_start":
                 content = self._research_start()
                 reload = False
@@ -987,7 +993,7 @@ class Chat:
                 content = self._research_end()
                 reload = False
             else:
-                content = "错误：module 必须为 clear、compress、now、research_start 或 research_end"
+                content = "错误：module 必须为 clear、compress、now、silent、research_start 或 research_end"
                 reload = False
 
             self.messages.append({"role": "tool", "content": content, "tool_call_id": tool_call_id})
@@ -1389,6 +1395,9 @@ class Chat:
             if self.stop_after_conversation_clear:
                 self.stop_after_conversation_clear = False
                 finish = True
+            elif self.stop_after_silent:
+                self.stop_after_silent = False
+                finish = True
             elif self.pause_for_user_feedback:
                 self.pause_for_user_feedback = False
                 finish = True
@@ -1615,6 +1624,9 @@ class Chat:
 
             if self.stop_after_conversation_clear:
                 self.stop_after_conversation_clear = False
+                finish = True
+            elif self.stop_after_silent:
+                self.stop_after_silent = False
                 finish = True
             elif self.pause_for_user_feedback:
                 self.pause_for_user_feedback = False

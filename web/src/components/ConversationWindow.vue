@@ -249,13 +249,13 @@
                 </svg>
                 <span>{{ t('conversation.personalize') }}</span>
               </button>
-              <button type="button" class="user-menu-item" @click="downloadGatewayConnect">
+              <button type="button" class="user-menu-item" @click="openDownloadClients">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <path d="M12 3v12" stroke-linecap="round" />
                   <path d="M8 11l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
                   <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" />
                 </svg>
-                <span>{{ t('conversation.gatewayConnect') }}</span>
+                <span>{{ t('conversation.downloadClients') }}</span>
               </button>
               <button type="button" class="user-menu-item" @click="toggleLocale">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -275,6 +275,7 @@
           </div>
         </div>
         <PersonalizeDialog v-model="showPersonalize" @saved="(p) => emit('usernameUpdated', p.username)" />
+        <DownloadClientsDialog v-model="showDownloadClients" />
     </div>
 </template>
 
@@ -283,19 +284,20 @@ import { ref, computed, onMounted, onUnmounted, nextTick, toRefs, type Component
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
-import { downloadGatewayClient } from '@/constants/gateway';
 import PersonalizeDialog from './PersonalizeDialog.vue';
+import DownloadClientsDialog from './DownloadClientsDialog.vue';
 import type { ConversationBase, ChatRequest } from '../types/interface';
 
 const showPersonalize = ref(false);
+const showDownloadClients = ref(false);
 const openPersonalize = () => {
   showMenu.value = false;
   showPersonalize.value = true;
 };
 
-const downloadGatewayConnect = () => {
+const openDownloadClients = () => {
   showMenu.value = false;
-  downloadGatewayClient();
+  showDownloadClients.value = true;
 };
 
 const { t, locale } = useI18n();

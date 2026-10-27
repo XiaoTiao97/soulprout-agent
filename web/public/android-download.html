@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <title>下载 Soulprout 安卓版</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #111827;
+      --muted: #6b7280;
+      --line: #eef0f2;
+      --bg: #f7f7f8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px;
+    }
+    .card {
+      width: min(400px, 100%);
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.06);
+      padding: 36px 28px 28px;
+      text-align: center;
+    }
+    .mark {
+      display: inline-block;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+    .hint {
+      display: none;
+      margin-top: 22px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: #f3f4f6;
+      font-size: 13px;
+      color: var(--ink);
+      text-align: left;
+      line-height: 1.6;
+    }
+    .hint strong { font-weight: 600; }
+    .btn {
+      display: none;
+      margin-top: 22px;
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      background: #111827;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn:active { opacity: 0.88; }
+    .wechat .hint { display: block; }
+    .browser .btn { display: inline-block; }
+  </style>
+</head>
+<body>
+  <main class="card" id="root">
+    <div class="mark">Soulprout</div>
+    <h1 id="title">正在准备下载</h1>
+    <p id="desc">Soulprout 安卓安装包</p>
+    <div class="hint" id="hint">
+      <strong>请在浏览器中打开</strong><br />
+      点击右上角 ···，选择「在浏览器中打开」，即可自动开始下载安装包。
+    </div>
+    <a class="btn" id="btn" href="#">重新下载</a>
+  </main>
+  <script>
+    (function () {
+      var APK_URL = 'https://oss.soulprout.com/android/Soulprout.apk'
+      var root = document.getElementById('root')
+      var title = document.getElementById('title')
+      var desc = document.getElementById('desc')
+      var btn = document.getElementById('btn')
+      var ua = navigator.userAgent || ''
+      var isWeChat = /MicroMessenger/i.test(ua)
+
+      btn.href = APK_URL
+
+      if (isWeChat) {
+        root.classList.add('wechat')
+        title.textContent = '在浏览器中打开'
+        desc.textContent = '微信内无法直接安装 APK，请用系统浏览器打开本页。'
+        return
+      }
+
+      root.classList.add('browser')
+      title.textContent = '开始下载'
+      desc.textContent = '若未自动开始，请点击下方按钮。'
+      // 稍延迟，避免部分浏览器拦截同步导航
+      setTimeout(function () {
+        window.location.href = APK_URL
+      }, 120)
+    })()
+  </script>
+</body>
+</html>

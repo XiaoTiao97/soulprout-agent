@@ -253,13 +253,8 @@ const cfg = reactive(
 if (cfg.voice !== 'female' && cfg.voice !== 'male') cfg.voice = 'female'
 // 旧版本默认写死的「你好小芽」不是用户主动设置的，迁移成「跟随默认」
 if (cfg.word === '你好小芽') cfg.word = ''
-// 连续对话的默认值改成了开启。已经保存过设置的手机里它还是旧的关闭，这里一次性迁移过来；
-// 之后用户自己在设置里关掉就会保持关闭。
-const CONT_MIGRATED_KEY = 'yavis_cont_default_on'
-if (!localStorage.getItem(CONT_MIGRATED_KEY)) {
-  cfg.continuous = true
-  localStorage.setItem(CONT_MIGRATED_KEY, '1')
-}
+// 连续对话：新安装默认开启；已保存的用户选择必须保留，不能再强制改成开启。
+cfg.continuous = !!cfg.continuous
 const manual = reactive(loadJson(MANUAL_KEY, { autostart: false, lock: false }))
 watch(cfg, () => localStorage.setItem(CFG_KEY, JSON.stringify(cfg)), { deep: true })
 watch(manual, () => localStorage.setItem(MANUAL_KEY, JSON.stringify(manual)), { deep: true })

@@ -36,7 +36,7 @@ $ReleaseDir  = Join-Path $AppDir 'release'
 $UpdateBaseUrl = if ($env:GATEWAY_UPDATE_BASE_URL) {
     $env:GATEWAY_UPDATE_BASE_URL.TrimEnd('/')
 } else {
-    'https://soulprout-gateway-app.oss-cn-hongkong.aliyuncs.com'
+    'https://oss.soulprout.com'
 }
 
 Info "Project root: $ProjectRoot"

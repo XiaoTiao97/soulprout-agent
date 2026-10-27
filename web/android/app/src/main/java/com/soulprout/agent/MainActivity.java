@@ -11,5 +11,13 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WakeWordPlugin.class);
         registerPlugin(StandbyPlugin.class);
         super.onCreate(savedInstanceState);
+        ForceUpdateChecker.check(this);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 从「安装未知应用」设置返回后继续强制更新下载
+        ForceUpdateChecker.onResume(this);
     }
 }

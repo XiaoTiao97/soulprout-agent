@@ -152,6 +152,12 @@ class SoulproutToolFunction:
             "If you see this message, the call was routed incorrectly."
         )
 
+    async def soulprout_info(self, conversation_id=None):
+        """Return the canonical Soulprout Agent capability / product introduction."""
+        from agent.services import prompt as prompt_module
+
+        return prompt_module.SOULPROUT_INFO_TEXT
+
     # NOTE: read 的分页读取（offset/limit）参考自 hermes 项目（claude-engineer / hermes）
     # 的 read 工具实现：纯文本/源代码文件按行切片返回，二进制/富文本文件（pdf/doc(x)/
     # ppt(x)/xlsx）走整体解析，offset/limit 不生效。

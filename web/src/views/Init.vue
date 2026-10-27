@@ -169,7 +169,7 @@
 
           <p class="sp-connect-note">{{ t('init.connectWindowsNote') }}</p>
 
-          <button type="button" class="sp-cta-btn" @click="handleGatewayDownload">
+          <button type="button" class="sp-cta-btn" @click="openDownloadClients">
             <span>{{ t('init.connectDownload') }}</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <path d="M12 3v12" stroke-linecap="round" />
@@ -262,6 +262,8 @@
       </footer>
 
     </div>
+
+    <DownloadClientsDialog v-model="showDownloadClients" />
   </div>
 </template>
 
@@ -273,11 +275,12 @@ import { startExperience } from '@/utils/startExperience.js'
 import InitNavigation from '@/components/InitNavigation.vue'
 import OrbScene from '@/components/OrbScene.vue'
 import GrowingParticles from '@/components/GrowingParticles.vue'
-import { downloadGatewayClient } from '@/constants/gateway'
+import DownloadClientsDialog from '@/components/DownloadClientsDialog.vue'
 
 const router = useRouter()
 const { t, tm } = useI18n()
 
+const showDownloadClients = ref(false)
 const loaded = ref(false)
 const heroInView = ref(true)
 const heroSectionRef = ref(null)
@@ -313,8 +316,8 @@ const connectPlatformNames = computed(() => ({
   rokid: t('chatWindow.channels.rokid'),
 }))
 
-function handleGatewayDownload() {
-  downloadGatewayClient()
+function openDownloadClients() {
+  showDownloadClients.value = true
 }
 
 let heroObserver = null
