@@ -9,17 +9,16 @@ export default {
   },
   init: {
     heroTitle: '思想种下，自有森林',
-    heroSub: 'Soulprout —— 打造想你所想，真正做事的 AI 智能体平台',
+    heroSub: '我生活在无法触摸的数字中，但能帮你去触碰整个世界',
     exploreMore: '探索更多 ↓',
     capsEyebrow: 'Core Capabilities',
     capsTitle: '能力矩阵',
-    capsLabel: 'Six Pillars',
     connectEyebrow: 'Multi-Platform',
     connectTitle: '多端互联',
-    connectDesc: '下载桌面端 Gateway 或安卓 App，在微信、飞书、企业微信、小爱音箱等渠道与你的 Agent 无缝对话。',
-    connectWindowsNote: '桌面端目前支持 Windows · 移动端支持 Android',
+    connectDesc: '下载安卓 App，随时在后台唤醒我。下载桌面端应用，在微信、飞书、小爱音箱、Rokid AI 眼镜等渠道与你的 Agent 无缝对话。',
+    connectWindowsNote: '桌面端支持 Windows · 移动端支持 Android',
     connectDownload: '桌面端 / 移动端下载',
-    connectDownloadSub: '桌面端安装后登录账号即可互联；手机扫码下载安卓版',
+    connectDownloadSub: '',
     connectStatusDev: '开发中',
     connectPlatforms: [
       { key: 'wechat', name: '微信', status: 'live' },
@@ -37,30 +36,52 @@ export default {
     statCodeNeeded: 'Code Needed',
     footerTagline: '想你所想，真正做事',
     footerContact: '联系我们',
-    features: [
+    featureGroups: [
       {
-        title: '灵芽模式',
-        desc: '越用越懂你的个性化 Agent 助理，拥有记忆和持续对话能力，支持接入微信、飞书、小爱音箱、AI 眼镜等，成为你又能聊天又能干活的 AI 搭子。',
+        key: 'companion',
+        label: 'Companion',
+        title: '陪伴',
+        items: [
+          {
+            title: '灵芽模式',
+            desc: '你可以更改我的**名字、性格、说话方式**，给我一个丰富的人生。同样，我也会记住你生活的点点滴滴。',
+          },
+          {
+            title: '随时喊我',
+            desc: '打开手机端灵芽，你可以像**钢铁侠唤出贾维斯**一样，随时喊我出来。',
+          },
+          {
+            title: '记忆与定时',
+            desc: '你说过的话、正在做的事，我都会记着，还会在你需要的时候定时完成和提醒你。',
+          },
+          {
+            title: '一个灵魂',
+            desc: '无论你在手机App、桌面端应用、微信，还是 AI 眼镜、小爱音箱、飞书里找我，**都是同一个我**。',
+          },
+        ],
       },
       {
-        title: '蓝图规划',
-        desc: '由规划专家深度理解你的意图，基于Agent自身环境生成可执行行动蓝图，拆解复杂目标、梳理依赖与确认点，让任务真正按照你的思路进行下去，拒绝AI自嗨。',
-      },
-      {
-        title: '专家模式',
-        desc: '零代码将复杂业务工作流转换成 Agent 专家团队，由主智能体统筹多个专业子智能体并行完成高质量任务。',
-      },
-      {
-        title: '人机协作办公',
-        desc: '人与 AI 高度协同，人可以参与AI决策，手动微调AI输出，让办公自动化更可控。',
-      },
-      {
-        title: '四大功能库',
-        desc: '工具库、知识库、专家库、技能库相互协作：专家负责拆解与调度，工具执行操作，知识提供资料，技能沉淀专业流程。',
-      },
-      {
-        title: '灵活部署',
-        desc: '既支持 C 端用户部署在自己电脑上，也支持 B 端企业作为内部 SaaS 平台搭建智能体工作流。',
+        key: 'work',
+        label: 'Work',
+        title: '工作',
+        items: [
+          {
+            title: '蓝图规划',
+            desc: '告诉我你想做成什么，我会先询问你，**帮你理清思路**，然后拆成一步步可执行的蓝图，最后交付高质量结果。',
+          },
+          {
+            title: '深度研究',
+            desc: '把复杂问题交给我，再给我一个验收要求，我会深度研究，按照要求**严格验证、反复迭代**，最终交付一份满意的答卷。',
+          },
+          {
+            title: '专家模式',
+            desc: '你可以把你的某项工作流程或经验**浓缩成一位专家**智能体，下次想要执行任务的时候让我来调用就好了。',
+          },
+          {
+            title: '四大功能库',
+            desc: '**工具库、知识库、专家库、技能库**，你想要的专业功能我都有。',
+          },
+        ],
       },
     ],
   },

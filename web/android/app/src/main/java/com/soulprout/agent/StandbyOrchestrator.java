@@ -4,6 +4,9 @@ import android.util.Log;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -49,6 +52,15 @@ final class StandbyOrchestrator {
         t.setDaemon(true);
         return t;
     });
+
+    private static final int MAX_ASR_REOPEN = 6;
+    private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "standby-timer");
+        t.setDaemon(true);
+        return t;
+    });
+    private final AtomicInteger asrReopenCount = new AtomicInteger(0);
+    private final AtomicBoolean asrReopenPending = new AtomicBoolean(false);
 
     private volatile boolean enabled = false;
     private volatile boolean continuous = true;
@@ -96,12 +108,14 @@ final class StandbyOrchestrator {
 
     void setContinuous(boolean continuous) {
         this.continuous = continuous;
-        // 关掉连续对话时：若正在「免唤醒聆听」，立刻回到待命，避免未唤醒仍继续收音发消息
-        if (!continuous && "listening".equals(phase)) {
+        if (!continuous) {
+            // 非连续：立刻停收音，避免思考/播报中被环境声或残留识别打断
             host.closeAsr();
             host.endCapture();
-            setPhase("standby");
-            host.emitPipeline(phase, "standby", "");
+            if ("listening".equals(phase)) {
+                setPhase("standby");
+                host.emitPipeline(phase, "standby", "");
+            }
         }
     }
 
@@ -113,7 +127,7 @@ final class StandbyOrchestrator {
         this.enabled = !this.asrUrl.isEmpty() && !this.ttsUrl.isEmpty() && !this.chatUrl.isEmpty();
     }
 
-    /** 命中唤醒词：取消当前轮，进入聆听 */
+    /** 命中唤醒词：随时可打断当前轮（含非连续对话的思考/播报），进入聆听 */
     void onWake(String keyword) {
         if (!enabled) return;
         Log.i(TAG, "pipeline wake 「" + keyword + "」");
@@ -124,10 +138,11 @@ final class StandbyOrchestrator {
         host.emitPipeline(phase, "wake", keyword);
     }
 
-    /** 识别 partial：思考/播报中听到人声则打断 */
+    /** 识别 partial：连续对话时，思考/播报中听到人声则打断 */
     void onAsrPartial(String text) {
         if (!enabled) return;
         if ("thinking".equals(phase) || "speaking".equals(phase)) {
+            if (!continuous) return;
             if (SentenceSplitter.validChars(text) >= MIN_VALID_CHARS) {
                 Log.i(TAG, "pipeline barge-in 「" + text + "」");
                 cancelTurn();
@@ -149,16 +164,41 @@ final class StandbyOrchestrator {
             Log.i(TAG, "pipeline ignore final in phase=" + phase + " 「" + text + "」");
             return;
         }
+        // 非连续：思考/播报中不再接收新的断句
+        if (!continuous && ("thinking".equals(phase) || "speaking".equals(phase))) {
+            Log.i(TAG, "pipeline ignore final during turn (non-continuous) 「" + text + "」");
+            return;
+        }
         if (SentenceSplitter.validChars(text) < MIN_VALID_CHARS) {
             Log.i(TAG, "pipeline ignore short 「" + text + "」");
             return;
         }
-        // 思考/播报中的 final：先打断再开新一轮
+        // 连续对话：思考/播报中的 final 先打断再开新一轮
         if ("thinking".equals(phase) || "speaking".equals(phase)) {
             cancelTurn();
         }
         Log.i(TAG, "pipeline final → agent 「" + text + "」");
         startAgentTurn(text);
+    }
+
+    /**
+     * 识别通道被服务端关掉（断句后 / 静默超时）。连续对话在思考、播报期间必须保持收音，
+     * 否则说话打不断。稍等片刻重开，并限制次数避免网络异常时死循环。
+     */
+    void onAsrClosed() {
+        if (!enabled || !continuous) return;
+        if (!"thinking".equals(phase) && !"speaking".equals(phase)) return;
+        if (asrReopenCount.get() >= MAX_ASR_REOPEN) return;
+        if (!asrReopenPending.compareAndSet(false, true)) return;
+        asrReopenCount.incrementAndGet();
+        final int myTurn = turnId.get();
+        timer.schedule(() -> {
+            asrReopenPending.set(false);
+            if (!enabled || !continuous || myTurn != turnId.get()) return;
+            if (!"thinking".equals(phase) && !"speaking".equals(phase)) return;
+            Log.i(TAG, "pipeline reopen asr during turn for barge-in");
+            host.openAsr();
+        }, 600, TimeUnit.MILLISECONDS);
     }
 
     void onPlayEnd(boolean interrupted) {
@@ -213,6 +253,18 @@ final class StandbyOrchestrator {
     private void startAgentTurn(String text) {
         final int myTurn = turnId.incrementAndGet();
         setPhase("thinking");
+        asrReopenCount.set(0);
+        asrReopenPending.set(false);
+        if (!continuous) {
+            // 非连续：进入思考后立刻关识别/采集，避免思考与播报过程中继续收音导致打断
+            // （唤醒词仍由原生唤醒引擎监听，可随时打断）
+            host.closeAsr();
+            host.endCapture();
+        } else {
+            // 连续：断句后识别通道多半已被服务端结束，重开一路新的，保证思考/播报时能语音打断
+            host.beginCapture();
+            host.openAsr();
+        }
         host.thinkStart();
         host.emitPipeline(phase, "sent", text);
         playStarted = false;

@@ -10,7 +10,7 @@ import * as native from './standbyNative'
 
 const DEFAULT_OPTIONS = {
   source: 'auto',
-  endWindowMs: 500,
+  endWindowMs: 1300,
   continuous: true,
   bargeIn: true,
   speechRate: 0,

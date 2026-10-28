@@ -1068,6 +1068,12 @@ export function useChatSession() {
     detachRunsStream()
   })
 
+  async function refreshHistory() {
+    await fetchConversations()
+    const cid = chat_request.value.conversation_id || currentUserId.value
+    if (cid) await refreshMessagesFromServer(cid)
+  }
+
   return {
     conversation_list,
     taskConversationList,
@@ -1102,5 +1108,6 @@ export function useChatSession() {
     deleteConversation,
     updateConversationAbstract,
     openRunningConversation,
+    refreshHistory,
   }
 }

@@ -380,10 +380,12 @@ public class WakeWordPlugin extends Plugin {
 
             @Override
             public void onEnd() {
+                notifyOrchestratorAsrClosed();
             }
 
             @Override
             public void onClose() {
+                notifyOrchestratorAsrClosed();
             }
         });
         synchronized (asrLock) {
@@ -391,6 +393,15 @@ public class WakeWordPlugin extends Plugin {
         }
         session.connect(url);
         Log.i(TAG, "asr session opening");
+    }
+
+    private void notifyOrchestratorAsrClosed() {
+        if (!orchestrator.isEnabled()) return;
+        try {
+            orchestrator.onAsrClosed();
+        } catch (Throwable e) {
+            Log.w(TAG, "orchestrator onAsrClosed", e);
+        }
     }
 
     private void closeAsrSession() {

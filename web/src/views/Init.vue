@@ -54,14 +54,12 @@
 
       <!-- ── Core Capabilities ── -->
       <section id="capabilities" class="sp-caps-section">
-        <!-- soft radial bg -->
         <div class="sp-caps-bg-radial" />
         <div class="sp-caps-ring sp-caps-ring-lg" />
         <div class="sp-caps-ring sp-caps-ring-sm" />
 
         <div class="sp-caps-inner">
-          <!-- header -->
-          <div class="sp-section-header">
+          <div class="sp-section-header sp-caps-header">
             <p class="sp-section-eyebrow">{{ t('init.capsEyebrow') }}</p>
             <h2 class="sp-section-title">
               <span class="sp-reveal-wrap" ref="capTitleRef">
@@ -70,42 +68,32 @@
             </h2>
           </div>
 
-          <!-- panel -->
-          <div class="sp-caps-panel">
-            <div class="sp-caps-panel-border" />
-            <div class="sp-caps-panel-inner">
-              <div class="sp-caps-top-line" />
-              <div class="sp-caps-grid">
-                <div
-                  v-for="(f, i) in features"
-                  :key="i"
-                  class="sp-cap-card"
-                  :class="[
-                    i % 3 === 1 ? 'sp-cap-card--mid' : '',
-                    i < 3 ? 'sp-cap-card--top' : ''
-                  ]"
-                >
-                  <div class="sp-cap-card-hover-bg" />
-                  <div class="sp-cap-num-row">
-                    <span class="sp-cap-num">{{ f.num }}</span>
-                    <span class="sp-cap-num-line" />
-                  </div>
-                  <h3 class="sp-cap-title">{{ f.title }}</h3>
-                  <p class="sp-cap-desc">{{ f.desc }}</p>
-                  <div class="sp-cap-foot">
-                    <span class="sp-cap-dot" />
-                    <span class="sp-cap-foot-line" />
-                  </div>
-                </div>
-              </div>
-              <div class="sp-caps-bottom-line" />
-            </div>
-          </div>
+          <div class="sp-caps-columns">
+            <header
+              v-for="(group, gi) in featureGroups"
+              :key="'head-' + group.key"
+              class="sp-caps-group-head"
+              :class="gi === 0 ? 'is-left' : 'is-right'"
+            >
+              <span class="sp-caps-group-label">{{ group.label }}</span>
+              <h3 class="sp-caps-group-title">{{ group.title }}</h3>
+              <span class="sp-caps-group-rule" />
+            </header>
 
-          <div class="sp-caps-label-row">
-            <span class="sp-caps-label-dash" />
-            <span class="sp-caps-label-text">{{ t('init.capsLabel') }}</span>
-            <span class="sp-caps-label-dash" />
+            <template v-for="(row, ri) in capRows" :key="'row-' + ri">
+              <div
+                v-for="(f, gi) in row"
+                :key="ri + '-' + gi"
+                class="sp-cap-item"
+                :class="gi === 0 ? 'is-left' : 'is-right'"
+                :style="{ transitionDelay: (ri * 70 + gi * 40) + 'ms' }"
+              >
+                <template v-if="f">
+                  <h4 class="sp-cap-title">{{ f.title }}</h4>
+                  <p class="sp-cap-desc" v-html="f.descHtml"></p>
+                </template>
+              </div>
+            </template>
           </div>
         </div>
       </section>
@@ -290,14 +278,34 @@ const connectTitleRef = ref(null)
 const openTitleRef = ref(null)
 const loadingChars = 'LOADING_SOULPROUT...'.split('')
 
-const featureNums = ['01', '02', '03', '04', '05', '06']
-const features = computed(() => {
-  const items = tm('init.features')
-  return featureNums.map((num, i) => ({
-    num,
-    title: items[i]?.title ?? '',
-    desc: items[i]?.desc ?? '',
+const featureGroups = computed(() => {
+  const groups = tm('init.featureGroups')
+  const list = Array.isArray(groups) ? groups : []
+  return list.map((g) => ({
+    key: g.key,
+    label: g.label ?? '',
+    title: g.title,
+    items: (g.items || []).map((item) => ({
+      title: item.title ?? '',
+      descHtml: renderBold(item.desc ?? ''),
+    })),
   }))
+})
+
+// 文案中用 **加粗** 标记强调；先转义 HTML，再把标记替换为 <strong>，避免注入
+function renderBold(text) {
+  const escaped = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+}
+
+// 按序号把左右两栏的条目配对成"行"，保证同一行在横向上对齐
+const capRows = computed(() => {
+  const groups = featureGroups.value
+  const rowCount = Math.max(0, ...groups.map((g) => g.items.length))
+  return Array.from({ length: rowCount }, (_, i) => groups.map((g) => g.items[i] ?? null))
 })
 
 const connectPlatforms = [
@@ -361,7 +369,7 @@ onMounted(() => {
     },
     { threshold: 0.05, rootMargin: '0px 0px -60px 0px' }
   )
-  document.querySelectorAll('.sp-cap-card').forEach(el => cardObs.observe(el))
+  document.querySelectorAll('.sp-cap-item').forEach(el => cardObs.observe(el))
 })
 
 onUnmounted(() => {
@@ -576,171 +584,98 @@ const scrollTo = (id) => {
 .sp-caps-inner {
   position: relative;
   z-index: 10;
-  max-width: 1000px;
+  max-width: 1080px;
   margin: 0 auto;
 }
 
-/* Panel */
-.sp-caps-panel {
-  position: relative;
-}
-.sp-caps-panel-border {
-  position: absolute;
-  inset: -1px;
-  border-radius: 1.5rem;
-  pointer-events: none;
-  background: linear-gradient(135deg,
-    rgba(30,180,140,0.08) 0%,
-    rgba(30,180,140,0.02) 50%,
-    rgba(30,180,140,0.06) 100%);
-}
-.sp-caps-panel-inner {
-  position: relative;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(24px);
-  border: 1px solid rgba(15, 15, 15, 0.06);
-  border-radius: 1.5rem;
-  overflow: hidden;
-  box-shadow: 0 0 80px rgba(30, 180, 140, 0.04);
-}
-.sp-caps-top-line,
-.sp-caps-bottom-line {
-  height: 1px;
-  width: 100%;
-  background: linear-gradient(to right, transparent, rgba(30,180,140,0.2), transparent);
+/* 标题沿用公共的居中、大字号样式（与「多端互联」一致），仅拉开与下方内容的距离 */
+.sp-caps-header {
+  margin-bottom: 6rem;
 }
 
-/* 3-col grid */
-.sp-caps-grid {
+/* 共用一个网格：左右同序号的条目落在同一行，横向天然对齐；中间一条细竖线 */
+.sp-caps-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
+}
+.sp-caps-columns > .is-left {
+  grid-column: 1;
+  padding-right: 4rem;
+}
+.sp-caps-columns > .is-right {
+  grid-column: 2;
+  padding-left: 4rem;
+  border-left: 1px solid rgba(15, 15, 15, 0.1);
+}
+.sp-caps-columns > * {
+  min-width: 0;
 }
 
-/* Card */
-.sp-cap-card {
-  position: relative;
-  padding: 2.5rem;
-  transition: background 0.5s;
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1),
-              transform 0.7s cubic-bezier(0.25, 1, 0.5, 1),
-              background 0.5s;
+.sp-caps-group-head {
+  padding-bottom: 1.5rem;
 }
-.sp-cap-card.is-visible {
+.sp-caps-group-label {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #1eb48c;
+}
+.sp-caps-group-title {
+  margin: 0;
+  font-size: clamp(2.25rem, 4vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f0f0f;
+  line-height: 1.05;
+}
+.sp-caps-group-rule {
+  display: block;
+  width: 2rem;
+  height: 2px;
+  margin-top: 1.5rem;
+  background: #1eb48c;
+  border-radius: 2px;
+}
+
+.sp-cap-item {
+  box-sizing: border-box;
+  padding-top: 1.6rem;
+  padding-bottom: 1.6rem;
+  border-top: 1px solid rgba(15, 15, 15, 0.08);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1),
+              transform 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.sp-cap-item.is-visible {
   opacity: 1;
   transform: translateY(0);
 }
-.sp-cap-card:nth-child(1) { transition-delay: 0ms; }
-.sp-cap-card:nth-child(2) { transition-delay: 80ms; }
-.sp-cap-card:nth-child(3) { transition-delay: 160ms; }
-.sp-cap-card:nth-child(4) { transition-delay: 240ms; }
-.sp-cap-card:nth-child(5) { transition-delay: 320ms; }
-.sp-cap-card:nth-child(6) { transition-delay: 400ms; }
-.sp-cap-card:hover { background: rgba(248, 250, 250, 0.8); }
-
-/* Top row gets bottom border, middle column gets left/right borders */
-.sp-cap-card--top {
-  border-bottom: 1px solid rgba(15, 15, 15, 0.05);
-}
-.sp-cap-card--mid {
-  border-left: 1px solid rgba(15, 15, 15, 0.05);
-  border-right: 1px solid rgba(15, 15, 15, 0.05);
-}
-
-.sp-cap-card-hover-bg {
-  position: absolute;
-  top: 0; right: 0;
-  width: 8rem; height: 8rem;
-  background: linear-gradient(to bottom left, rgba(30,180,140,0.03), transparent);
-  opacity: 0;
-  transition: opacity 0.7s;
-  pointer-events: none;
-}
-.sp-cap-card:hover .sp-cap-card-hover-bg { opacity: 1; }
-
-.sp-cap-num-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-.sp-cap-num {
-  font-size: 10px;
-  font-family: 'Courier New', monospace;
-  color: rgba(30, 180, 140, 0.4);
-  letter-spacing: 0.2em;
-  flex-shrink: 0;
-}
-.sp-cap-num-line {
-  flex: 1;
-  height: 1px;
-  background: rgba(15, 15, 15, 0.04);
-  transition: background 0.5s;
-}
-.sp-cap-card:hover .sp-cap-num-line { background: rgba(30, 180, 140, 0.1); }
 
 .sp-cap-title {
-  font-size: 1.05rem;
+  margin: 0 0 0.55rem;
+  font-size: 1.15rem;
   font-weight: 600;
+  letter-spacing: 0;
   color: #0f0f0f;
-  letter-spacing: -0.01em;
-  margin: 0 0 0.75rem;
-  transition: color 0.5s;
+  line-height: 1.35;
+  transition: color 0.3s;
 }
-.sp-cap-card:hover .sp-cap-title { color: #1eb48c; }
+.sp-cap-item:hover .sp-cap-title { color: #1eb48c; }
 
 .sp-cap-desc {
-  font-size: 0.875rem;
-  color: rgba(15, 15, 15, 0.35);
-  font-weight: 300;
-  line-height: 1.7;
   margin: 0;
-  transition: color 0.5s;
+  font-size: 0.975rem;
+  font-weight: 400;
+  line-height: 1.75;
+  color: rgba(15, 15, 15, 0.66);
 }
-.sp-cap-card:hover .sp-cap-desc { color: rgba(15, 15, 15, 0.5); }
-
-.sp-cap-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
-}
-.sp-cap-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: transparent;
-  transition: background 0.5s;
-  flex-shrink: 0;
-}
-.sp-cap-card:hover .sp-cap-dot { background: rgba(30, 180, 140, 0.4); }
-.sp-cap-foot-line {
-  flex: 1;
-  height: 1px;
-  background: rgba(15, 15, 15, 0.03);
-  transition: background 0.5s;
-}
-.sp-cap-card:hover .sp-cap-foot-line { background: rgba(30, 180, 140, 0.1); }
-
-/* label row */
-.sp-caps-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 3rem;
-}
-.sp-caps-label-dash {
-  width: 2rem;
-  height: 1px;
-  background: rgba(15, 15, 15, 0.08);
-}
-.sp-caps-label-text {
-  font-size: 10px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgba(15, 15, 15, 0.2);
+.sp-cap-desc :deep(strong) {
+  font-weight: 600;
+  color: #17a27d;
 }
 
 /* ─── Connectivity ─────────────────────── */
@@ -1034,16 +969,26 @@ const scrollTo = (id) => {
 }
 
 /* ─── Responsive ───────────────────────── */
-@media (max-width: 768px) {
-  .sp-caps-grid {
+@media (max-width: 900px) {
+  .sp-caps-columns {
     grid-template-columns: 1fr;
   }
-  .sp-cap-card--top {
-    border-bottom: 1px solid rgba(15, 15, 15, 0.05);
-  }
-  .sp-cap-card--mid {
+  .sp-caps-columns > .is-left,
+  .sp-caps-columns > .is-right {
+    grid-column: 1;
+    padding-left: 0;
+    padding-right: 0;
     border-left: none;
-    border-right: none;
+  }
+  /* 单列时仍按「陪伴 → 工作」的顺序排列 */
+  .sp-caps-columns > .sp-caps-group-head.is-left { order: 0; }
+  .sp-caps-columns > .sp-cap-item.is-left { order: 1; }
+  .sp-caps-columns > .sp-caps-group-head.is-right { order: 2; margin-top: 3.5rem; }
+  .sp-caps-columns > .sp-cap-item.is-right { order: 3; }
+}
+@media (max-width: 768px) {
+  .sp-cap-item {
+    padding: 1.35rem 0;
   }
   .sp-connect-list {
     padding: 1.5rem 1.25rem;

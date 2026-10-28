@@ -27,7 +27,7 @@ function absWs(path, params = {}) {
  */
 export async function configureNativePipeline(opts) {
   const token = getToken()
-  const endWindowMs = Number(opts.endWindowMs) || 500
+  const endWindowMs = Number(opts.endWindowMs) || 1300
   const speechRate = Number(opts.speechRate) || 0
   const voice = opts.voice || 'female'
   const ttsParams = { token, speech_rate: String(speechRate) }

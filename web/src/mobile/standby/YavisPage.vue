@@ -244,7 +244,7 @@ const cfg = reactive(
   loadJson(CFG_KEY, {
     // 空表示「跟随默认」：默认唤醒词是「你好」+ 智能体名字
     word: '',
-    endWindowMs: 500,
+    endWindowMs: 1300,
     continuous: true,
     voice: 'female',
     speechRate: 0,
@@ -255,6 +255,11 @@ if (cfg.voice !== 'female' && cfg.voice !== 'male') cfg.voice = 'female'
 if (cfg.word === '你好小芽') cfg.word = ''
 // 连续对话：新安装默认开启；已保存的用户选择必须保留，不能再强制改成开启。
 cfg.continuous = !!cfg.continuous
+// 断句静音：钳制到滑条范围；缺省或非法时用 1300
+{
+  const n = Number(cfg.endWindowMs)
+  cfg.endWindowMs = Number.isFinite(n) ? Math.min(1500, Math.max(300, Math.round(n / 100) * 100)) : 1300
+}
 const manual = reactive(loadJson(MANUAL_KEY, { autostart: false, lock: false }))
 watch(cfg, () => localStorage.setItem(CFG_KEY, JSON.stringify(cfg)), { deep: true })
 watch(manual, () => localStorage.setItem(MANUAL_KEY, JSON.stringify(manual)), { deep: true })
@@ -264,7 +269,7 @@ watch(
   () => [cfg.endWindowMs, cfg.continuous, cfg.voice, cfg.speechRate],
   () => {
     engine.updateOptions({
-      endWindowMs: Number(cfg.endWindowMs) || 500,
+      endWindowMs: Number(cfg.endWindowMs) || 1300,
       continuous: !!cfg.continuous,
       voice: cfg.voice,
       speechRate: Number(cfg.speechRate) || 0,
@@ -464,11 +469,12 @@ function buildOptions(userId) {
   return {
     keywords: buildKeywordLine(effectiveWord.value, { score: 1.5, threshold: 0.25 }),
     userId,
-    // 固定默认：连蓝牙用蓝牙否则手机麦克风；播报中可语音打断；唤醒后等 4 秒
+    // 固定默认：连蓝牙用蓝牙否则手机麦克风；始终开回声消除，播报中唤醒词随时可打断
+    // （非连续时原生层会关掉识别通道，所以只能靠唤醒词打断；连续时还可直接说话打断）
     source: 'auto',
     bargeIn: true,
     noSpeechSec: 4,
-    endWindowMs: Number(cfg.endWindowMs) || 500,
+    endWindowMs: Number(cfg.endWindowMs) || 1300,
     continuous: !!cfg.continuous,
     voice: cfg.voice,
     speechRate: Number(cfg.speechRate) || 0,

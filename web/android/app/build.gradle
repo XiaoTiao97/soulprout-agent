@@ -14,8 +14,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // 发版时同步递增；强制更新以 versionCode 为准（须与 OSS android/updates/version.json 一致）
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 4
+        versionName "1.0.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // 唤醒词（sherpa-onnx）原生库较大，只打真机常见架构；x86_64 供模拟器调试
         ndk {

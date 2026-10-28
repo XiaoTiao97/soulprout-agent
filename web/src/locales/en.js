@@ -9,11 +9,10 @@ export default {
   },
   init: {
     heroTitle: 'Sow an idea. Grow a forest.',
-    heroSub: 'Soulprout — thinks with you, works for you.',
+    heroSub: 'Untouchable, they let you touch the world.',
     exploreMore: 'Explore more ↓',
     capsEyebrow: 'Core Capabilities',
     capsTitle: 'Capability Matrix',
-    capsLabel: 'Six Pillars',
     connectEyebrow: 'Multi-Platform',
     connectTitle: 'Connect Everywhere',
     connectDesc: 'Download the desktop Gateway or Android app to chat with your agent on WeChat, Feishu, WeCom, XiaoAI speakers, and more.',
@@ -37,30 +36,52 @@ export default {
     statCodeNeeded: 'Code Needed',
     footerTagline: 'Think it. Do it.',
     footerContact: 'Contact Us',
-    features: [
+    featureGroups: [
       {
-        title: 'Soul Mode',
-        desc: 'A personalized agent that learns you over time, with memory and ongoing conversations. Connect WeChat, Feishu, XiaoAI speakers, AI glasses, and more — your AI companion for chat and action.',
+        key: 'companion',
+        label: 'With You',
+        title: 'Companion',
+        items: [
+          {
+            title: 'Soul Mode',
+            desc: 'You can change my name, personality, and way of speaking — give me a richer life. And I will remember the little pieces of yours.',
+          },
+          {
+            title: 'Call Me Anytime',
+            desc: 'Open Soul on your phone, and call me out anytime — like Tony Stark summoning Jarvis.',
+          },
+          {
+            title: 'Memory',
+            desc: 'What you said, what you care about, the small habits of your life — I keep them. Next time we meet, I still remember.',
+          },
+          {
+            title: 'Multi-Device Sync',
+            desc: 'Whether you find me on phone, desktop, WeChat, AI glasses, XiaoAI speakers, or Feishu — I am always the same me.',
+          },
+        ],
       },
       {
-        title: 'Blueprint Planning',
-        desc: 'Planning experts deeply understand your intent and generate executable action blueprints based on the agent environment — breaking down complex goals, dependencies, and checkpoints so tasks follow your plan, not AI hallucination.',
-      },
-      {
-        title: 'Expert Mode',
-        desc: 'Turn complex business workflows into agent expert teams with zero code. A lead agent coordinates specialized sub-agents to deliver high-quality results in parallel.',
-      },
-      {
-        title: 'Human-AI Collaboration',
-        desc: 'Humans and AI work closely together. You can join decisions and fine-tune outputs for controllable office automation.',
-      },
-      {
-        title: 'Four Libraries',
-        desc: 'Tools, knowledge, experts, and skills work together: experts orchestrate, tools execute, knowledge informs, and skills capture professional workflows.',
-      },
-      {
-        title: 'Flexible Deployment',
-        desc: 'Deploy on your own machine for personal use, or run as an internal SaaS platform for enterprise agent workflows.',
+        key: 'work',
+        label: 'At Work',
+        title: 'Work',
+        items: [
+          {
+            title: 'Blueprint Planning',
+            desc: 'Tell me what you want done. I will clarify your intent, break it into an executable blueprint, and move at your pace — no freelancing on my own.',
+          },
+          {
+            title: 'Deep Research',
+            desc: 'Hand me a hard question. I will search widely, weigh the evidence, and give you a clear, structured research answer.',
+          },
+          {
+            title: 'Expert Mode',
+            desc: 'No code needed — I turn complex workflows into an expert team. I lead; specialized sub-agents get it done together.',
+          },
+          {
+            title: 'Four Libraries',
+            desc: 'Tools, knowledge, experts, and skills are all in my hands. Need action? Tools. Facts? Knowledge. Specialists? Experts. Process? Skills.',
+          },
+        ],
       },
     ],
   },

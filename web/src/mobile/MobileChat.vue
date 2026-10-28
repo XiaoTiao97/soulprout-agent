@@ -169,8 +169,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { App } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import ChatWindow from '@/components/ChatWindow.vue'
 import MobileFiles from './MobileFiles.vue'
 import YavisPage from './standby/YavisPage.vue'
@@ -215,6 +217,7 @@ const {
   deleteConversation,
   updateConversationAbstract,
   openRunningConversation,
+  refreshHistory,
 } = session
 
 watch(unauthorized, (value) => {
@@ -558,9 +561,50 @@ async function closeYavis() {
   yavisMounted.value = false
   prepPromise = null
   yavisOpen.value = false
+  // 芽维斯对话走原生管线，退出后刷新侧边栏与当前会话，避免仍是进待命前的旧记录
+  refreshHistory().catch(() => {})
 }
 
+/** 安卓返回键 / 边缘滑动：优先关文件页、芽维斯、侧栏，而不是直接杀进程 */
+let backButtonHandle = null
+async function onAndroidBackButton() {
+  if (filesOpen.value) {
+    closeFiles()
+    return
+  }
+  if (yavisOpen.value) {
+    await closeYavis()
+    return
+  }
+  if (drawerOpen.value) {
+    drawerOpen.value = false
+    return
+  }
+  if (confirmDeleteId.value) {
+    confirmDeleteId.value = ''
+    return
+  }
+  try {
+    await App.exitApp()
+  } catch {
+    /* web 预览无此能力 */
+  }
+}
+
+onMounted(async () => {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    backButtonHandle = await App.addListener('backButton', () => {
+      onAndroidBackButton()
+    })
+  } catch (e) {
+    console.warn('[mobile] backButton listener failed', e)
+  }
+})
+
 onBeforeUnmount(() => {
+  backButtonHandle?.remove?.()
+  backButtonHandle = null
   runId += 1
   clearDissolveStyle()
 })
