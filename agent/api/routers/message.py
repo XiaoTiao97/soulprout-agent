@@ -4,6 +4,7 @@ from agent.services.auth import ensure_conversation_owner, require_user
 from agent.database.crud.message import get_message_by_conv_id
 from agent.api.models.message import ChatRequest, ChatResponse
 from agent.services.run_manager import run_manager
+from agent.services import desktop_bridge
 from fastapi.responses import StreamingResponse
 from agent.core.config import Config
 import asyncio
@@ -135,6 +136,10 @@ async def chat_stream(
     chat_request = ChatRequest(**chat_req_dict)
     chat_request.user_id = user.user_id
     try:
+        await desktop_bridge.prepare_request(chat_request, user.user_id)
+    except desktop_bridge.LocalWorkspaceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    try:
         from agent.database.crud.user_channel_binding import upsert_channel_binding
         await upsert_channel_binding(
             user.user_id,
@@ -169,7 +174,9 @@ async def chat_stream(
             except Exception as e:
                 print(f"文件保存失败 {file.filename}: {e}")
                 continue
-    chat_request.file_name_list = file_name_list
+    # 桌面端的本地会话由本机保存附件，只把文件名随请求带上来，这里不要把它覆盖成空列表
+    if file_name_list or not getattr(chat_request, "file_name_list", None):
+        chat_request.file_name_list = file_name_list
 
     try:
         handle = await run_manager.submit(chat_request)

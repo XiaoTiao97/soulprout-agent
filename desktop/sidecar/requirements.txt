@@ -1,0 +1,14 @@
+# 桌面端 sidecar 运行时依赖
+# 安装：pip install -r desktop/sidecar/requirements.txt
+
+# 内嵌的 gateway（微信 / 飞书等渠道）依赖，也带来 aiohttp
+-r ../../gateway/requirements.txt
+
+# 本机文档解析（读 PDF / Word / PPT / Excel；都是惰性导入，缺了只会让对应格式读不了）
+pdfminer.six
+python-docx
+python-pptx
+openpyxl
+
+# 仅构建时需要（不会打进最终包）
+# pyinstaller>=6.6.0

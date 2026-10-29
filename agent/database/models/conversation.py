@@ -19,6 +19,9 @@ class Conversation(Document):
     agent_id: Union[None, str, List] = Field(default=None, description="智能体id")
     agent_name: Union[None, str, List] = Field(default=None, description="智能体名称")
     memory_loaded: List[str] = Field(default_factory=list, description="当前会话已加载的记忆 name 列表，用于召回去重与 compress 后同步")
+    workspace: str = Field(default="cloud", description="工作区位置：cloud=云端服务器，local=用户电脑（桌面端新建），创建后不变")
+    device_id: Union[None, str] = Field(default=None, description="local 会话所属的桌面设备")
+    device_name: Union[None, str] = Field(default=None, description="local 会话所属设备的名称（仅展示）")
     create_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
 

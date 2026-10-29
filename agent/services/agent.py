@@ -26,6 +26,7 @@ from agent.database.crud.conversation import (
 from agent.database.models.user import UserInfo
 from agent.skill.manager import load_skill_to_workspace
 from agent.tool.tools import ToolExecutor
+from agent.services import desktop_bridge
 from agent.services import exception_handler, prompt
 from agent.services.blueprint import Blueprint
 from agent.services.compress import Compress
@@ -71,6 +72,11 @@ class Chat:
         self.runtime_mode = getattr(request, "runtime_mode", "main") or "main"
         self.source_channel = (getattr(request, "channel", None) or "").strip() or None
         self.source_chat_id = (getattr(request, "chat_id", None) or "").strip() or None
+        # 桌面端：新建会话的工作区标签（local / None=云端）。已有会话以库里的标签为准，见 desktop_bridge。
+        self.workspace = (getattr(request, "workspace", None) or "").strip().lower() or None
+        self.device_id = getattr(request, "device_id", None)
+        self.device_name = getattr(request, "device_name", None)
+        self.client = (getattr(request, "client", None) or "").strip().lower() or None
 
         self.time_now = f"""{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} {datetime.now().strftime("%A")}"""
         self.capabilities_prompt = prompt.CAPABILITIES_PROMPT
@@ -123,7 +129,8 @@ class Chat:
         ]
 
     async def mcp_list_tools(self):
-        return self.tool_executor.list_tools()
+        # 本地会话 / 灵芽模式会在 desktop_bridge 里改写本地类工具的定义，其它会话原样返回
+        return await desktop_bridge.adapt_tools(self, self.tool_executor.list_tools())
 
     async def mcp_call_tool(self, name, arguments):
         return await self.tool_executor.call_tool(name=name, arguments=arguments)
@@ -423,7 +430,7 @@ class Chat:
             history_ids.append(item.id)
             history_list.append({
                 'role': item.role,
-                'content': item.content,
+                'content': desktop_bridge.apply_source_header(item.content, getattr(item, 'meta', None)) if item.role == "user" else item.content,
                 **({'reasoning_content': item.reasoning_content} if hasattr(item, 'reasoning_content') and item.reasoning_content is not None else {}),
                 **({'tool_calls': item.tool_calls} if hasattr(item, 'tool_calls') and item.tool_calls is not None else {}),
                 **({'tool_call_id': item.tool_call_id} if hasattr(item, 'tool_call_id') and item.tool_call_id is not None else {})
@@ -519,6 +526,8 @@ class Chat:
 
         success = sum(1 for r in results if r)
         print(f"\n完成: {success}/{len(file_list)} 个文件处理成功")
+        # 本地会话：把刚复制好的智能体文件推送到用户电脑的工作区（其它会话是空操作）
+        await desktop_bridge.sync_to_device(self.config, self.conversation_id)
         return success
 
     async def get_conversation_files(self):
@@ -610,6 +619,7 @@ class Chat:
             )
             if result.get("success"):
                 print(f"✅ 加载技能成功: {result.get('data')}")
+                await desktop_bridge.sync_to_device(self.config, self.conversation_id)
                 return result
             raise Exception(f"加载失败: {result.get('error')}")
         else:
@@ -718,6 +728,8 @@ class Chat:
             f"{agent_info_section}\n"
             f"Current Date: {datetime.now().strftime('%Y-%m-%d')}\n"
         )
+        # 用户电脑（桌面端）的在线状态与 target 用法；其它渠道仅在线时才出现
+        self.system_prompt += await desktop_bridge.device_prompt_section(self.user_id)
         if self.research_mode_prompt:
             self.system_prompt += f"{self.research_mode_prompt}\n"
 
@@ -1441,7 +1453,7 @@ class Chat:
             abstract = await self.get_abstract()
             if self.temp_file_path:
                 await self.remove_temp_files()
-            await create_conversation(Conversation(user_id=self.user_id, conversation_id=self.conversation_id, abstract=abstract, tools_use=self.tools_use, skills_use=self.skills_use, kb_use=self.kb_use, agent_use=self.agent_use, agent_id=self.agent_id, agent_name=self.agent_name, model_source=self.model_source, model=self.model))
+            await create_conversation(Conversation(user_id=self.user_id, conversation_id=self.conversation_id, abstract=abstract, tools_use=self.tools_use, skills_use=self.skills_use, kb_use=self.kb_use, agent_use=self.agent_use, agent_id=self.agent_id, agent_name=self.agent_name, model_source=self.model_source, model=self.model, workspace=self.workspace or "cloud", device_id=self.device_id if self.workspace == "local" else None, device_name=self.device_name if self.workspace == "local" else None))
             return True, abstract
         await update_conversation_by_conv_for_tools_and_kb(conversation_id=self.conversation_id, tools_use=self.tools_use, skills_use=self.skills_use, kb_use=self.kb_use, agent_use=self.agent_use, agent_id=self.agent_id, agent_name=self.agent_name, model_source=self.model_source, model=self.model, update_at=datetime.utcnow())
         return False, None
@@ -1480,7 +1492,11 @@ class Chat:
             # process conversation_init
             conversation_init, abstract = await self.conversation_init()
             if conversation_init:
-                yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract).model_dump_json()
+                yield ChatResponse(
+                    conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract,
+                    workspace=self.workspace or "cloud",
+                    device_name=self.device_name if self.workspace == "local" else None,
+                ).model_dump_json()
 
             agent_card = await self.config.db_agent_card.find_one({"agent_id": self.agent_id})
             self.agent_card = AgentCard(**agent_card)
@@ -1504,7 +1520,11 @@ class Chat:
         # process conversation_init
         conversation_init, abstract = await self.conversation_init()
         if conversation_init:
-            yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract).model_dump_json()
+            yield ChatResponse(
+                conversation_id=self.conversation_id, user_id=self.user_id, type="abstract", content=abstract,
+                workspace=self.workspace or "cloud",
+                device_name=self.device_name if self.workspace == "local" else None,
+            ).model_dump_json()
 
         # 对于知识库的系统提示词处理
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
@@ -1518,7 +1538,7 @@ class Chat:
         self.model_config = ModelConfig(model_source=self.model_source, model=self.model, tools=tools, stream=True)
         print("model_source:", self.model_source, "model:", self.model)
         user_msg_type = "user_feedback" if self.user_feedback else "text"
-        result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow()))
+        result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow(), meta=desktop_bridge.source_header(self)))
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="user_message", role="user", content=self.input_text).model_dump_json()
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="input_message_id", content=str(result.id)).model_dump_json()
 

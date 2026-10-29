@@ -212,6 +212,7 @@ public class WakeWordPlugin extends Plugin {
     private int prevAudioMode = AudioManager.MODE_NORMAL;
     private boolean modeChanged = false;
     private boolean commDeviceSet = false;
+    private boolean speakerphoneSet = false;
     private boolean scoStarted = false;
 
     // ------------------------------------------------------------------ JS API
@@ -786,10 +787,67 @@ public class WakeWordPlugin extends Plugin {
         return true;
     }
 
+    /** 是否已接了耳机（有线 / 蓝牙 / USB）：接了就尊重用户，不强制外放 */
+    private boolean hasExternalOutput(AudioManager am) {
+        for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            switch (d.getType()) {
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                case AudioDeviceInfo.TYPE_USB_HEADSET:
+                case AudioDeviceInfo.TYPE_USB_DEVICE:
+                case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+                case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+                    return true;
+                default:
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        && d.getType() == AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                        return true;
+                    }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 通话通道默认走听筒，声音很小。没接耳机时把通话输出切到手机扬声器（免提）。
+     * 只影响通话用途的音频（本应用的播报），退出时由 releaseBluetooth 还原。
+     */
+    @SuppressWarnings("deprecation")
+    private void routeToSpeaker() {
+        try {
+            AudioManager am = audioManager();
+            if (hasExternalOutput(am)) {
+                Log.i(TAG, "speaker route skipped: external output connected");
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
+                    if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                        if (am.setCommunicationDevice(d)) {
+                            commDeviceSet = true;
+                            Log.i(TAG, "speaker route: communication device = builtin speaker");
+                        }
+                        return;
+                    }
+                }
+            } else {
+                am.setSpeakerphoneOn(true);
+                speakerphoneSet = true;
+                Log.i(TAG, "speaker route: speakerphone on");
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "routeToSpeaker failed", e);
+        }
+    }
+
     @SuppressWarnings("deprecation")
     private void releaseBluetooth() {
         try {
             AudioManager am = audioManager();
+            if (speakerphoneSet) {
+                am.setSpeakerphoneOn(false);
+                speakerphoneSet = false;
+            }
             if (commDeviceSet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 am.clearCommunicationDevice();
             }
@@ -1275,6 +1333,8 @@ public class WakeWordPlugin extends Plugin {
             int bufBytes = Math.max(minBuf, SAMPLE_RATE * 2);
             // 走蓝牙通话链路时用 VOICE_COMMUNICATION，系统才会把录音路由到耳机
             bargeIn = Boolean.TRUE.equals(call.getBoolean("bargeIn", false));
+            // 播报走通话通道时，默认外放（免提），否则声音从听筒出来很小
+            if (bargeIn && !btRequested) routeToSpeaker();
             recorder = new AudioRecord(
                 (btRequested || bargeIn) ? MediaRecorder.AudioSource.VOICE_COMMUNICATION
                             : MediaRecorder.AudioSource.VOICE_RECOGNITION,

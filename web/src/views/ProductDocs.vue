@@ -89,9 +89,11 @@ const docsByLocale = {
 
 // 文档图片：用 import 方式加载，打包进 assets，确保生产环境一定能访问到
 const docImageModules = {
-  ...import.meta.glob('@/assets/docs-images/*.png', { eager: true, as: 'url' }),
-  ...import.meta.glob('@/assets/docs-images/*.jpg', { eager: true, as: 'url' }),
-  ...import.meta.glob('@/assets/docs-images/*.jpeg', { eager: true, as: 'url' }),
+  ...import.meta.glob('@/assets/docs-images/*.png', { eager: true, query: '?url', import: 'default' }),
+  ...import.meta.glob('@/assets/docs-images/*.jpg', { eager: true, query: '?url', import: 'default' }),
+  ...import.meta.glob('@/assets/docs-images/*.jpeg', { eager: true, query: '?url', import: 'default' }),
+  ...import.meta.glob('@/assets/docs-images/*.gif', { eager: true, query: '?url', import: 'default' }),
+  ...import.meta.glob('@/assets/docs-images/*.webp', { eager: true, query: '?url', import: 'default' }),
 }
 const docImageMap = {}
 for (const path in docImageModules) {
@@ -174,20 +176,48 @@ const activeSection = ref('0-0')
 
 const HEADER_OFFSET = 80
 
+function scrollRoot() {
+  const page = document.querySelector('.product-docs')
+  if (page) {
+    const self = getComputedStyle(page).overflowY
+    if (self === 'auto' || self === 'scroll') return page
+  }
+  let node = page?.parentElement
+  while (node && node !== document.body && node !== document.documentElement) {
+    const overflow = getComputedStyle(node).overflowY
+    if (overflow === 'auto' || overflow === 'scroll') return node
+    node = node.parentElement
+  }
+  return window
+}
+
+function scrollYOf(root) {
+  return root === window ? window.scrollY : root.scrollTop
+}
+
+function rootTop(root) {
+  return root === window ? 0 : root.getBoundingClientRect().top
+}
+
+function scrollToY(root, top) {
+  root.scrollTo({ top, behavior: 'smooth' })
+}
+
 watch(locale, () => {
   partRefs.value = {}
   activePart.value = 0
   activeSection.value = '0-0'
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  scrollToY(scrollRoot(), 0)
 })
 
 const scrollToPart = (partIndex) => {
   const el = partRefs.value[partIndex]
+  const root = scrollRoot()
   if (el) {
     const node = Array.isArray(el) ? el[0] : el
     if (node) {
-      const y = node.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET
-      window.scrollTo({ top: y, behavior: 'smooth' })
+      const y = node.getBoundingClientRect().top + scrollYOf(root) - rootTop(root) - HEADER_OFFSET
+      scrollToY(root, y)
     }
   }
   activePart.value = partIndex
@@ -199,30 +229,32 @@ const scrollToSection = (partIndex, sectionIndex) => {
   if (!partEl) return
   const node = Array.isArray(partEl) ? partEl[0] : partEl
   const h2 = node?.querySelectorAll('h2')[sectionIndex]
+  const root = scrollRoot()
   if (h2) {
-    const y = h2.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET
-    window.scrollTo({ top: y, behavior: 'smooth' })
+    const y = h2.getBoundingClientRect().top + scrollYOf(root) - rootTop(root) - HEADER_OFFSET
+    scrollToY(root, y)
   }
   activePart.value = partIndex
   activeSection.value = `${partIndex}-${sectionIndex}`
 }
 
 const updateActiveOnScroll = () => {
-  const scrollTop = window.scrollY + 120
+  const root = scrollRoot()
+  const scrollTop = scrollYOf(root) + 120
   for (let p = 0; p < docParts.value.length; p++) {
     const el = partRefs.value[p]
     if (!el) continue
     const node = Array.isArray(el) ? el[0] : el
     if (!node) continue
     const rect = node.getBoundingClientRect()
-    const top = rect.top + window.scrollY
+    const top = rect.top + scrollYOf(root) - rootTop(root)
     const height = rect.height
     if (scrollTop >= top && scrollTop < top + height) {
       activePart.value = p
       const h2s = node.querySelectorAll('h2')
       for (let s = 0; s < h2s.length; s++) {
         const h2Rect = h2s[s].getBoundingClientRect()
-        const h2Top = h2Rect.top + window.scrollY
+        const h2Top = h2Rect.top + scrollYOf(root) - rootTop(root)
         if (scrollTop < h2Top + 80) {
           activeSection.value = `${p}-${s}`
           break
@@ -234,11 +266,15 @@ const updateActiveOnScroll = () => {
   }
 }
 
+let detachScroll = null
 onMounted(() => {
-  window.addEventListener('scroll', updateActiveOnScroll, { passive: true })
+  const root = scrollRoot()
+  const target = root === window ? window : root
+  target.addEventListener('scroll', updateActiveOnScroll, { passive: true })
+  detachScroll = () => target.removeEventListener('scroll', updateActiveOnScroll)
 })
 onUnmounted(() => {
-  window.removeEventListener('scroll', updateActiveOnScroll)
+  if (detachScroll) detachScroll()
 })
 </script>
 

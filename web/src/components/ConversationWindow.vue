@@ -137,7 +137,10 @@
                 @click="handlePickConversation(item)"
                 :class="{ selected: item.conversation_id === chat_request.conversation_id, 'is-running': isConversationRunning(item.conversation_id) }"
             >
-                <div class="conversation-abstract-wrapper">
+                <div
+                  class="conversation-abstract-wrapper"
+                  :class="{ 'conversation-abstract-wrapper--tagged': item.workspace === 'local' }"
+                >
                     <span v-if="isConversationRunning(item.conversation_id)" class="running-dot" aria-hidden="true"></span>
                     <input
                       v-if="editingId === item.conversation_id"
@@ -157,6 +160,11 @@
                     >
                       {{ item.abstract || t('conversation.unnamedConversation') }}
                     </p>
+                    <span
+                      v-if="item.workspace === 'local'"
+                      class="conversation-local-tag"
+                      :title="item.device_name || t('conversation.localTag')"
+                    >{{ t('conversation.localTag') }}</span>
                 </div>
                 <div class="conversation-option-wrapper">
                     <button
@@ -234,7 +242,22 @@
               </svg>
             </button>
             <div v-if="showMenu" class="user-menu" ref="menuRef">
-              <button type="button" class="user-menu-item" @click="goHome">
+              <!-- 桌面端通过 provide('desktopMenu') 注入自己的入口（设置 / 多端互联）；网页端没有这个注入，行为不变 -->
+              <template v-if="desktopMenu">
+                <button
+                  v-for="entry in desktopMenu.items"
+                  :key="entry.key"
+                  type="button"
+                  class="user-menu-item"
+                  @click="runDesktopEntry(entry)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="entry.icon"></svg>
+                  <span>{{ entry.label }}</span>
+                  <span v-if="entry.dot" class="user-menu-dot" :class="`is-${entry.dot}`" aria-hidden="true"></span>
+                </button>
+                <div class="user-menu-divider" aria-hidden="true"></div>
+              </template>
+              <button v-if="!desktopMenu" type="button" class="user-menu-item" @click="goHome">
                 <img width="14" height="14" src="@/assets/images/home_icon.svg" alt="" />
                 <span>{{ t('conversation.home') }}</span>
               </button>
@@ -280,7 +303,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, toRefs, type ComponentPublicInstance } from 'vue';
+import { ref, computed, inject, onMounted, onUnmounted, nextTick, toRefs, type ComponentPublicInstance } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
@@ -394,8 +417,27 @@ const goHome = () => {
   router.push('/');
 };
 
+// 桌面端注入的菜单入口（见 desktop/ui）。网页端不会 provide，值为 null。
+interface DesktopMenuEntry {
+  key: string;
+  label: string;
+  icon: string;
+  dot?: string;
+  onClick: () => void;
+}
+const desktopMenu = inject<{ items: DesktopMenuEntry[]; openDocs?: () => void } | null>('desktopMenu', null);
+
+const runDesktopEntry = (entry: DesktopMenuEntry) => {
+  showMenu.value = false;
+  entry.onClick();
+};
+
 const goDocs = () => {
   showMenu.value = false;
+  if (desktopMenu?.openDocs) {
+    desktopMenu.openDocs();
+    return;
+  }
   window.open('/docs', '_blank', 'noopener,noreferrer');
 };
 
@@ -572,6 +614,50 @@ onUnmounted(() => {
   font-weight: 600;
   color: rgb(120, 120, 120);
   letter-spacing: 0.02em;
+}
+
+.conversation-local-tag {
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 18px;
+  color: #15803d;
+  background: rgba(22, 163, 74, 0.1);
+}
+
+/* 带「本地」标签的会话：关掉打字动画的 width: 100%，把剩余宽度留给标题并截断，
+   否则标签被挤出容器，历史列表底部会冒出横向滚动条 */
+.conversation-abstract-wrapper--tagged {
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.conversation-abstract-wrapper--tagged .conversation_abstract {
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  animation: none;
+}
+
+.history-choose {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.user-menu-dot {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex-shrink: 0;
+}
+
+.user-menu-dot.is-online {
+  background: #16a34a;
 }
 
 .running-dot {

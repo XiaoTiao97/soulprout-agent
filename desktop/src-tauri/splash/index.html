@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>灵芽</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+      body { font-family: 'Microsoft YaHei UI', system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+      .card {
+        box-sizing: border-box; position: relative; height: 100%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+        background: rgb(242, 242, 242); color: #111827;
+        border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px;
+      }
+      html.is-max .card { border-radius: 0; border-color: transparent; }
+      .drag {
+        position: absolute; top: 0; left: 0; right: 138px; height: 36px;
+      }
+      .win {
+        position: absolute; top: 0; right: 0; width: 138px; height: 36px;
+        display: flex; flex-direction: row; align-items: stretch; z-index: 2;
+      }
+      .win button {
+        flex: 0 0 46px; width: 46px; min-width: 46px; height: 36px;
+        border: none; background: transparent; color: #4b5563;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; padding: 0; margin: 0;
+      }
+      .win button svg { display: block; flex: 0 0 auto; }
+      #restore-icon { display: none; }
+      html.is-max #max-icon { display: none; }
+      html.is-max #restore-icon { display: block; }
+      .win button:hover { background: rgba(0, 0, 0, 0.1); color: #111827; }
+      .win button.close { border-top-right-radius: 11px; }
+      html.is-max .win button.close { border-top-right-radius: 0; }
+      .win button.close:hover { background: #e5484d; color: #fff; }
+      .logo { width: min(360px, 62vw); height: auto; display: block; }
+      .dots { display: flex; gap: 8px; height: 12px; align-items: center; }
+      .dots i {
+        width: 8px; height: 8px; border-radius: 50%; background: #16a34a; opacity: .25;
+        animation: pulse 1.2s infinite ease-in-out;
+      }
+      .dots i:nth-child(2) { animation-delay: .2s; }
+      .dots i:nth-child(3) { animation-delay: .4s; }
+      @keyframes pulse {
+        0%, 100% { opacity: .25; transform: scale(.85); }
+        50% { opacity: 1; transform: scale(1.15); }
+      }
+      .error { display: none; max-width: 70%; text-align: center; color: #b91c1c; font-size: 14px; line-height: 1.6; }
+      .failed .dots { display: none; }
+      .failed .error { display: block; }
+    </style>
+  </head>
+  <body>
+    <div class="card" id="card">
+      <div class="drag" data-tauri-drag-region></div>
+      <div class="win">
+        <button type="button" aria-label="最小化" onclick="spWin('minimize')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1" /></svg>
+        </button>
+        <button type="button" id="max-btn" aria-label="最大化" onclick="spWin('toggle')">
+          <svg id="max-icon" width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" /></svg>
+          <svg id="restore-icon" width="10" height="10" viewBox="0 0 10 10">
+            <path d="M2.5 2.5V1.5a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-1" fill="none" stroke="currentColor" />
+            <rect x="0.5" y="2.5" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" />
+          </svg>
+        </button>
+        <button type="button" class="close" aria-label="关闭" onclick="spWin('close')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1" /></svg>
+        </button>
+      </div>
+      <img class="logo" src="logo.png" alt="Soulprout" />
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="error" id="error"></div>
+    </div>
+    <script>
+      function spWindow() {
+        try {
+          return window.__TAURI__?.window?.getCurrentWindow?.() ?? null
+        } catch (err) {
+          return null
+        }
+      }
+      function spWin(action) {
+        const win = spWindow()
+        if (!win) return
+        if (action === 'minimize') win.minimize()
+        else if (action === 'close') win.close()
+        else win.toggleMaximize().then(syncMax)
+      }
+      async function syncMax() {
+        const win = spWindow()
+        if (!win?.isMaximized) return
+        const max = await win.isMaximized()
+        document.documentElement.classList.toggle('is-max', max)
+        document.getElementById('max-btn').setAttribute('aria-label', max ? '还原' : '最大化')
+      }
+      window.__spFail = function (message) {
+        document.getElementById('card').className = 'card failed'
+        document.getElementById('error').textContent = message
+      }
+      syncMax()
+      const win = spWindow()
+      if (win?.onResized) win.onResized(syncMax)
+    </script>
+  </body>
+</html>

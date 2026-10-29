@@ -30,6 +30,7 @@ from agent.database.crud.user_channel_binding import (
 from agent.database.models.user import UserInfo
 from agent.tool.file_process import AsyncFileProcess
 from agent.tool.registry import get_all_tool_schemas, get_registered_tool_names
+from agent.services.desktop_bridge import LOCAL_TOOL_NAMES, NOT_ROUTED, describe_devices, route_local_tool, sync_to_device
 from agent.utils.vdb_client import VDBClient
 
 
@@ -350,7 +351,15 @@ class SoulproutToolFunction:
                 return json.dumps(resp.json(), ensure_ascii=False, indent=2)
             except Exception as e:
                 return f"错误：获取子智能体列表失败，失败原因：{e}"
-        return f"错误：未知的 category={category}，仅支持 models / tools / agent_cards"
+        if category == "device":
+            try:
+                user_id = await self._get_user_id_by_conversation_id(conversation_id)
+                if not user_id:
+                    return "错误：无法获取user_id"
+                return await describe_devices(user_id)
+            except Exception as e:
+                return f"错误：获取设备状态失败，失败原因：{e}"
+        return f"错误：未知的 category={category}，仅支持 models / tools / agent_cards / device"
 
     async def skills(self, module, conversation_id, query=None, source=None, skill_name=None):
         """统一 skills 工具：module=search/view/load/close_search。"""
@@ -490,6 +499,8 @@ class SoulproutToolFunction:
         user_id = await self._get_user_id_by_conversation_id(conversation_id)
         skills = {"system": [skill_name]} if source == "system" else {"user": [skill_name]}
         result = await load_skill_to_workspace(conversation_id=conversation_id, user_id=user_id, skills=skills, workspace_base=self.config.local_file_path)
+        if result.get("success"):
+            await sync_to_device(self.config, conversation_id)  # 本地会话：把技能推送到用户电脑的工作区
         return result.get("data") if result.get("success") else result.get("error", "加载失败")
 
     async def _skills_close_search(self, conversation_id):
@@ -1290,6 +1301,12 @@ class ToolExecutor:
     async def call_tool(self, name, arguments):
         if name not in get_registered_tool_names():
             raise ValueError(f"Tool {name} is not exist")
+        # 桌面端：本地类工具按会话工作区标签 / target 参数决定在云端还是用户电脑执行。
+        # 云端会话（含全部网页端会话）这里只会剔除云端函数不认识的参数，然后照常走下面的原逻辑。
+        if name in LOCAL_TOOL_NAMES:
+            routed = await route_local_tool(self.tools.config, name, arguments)
+            if routed is not NOT_ROUTED:
+                return routed
         fn = getattr(self.tools, name, None)
         if not callable(fn) or name.startswith("_"):
             raise ValueError(

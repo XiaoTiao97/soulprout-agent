@@ -9,6 +9,8 @@ export interface ConversationBase {
     model_source?: string // 模型来源
     model?: string
     agent_use?: 'expert-agent' | 'select-agent' | 'soulprout' | string | null
+    workspace?: 'cloud' | 'local' | string // 工作区位置：local 表示由桌面端在用户电脑上执行（创建后不变）
+    device_name?: string | null
     create_at: string
     updated_at: string
 }

@@ -246,3 +246,15 @@ pnpm-debug.log*
 *.sln
 *.sw?
 dist-mobile/
+
+# === Desktop（桌面端）===
+# sidecar 的 PyInstaller 配置要纳入版本控制（上面的 *.spec 规则会误伤）
+!desktop/sidecar/*.spec
+desktop/src-tauri/binaries/*.exe
+desktop/src-tauri/gen/
+desktop/src-tauri/target/
+desktop/build/
+desktop/dist/
+desktop/ui/dist/
+desktop/.dev-python
+desktop/.dev-agent-url

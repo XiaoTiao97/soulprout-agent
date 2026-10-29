@@ -34,6 +34,12 @@ class ChatRequest(BaseModel):
     temp_sub_agent: Optional[TempSubAgent] = None
     channel: Optional[str] = None
     chat_id: Optional[str] = None
+    # 桌面端：新建会话时 workspace="local" 表示这个任务会话的文件与命令都在用户电脑上执行；
+    # 网页端不传，默认云端。client 标记发送端（desktop/mobile/...），仅用于灵芽模式的来源行。
+    workspace: Optional[str] = None
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
+    client: Optional[str] = None
     class Config:
         extra = "allow"
 
@@ -47,6 +53,9 @@ class ChatResponse(BaseModel):
     tool_calls: Optional[list] = None
     json_table: Optional[Dict] = None
     image: Optional[str] = None
+    # 新建会话的 abstract 事件里带上，前端才能立刻显示「本地」标签，不用等下一次拉列表
+    workspace: Optional[str] = None
+    device_name: Optional[str] = None
 
 # 符合数据库的Message类型
 class MessageBase(BaseModel):

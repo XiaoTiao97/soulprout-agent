@@ -1,10 +1,15 @@
 /** 阿里云 OSS 固定资产名，发新版后覆盖同名文件即可，URL 无需变更 */
 
-export const GATEWAY_DOWNLOAD_URL =
+export const DESKTOP_DOWNLOAD_URL =
+  import.meta.env.VITE_DESKTOP_DOWNLOAD_URL ||
   import.meta.env.VITE_GATEWAY_DOWNLOAD_URL ||
-  'https://oss.soulprout.com/Soulprout-Gateway-setup.exe'
+  'https://oss.soulprout.com/desktop/Soulprout-setup.exe'
 
-export const GATEWAY_DOWNLOAD_FILENAME = 'Soulprout-Gateway-setup.exe'
+export const DESKTOP_DOWNLOAD_FILENAME = 'Soulprout-setup.exe'
+
+/** @deprecated 旧名，指向现在的桌面端安装包 */
+export const GATEWAY_DOWNLOAD_URL = DESKTOP_DOWNLOAD_URL
+export const GATEWAY_DOWNLOAD_FILENAME = DESKTOP_DOWNLOAD_FILENAME
 
 /** APK 直接下载（官网落地页 / 强制更新清单里的固定名） */
 export const ANDROID_APK_URL =
@@ -22,8 +27,13 @@ export const ANDROID_LANDING_URL =
   'https://www.soulprout.com/android-download.html'
 
 /** 需用 a 标签触发下载 */
+export function downloadDesktopClient() {
+  triggerDownload(DESKTOP_DOWNLOAD_URL, DESKTOP_DOWNLOAD_FILENAME)
+}
+
+/** @deprecated 旧名 */
 export function downloadGatewayClient() {
-  triggerDownload(GATEWAY_DOWNLOAD_URL, GATEWAY_DOWNLOAD_FILENAME)
+  downloadDesktopClient()
 }
 
 export function downloadAndroidApk() {

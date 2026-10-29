@@ -25,8 +25,16 @@
       />
 
       <div class="chat-main" :class="{ 'with-extra': showExtraInfo }">
+        <div v-if="desktopShell" v-show="!desktopShell.panel" class="dk-chat-drag" data-tauri-drag-region></div>
         <div class="chat-window-wrapper" :style="{ width: showExtraInfo ? chatWindowWidth : '100%' }">
+          <div
+            v-if="desktopShell"
+            id="dk-embed-host"
+            class="dk-embed-host"
+            :class="{ 'is-open': !!desktopShell.panel }"
+          ></div>
           <ChatWindow
+            v-show="!desktopShell?.panel"
             :chat_request="chat_request"
             :agent_message_list="agent_message_list"
             :currentStreamingMessage="currentStreamingMessage"
@@ -81,7 +89,8 @@
           </div>
         </transition>
 
-        <button 
+        <button
+          v-show="!desktopShell?.panel"
           @click="toggleExtraInfo" 
           class="info-button" 
           :class="{ 'shifted': showExtraInfo }"
@@ -115,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick, inject } from 'vue'
 import axios from 'axios'
 import ConversationWindow from '../components/ConversationWindow.vue'
 import ChatWindow from '../components/ChatWindow.vue'
@@ -132,6 +141,7 @@ import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const { t } = useI18n()
+const desktopShell = inject<{ panel: string } | null>('desktopShell', null)
 
 // ✅ 定义响应式变量并加类型
 const conversation_list = ref<ConversationBase[]>([])
@@ -317,6 +327,8 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
     await loadSoulproutConversation()
   } else {
     chatMode.value = 'task'
+    // 任务列表可能在灵芽模式期间有新建（尤其是桌面端本地会话），切回来时重新拉一次
+    await fetchConversations()
     if (cachedTaskChatRequest.value) {
       chat_request.value = { ...cachedTaskChatRequest.value }
       cachedTaskChatRequest.value = null
@@ -1129,11 +1141,15 @@ async function readSseResponse(
             )
             if (existing) {
               existing.abstract = abstract.value
+              if (chunk_json.workspace) existing.workspace = chunk_json.workspace
+              if (chunk_json.device_name) existing.device_name = chunk_json.device_name
             } else {
               conversation_list.value.unshift({
                 user_id: chunk_json.user_id,
                 conversation_id: chunk_json.conversation_id,
                 abstract: abstract.value,
+                workspace: chunk_json.workspace,
+                device_name: chunk_json.device_name,
                 create_at: '',
                 updated_at: '',
               })

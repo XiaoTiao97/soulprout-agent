@@ -493,14 +493,17 @@ body::before {
     width: 100%;
     flex: 1;
     min-height: 0;
-    margin: 5px;
+    min-width: 0;
+    margin: 5px 0;
     gap: 5px;
+    overflow-x: hidden;
     overflow-y: auto; /* 启用垂直滚动条 */
 }
 
 /* WebKit-based browsers (Chrome, Safari) */
 .history-choose::-webkit-scrollbar {
     width: 5px;
+    height: 0;
 }
 
 .history-choose::-webkit-scrollbar-thumb {
@@ -1586,6 +1589,9 @@ body::before {
     justify-content: space-between;
     align-items: center;
     width: 95%;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
     position: relative;
     background-color: transparent; /* 白色，完全不透明 */
     border-radius: 10px;
@@ -1609,6 +1615,7 @@ body::before {
     align-items: center;
     flex: 1;
     min-width: 0;
+    overflow: hidden;
 }
 
 .conversation_abstract {

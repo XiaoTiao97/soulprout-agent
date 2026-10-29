@@ -11,6 +11,7 @@ from agent.kb.router import router as kb_router
 from .asr import router as asr_router
 from .rokid import router as rokid_router
 from .gateway_ws import router as gateway_ws_router
+from .desktop_ws import router as desktop_ws_router
 from .voice import router as voice_router
 
 router = APIRouter()
@@ -25,4 +26,5 @@ router.include_router(kb_router)
 router.include_router(asr_router)
 router.include_router(rokid_router)
 router.include_router(gateway_ws_router)
+router.include_router(desktop_ws_router)
 router.include_router(voice_router)

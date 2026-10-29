@@ -1,0 +1,930 @@
+/* 桌面外壳：窗口框架、浮在页面上的窗口按钮、设置 / 多端互联面板、审批弹窗。
+   配色跟聊天页：灰底 rgb(242,242,242)、白卡片、正文 14px。
+   绿色只用于连接状态和「官方云服务」标签；按钮、返回、链接一律黑白。 */
+
+:root {
+  --dk-titlebar-h: 36px;
+  --dk-radius: 12px;
+  --dk-vh: 100vh; /* 标题栏浮在页面上，不再扣高度 */
+  --dk-accent: #16a34a;
+  --dk-accent-soft: rgba(22, 163, 74, 0.1);
+  --dk-page: rgb(242, 242, 242);
+  --dk-bg: #ffffff;
+  --dk-fg: #111827;
+  --dk-muted: rgb(110, 110, 110);
+  --dk-line: rgba(0, 0, 0, 0.07);
+  --dk-hover: rgba(0, 0, 0, 0.05);
+  --dk-danger: #b91c1c;
+}
+
+html,
+body {
+  background: transparent !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: 0 !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden !important;
+  display: block !important;
+  place-items: initial !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#app {
+  width: 100% !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: initial;
+}
+
+.dk-content input,
+.dk-content textarea,
+.dk-content [contenteditable='true'],
+.dk-content .markdown-body,
+.dk-content pre,
+.dk-content code,
+.dk-selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.dk-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--dk-page);
+  color: var(--dk-fg);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--dk-radius);
+  box-sizing: border-box;
+  font-family: 'Microsoft YaHei UI', system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.dk-maximized .dk-frame {
+  border-radius: 0;
+  border-color: transparent;
+}
+
+.dk-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dk-content > * {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* 登录页顶栏右侧给窗口按钮留空 */
+html.soulprout-desktop .dk-content .register-header .header-inner {
+  padding-right: 148px;
+}
+
+html.soulprout-desktop .dk-content .soulprout-register-page {
+  height: 100%;
+  min-height: 0 !important;
+}
+
+/* ---- 窗口按钮：浮在页面右上角，没有自己的底色和分隔线 ---- */
+
+.dk-titlebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--dk-titlebar-h);
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  z-index: 4000;
+  pointer-events: none;
+  background: transparent;
+  border: none;
+}
+
+/* 侧边栏顶端只留很窄一条，避免挡住 logo；右侧聊天区用 .dk-chat-drag 单独加高 */
+.dk-drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 138px;
+  height: 10px;
+  pointer-events: auto;
+}
+
+html.soulprout-desktop .chat-window-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+html.soulprout-desktop .dk-chat-drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 138px;
+  height: 36px;
+  z-index: 40;
+  pointer-events: auto;
+}
+
+.dk-win-controls {
+  display: flex;
+  height: 100%;
+  pointer-events: auto;
+  flex: 0 0 auto;
+}
+
+.dk-win-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+}
+
+.dk-win-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #111827;
+}
+
+.dk-win-btn.is-close {
+  border-top-right-radius: calc(var(--dk-radius) - 1px);
+}
+
+.dk-win-btn.is-close:hover {
+  background: #e5484d;
+  color: #fff;
+}
+
+.dk-maximized .dk-win-btn.is-close {
+  border-top-right-radius: 0;
+}
+
+/* 左下角用户菜单：压过 ConversationWindow scoped 的 13px */
+html.soulprout-desktop .user-menu {
+  min-width: 188px;
+  padding: 6px;
+}
+
+html.soulprout-desktop .user-menu-item {
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+/* 嵌在右侧对话位置里的设置 / 多端互联 / 产品文档 */
+.dk-embed-host {
+  display: none;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.dk-embed-host.is-open {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dk-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--dk-page);
+}
+
+.dk-panel-drag {
+  position: absolute;
+  top: 0;
+  left: 96px;
+  right: 138px;
+  height: 36px;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.dk-panel-toolbar {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 8px 148px 0 12px;
+  box-sizing: border-box;
+}
+
+.dk-panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 148px 0 0;
+  box-sizing: border-box;
+}
+
+.dk-panel-inner {
+  width: min(720px, calc(100% - 48px));
+  margin: 4px auto 48px;
+  padding: 8px 24px 32px;
+  box-sizing: border-box;
+}
+
+.dk-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--dk-muted);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.dk-back:hover {
+  color: var(--dk-fg);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dk-page h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.dk-page-sub {
+  margin: 0 0 28px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--dk-muted);
+}
+
+.dk-page-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dk-page-head h1 {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.dk-page-head .dk-tag {
+  margin-right: 2px;
+}
+
+.dk-block {
+  margin-bottom: 28px;
+}
+
+.dk-block-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--dk-fg);
+}
+
+.dk-block-desc {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgb(120, 120, 120);
+}
+
+.dk-block-desc.dk-tight {
+  margin-bottom: 10px;
+}
+
+.dk-list {
+  background: var(--dk-bg);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.dk-list.is-flat {
+  background: transparent;
+}
+
+.dk-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dk-line);
+  font-size: 14px;
+}
+
+.dk-list-row:last-child {
+  border-bottom: none;
+}
+
+.dk-row-label {
+  flex: 0 0 108px;
+  color: var(--dk-muted);
+}
+
+.dk-row-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.dk-choice {
+  cursor: pointer;
+}
+
+.dk-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dk-check {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+}
+
+.dk-choice.is-active .dk-check {
+  border-color: var(--dk-fg);
+  background: var(--dk-fg);
+  color: #fff;
+}
+
+.dk-choice.is-danger.is-active .dk-check {
+  border-color: var(--dk-danger);
+  background: var(--dk-danger);
+}
+
+.dk-choice-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dk-choice-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.dk-choice-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgb(140, 140, 140);
+}
+
+.dk-choice:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.dk-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #15803d;
+  background: var(--dk-accent-soft);
+  flex-shrink: 0;
+}
+
+.dk-tag.is-muted {
+  color: var(--dk-muted);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dk-link,
+.dk-link-a {
+  border: none;
+  background: transparent;
+  color: var(--dk-fg);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.dk-link:hover,
+.dk-link-a:hover {
+  text-decoration: underline;
+}
+
+.dk-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dk-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.dk-icon-btn.is-round {
+  border-radius: 10px;
+}
+
+.dk-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--dk-fg);
+}
+
+.dk-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex: 0 0 auto;
+}
+
+.dk-dot.is-online {
+  background: var(--dk-accent);
+}
+
+.dk-mono {
+  font-family: Consolas, 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.dk-muted-line {
+  color: rgb(150, 150, 150);
+}
+
+.dk-note {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dk-muted);
+}
+
+.dk-error {
+  color: var(--dk-danger);
+  font-size: 13px;
+}
+
+.dk-ok {
+  color: var(--dk-accent);
+}
+
+.dk-hint {
+  font-size: 13px;
+  color: var(--dk-muted);
+  min-height: 1.2em;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.dk-hint.is-visible {
+  opacity: 1;
+}
+
+.dk-version {
+  margin: 24px 0 0;
+  text-align: right;
+  font-size: 12px;
+  color: rgb(160, 160, 160);
+}
+
+.dk-service-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -12px 0 20px;
+  font-size: 13px;
+  color: var(--dk-muted);
+}
+
+.dk-service-name {
+  font-weight: 600;
+  color: var(--dk-fg);
+}
+
+/* ---- 渠道列表 ---- */
+
+.dk-channel-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-channel {
+  border-bottom: 1px solid var(--dk-line);
+}
+
+.dk-channel:last-child {
+  border-bottom: none;
+}
+
+.dk-channel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+.dk-channel-head:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.dk-channel-logo {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.dk-channel-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dk-channel-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dk-channel-desc {
+  font-size: 13px;
+  color: rgb(140, 140, 140);
+}
+
+.dk-channel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--dk-muted);
+  flex-shrink: 0;
+}
+
+.dk-channel-status.is-on {
+  color: #15803d;
+}
+
+.dk-chevron {
+  flex-shrink: 0;
+  color: #9ca3af;
+  transition: transform 0.2s;
+}
+
+.dk-channel.is-open .dk-chevron {
+  transform: rotate(180deg);
+}
+
+.dk-channel-body {
+  padding: 0 16px 16px 64px;
+}
+
+.dk-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dk-field-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.dk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dk-label {
+  font-size: 13px;
+  color: var(--dk-muted);
+}
+
+.dk-input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--dk-fg);
+  box-sizing: border-box;
+}
+
+.dk-input:focus {
+  outline: none;
+  border-color: #c4c4c4;
+}
+
+.dk-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.dk-inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--dk-fg);
+}
+
+.dk-fold {
+  border-top: 1px solid var(--dk-line);
+  padding-top: 8px;
+}
+
+.dk-fold summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--dk-muted);
+  list-style: none;
+}
+
+.dk-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-fold[open] summary {
+  margin-bottom: 10px;
+  color: var(--dk-fg);
+}
+
+.dk-segment {
+  display: flex;
+  padding: 3px;
+  background: var(--dk-page);
+  border-radius: 10px;
+  gap: 2px;
+}
+
+.dk-segment.is-inline {
+  flex: 1;
+}
+
+.dk-segment button {
+  flex: 1;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--dk-muted);
+  cursor: pointer;
+}
+
+.dk-segment button.is-active {
+  background: #fff;
+  color: var(--dk-fg);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.dk-qr-live {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.dk-qr-frame {
+  width: 168px;
+  height: 168px;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dk-line);
+}
+
+.dk-qr-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.dk-qr-fallback,
+.dk-qr-msg {
+  font-size: 13px;
+  color: var(--dk-muted);
+  margin: 0 0 8px;
+}
+
+.dk-qr-link {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: var(--dk-fg);
+}
+
+.dk-reconnect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---- 弹窗 / 审批 ---- */
+
+.dk-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.28);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.dk-approval-overlay {
+  z-index: 3000;
+}
+
+.dk-dialog {
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  background: var(--dk-bg);
+  color: var(--dk-fg);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
+  padding: 20px 22px;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.dk-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dk-dialog-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.dk-shield {
+  display: inline-flex;
+  color: #ca8a04;
+}
+
+.dk-queue {
+  font-size: 12px;
+  color: var(--dk-muted);
+}
+
+.dk-muted {
+  color: var(--dk-muted);
+  margin: 6px 0;
+}
+
+.dk-small {
+  font-size: 13px;
+}
+
+.dk-approval-title {
+  font-weight: 600;
+  margin: 10px 0 6px;
+  word-break: break-word;
+  font-size: 14px;
+}
+
+.dk-approval-detail {
+  margin: 0 0 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--dk-page);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.dk-approval-reason {
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+.dk-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.dk-spacer {
+  flex: 1;
+}
+
+.dk-btn {
+  min-width: 84px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: var(--dk-fg);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.dk-btn:hover {
+  background: #f4f4f4;
+  border-color: #d1d5db;
+}
+
+.dk-btn.is-primary:hover {
+  background: #000;
+  border-color: #000;
+}
+
+.dk-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.dk-btn.is-sm {
+  min-width: 0;
+  height: 30px;
+  font-size: 13px;
+  padding: 0 12px;
+}
+
+.dk-btn.is-primary {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+html.soulprout-desktop .dk-panel .hover-hint::after,
+html.soulprout-desktop .dk-titlebar .hover-hint::after {
+  display: none !important;
+}

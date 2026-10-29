@@ -15,6 +15,9 @@ class AgentMessage(Document):
     tool_calls: Optional[list] = None
     table: Optional[dict] = None
     image: Optional[str] = None
+    # 灵芽模式的来源行（如 "Source: Wechat 2026-10-29 11:15 Thu"）。单独存放，
+    # 展示时不出现在用户气泡里，只在拼装模型历史时拼到正文前面。
+    meta: Optional[str] = None
 
     class Settings:
         name = "agent_messages"

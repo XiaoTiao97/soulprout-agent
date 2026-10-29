@@ -1,0 +1,15 @@
+{
+  "name": "soulprout-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "ui:build": "npm --prefix ui run build",
+    "tauri": "tauri",
+    "predev": "node scripts/ensure-sidecar-placeholder.mjs",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

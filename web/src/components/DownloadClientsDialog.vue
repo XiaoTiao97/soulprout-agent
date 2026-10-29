@@ -54,7 +54,7 @@ import { useI18n } from 'vue-i18n';
 import {
   ANDROID_LANDING_URL,
   downloadAndroidApk,
-  downloadGatewayClient,
+  downloadDesktopClient,
 } from '@/constants/downloads';
 
 const props = defineProps<{ modelValue: boolean }>();
@@ -66,7 +66,7 @@ const qrDataUrl = ref('');
 const close = () => emit('update:modelValue', false);
 
 const onDesktopDownload = () => {
-  downloadGatewayClient();
+  downloadDesktopClient();
 };
 
 const onAndroidDownload = () => {
