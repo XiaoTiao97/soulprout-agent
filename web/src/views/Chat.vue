@@ -188,6 +188,9 @@ const timeoutError = ref<string>('')
 const isStreamEnded = ref<boolean>(false)  // 标记SSE流是否已结束
 const abstract = ref<string>('')
 const showKBOption = ref<boolean>(false)
+const showExtraInfo = ref<boolean>(false)
+// 用户在当前对话里关掉右侧栏后，本对话不再因工具流自动展开；换对话时清掉
+const extraInfoAutoExpandSuppressed = ref(false)
 const currentUserId = ref<string>('')
 
 const currentUsername = ref<string>('')
@@ -287,6 +290,7 @@ async function fetchConversations(): Promise<void> {
 // 以下是交互处理方法（后续可完善逻辑）
 function createConversation() {
   detachLocalStream()
+  extraInfoAutoExpandSuppressed.value = false
   isGenerating.value = false
   chat_request.value.conversation_id = ""
   chat_request.value.tools_use = true
@@ -319,6 +323,7 @@ function createConversation() {
 async function handleSwitchMode(mode: 'soulprout' | 'task') {
   if (mode === chatMode.value) return
   detachLocalStream()
+  extraInfoAutoExpandSuppressed.value = false
   isGenerating.value = false
   currentStreamingMessage.value = null
   if (mode === 'soulprout') {
@@ -359,6 +364,10 @@ async function handleSwitchMode(mode: 'soulprout' | 'task') {
 /** Soulprout 唯一会话以 user_id 为 conversation_id：分页拉取最近消息（与任务模式一样每次重读） */
 async function loadSoulproutConversation() {
   const userId = currentUserId.value
+  const nextId = userId || ''
+  if (nextId !== (chat_request.value.conversation_id || '')) {
+    extraInfoAutoExpandSuppressed.value = false
+  }
   chat_request.value = {
     conversation_id: userId || '',
     agent_use: 'soulprout',
@@ -449,6 +458,7 @@ async function deleteConversation(conversationId) {
       await fetchConversations()
       agent_message_list.value = []
       chat_request.value.conversation_id = ""
+      extraInfoAutoExpandSuppressed.value = false
       chat_request.value.agent_use = null
       chat_request.value.agent_id = null
       chat_request.value.agent_name = ''
@@ -591,6 +601,7 @@ async function updateConversationAbstract(conversationId: string, abstract: stri
 }
 
 async function pickConversation(conversationId) {
+  const previousId = chat_request.value.conversation_id || ''
   try {
     detachLocalStream()
     isGenerating.value = false
@@ -610,6 +621,9 @@ async function pickConversation(conversationId) {
       response_conversation.data.action_blueprint,
     )
     chat_request.value.conversation_id = conversationId
+    if (String(conversationId || '') !== previousId) {
+      extraInfoAutoExpandSuppressed.value = false
+    }
       chat_request.value.tools_use = response_conversation.data.tools_use
       chat_request.value.skills_use = response_conversation.data.skills_use ?? false
       chat_request.value.kb_use = response_conversation.data.kb_use
@@ -819,7 +833,11 @@ async function processMessageQueue() {
       })
     }
 
-    if (!showExtraInfo.value && shouldAutoExpandExtraPanel(chunk_json)) {
+    if (
+      !showExtraInfo.value &&
+      !extraInfoAutoExpandSuppressed.value &&
+      shouldAutoExpandExtraPanel(chunk_json)
+    ) {
       showExtraInfo.value = true
     }
 
@@ -1464,8 +1482,6 @@ function closeAgentOption() {
   showAgentOption.value = false
 }
 
-const showExtraInfo = ref<boolean>(false)
-
 // 拖拽调整大小相关状态
 const isResizing = ref(false)
 const chatWindowWidth = ref('60%')
@@ -1603,6 +1619,8 @@ function toggleExtraInfo() {
   if (showExtraInfo.value) {
     // 恢复保存的宽度
     loadSavedWidths()
+  } else {
+    extraInfoAutoExpandSuppressed.value = true
   }
 }
 

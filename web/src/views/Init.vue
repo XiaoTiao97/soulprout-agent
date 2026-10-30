@@ -1,15 +1,9 @@
 <template>
   <div class="sp-page">
-    <!-- Loading Screen -->
+    <!-- Loading Screen：与桌面端开屏一致，Logo + 三个圆点 -->
     <div v-if="!loaded" class="sp-loading">
-      <div class="sp-loading-text">
-        <span
-          v-for="(char, i) in loadingChars"
-          :key="i"
-          class="sp-loading-char"
-          :style="{ animationDelay: `${i * 0.08}s` }"
-        >{{ char }}</span>
-      </div>
+      <img class="sp-loading-logo" src="@/assets/images/logo.png" alt="Soulprout" />
+      <div class="sp-loading-dots" aria-hidden="true"><i></i><i></i><i></i></div>
     </div>
 
     <!-- Navigation -->
@@ -276,8 +270,6 @@ const heroTitleRef = ref(null)
 const capTitleRef = ref(null)
 const connectTitleRef = ref(null)
 const openTitleRef = ref(null)
-const loadingChars = 'LOADING_SOULPROUT...'.split('')
-
 const featureGroups = computed(() => {
   const groups = tm('init.featureGroups')
   const list = Array.isArray(groups) ? groups : []
@@ -395,34 +387,47 @@ const scrollTo = (id) => {
   overflow-x: hidden;
 }
 
-/* ─── Loading ──────────────────────────── */
+/* ─── Loading（对齐桌面端 splash） ───────── */
 .sp-loading {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #ffffff;
+  background: rgb(242, 242, 242);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 28px;
   animation: spLoadFade 0.6s ease 1.8s forwards;
 }
 @keyframes spLoadFade {
   from { opacity: 1; }
   to   { opacity: 0; pointer-events: none; }
 }
-.sp-loading-text {
-  font-family: 'Source Code Pro', 'Courier New', monospace;
-  font-size: 14px;
-  letter-spacing: 0.3em;
-  color: #1eb48c;
+.sp-loading-logo {
+  width: min(360px, 62vw);
+  height: auto;
+  display: block;
 }
-.sp-loading-char {
-  display: inline-block;
-  animation: spCharBlink 1.5s ease-in-out infinite;
+.sp-loading-dots {
+  display: flex;
+  gap: 8px;
+  height: 12px;
+  align-items: center;
 }
-@keyframes spCharBlink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+.sp-loading-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  opacity: 0.25;
+  animation: spLoadPulse 1.2s infinite ease-in-out;
+}
+.sp-loading-dots i:nth-child(2) { animation-delay: 0.2s; }
+.sp-loading-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes spLoadPulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 /* ─── Reveal text ──────────────────────── */

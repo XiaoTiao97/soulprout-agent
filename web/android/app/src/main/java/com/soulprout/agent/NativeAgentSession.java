@@ -50,9 +50,55 @@ final class NativeAgentSession {
         return t;
     });
 
+    /** 通知后端终止这一轮运行（只断开 SSE 的话，后端的 Agent 仍会在后台继续跑） */
+    private static final OkHttpClient STOP_CLIENT = new OkHttpClient.Builder()
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
+        .build();
+
+    private final ExecutorService stopExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "native-agent-stop");
+        t.setDaemon(true);
+        return t;
+    });
+    private volatile Future<?> pendingStop;
+
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
     private Future<?> running;
     private okhttp3.Call call;
+
+    /**
+     * 立即向后端发送终止信号（POST /api/message/stop）。
+     * 新一轮 start() 会等这个请求结束再发，避免终止信号误伤刚提交的新一轮。
+     */
+    void stopRemote(String stopUrl, String token, String conversationId) {
+        if (stopUrl == null || stopUrl.isEmpty() || conversationId == null || conversationId.isEmpty()) return;
+        pendingStop = stopExecutor.submit(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("conversation_id", conversationId);
+                Request.Builder rb = new Request.Builder()
+                    .url(stopUrl)
+                    .post(RequestBody.create(payload.toString(), okhttp3.MediaType.parse("application/json; charset=utf-8")));
+                if (token != null && !token.isEmpty()) rb.header("Authorization", "Bearer " + token);
+                try (Response r = STOP_CLIENT.newCall(rb.build()).execute()) {
+                    Log.i(TAG, "agent stop signal http=" + r.code());
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "agent stop signal failed: " + e.getMessage());
+            }
+        });
+    }
+
+    private void awaitPendingStop() {
+        Future<?> f = pendingStop;
+        if (f == null) return;
+        try {
+            f.get(3, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+        }
+    }
 
     void start(String chatUrl, String token, String userId, String message, Listener listener) {
         cancel();
@@ -78,9 +124,12 @@ final class NativeAgentSession {
     void shutdown() {
         cancel();
         executor.shutdownNow();
+        stopExecutor.shutdown();
     }
 
     private void run(String chatUrl, String token, String userId, String message, Listener listener) {
+        awaitPendingStop();
+        if (cancelled.get()) return;
         try {
             JSONObject payload = new JSONObject();
             payload.put("message", message);

@@ -29,7 +29,11 @@ from urllib.request import Request, urlopen
 logger = logging.getLogger(__name__)
 
 try:
-    import lark_oapi as lark
+    # 不直接 `import lark_oapi`：它会一次性导入飞书全部业务域（约 9000 个模块、二三十秒）。
+    # 网关只用发消息 + 事件 + WebSocket，走快速入口（失败自动退回完整导入），详见 _lark_fast.py。
+    from gateway.platforms._lark_fast import load_lark
+
+    lark = load_lark()
     from lark_oapi.api.im.v1 import (
         CreateMessageRequest,
         CreateMessageRequestBody,

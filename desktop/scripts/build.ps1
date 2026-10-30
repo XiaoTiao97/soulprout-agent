@@ -28,7 +28,6 @@ $UiDir       = Join-Path $DesktopDir 'ui'
 $SidecarDir  = Join-Path $DesktopDir 'sidecar'
 $SpecFile    = Join-Path $SidecarDir 'soulprout_desktop.spec'
 $TauriDir    = Join-Path $DesktopDir 'src-tauri'
-$BinariesDir = Join-Path $TauriDir 'binaries'
 $DistDir     = Join-Path $DesktopDir 'dist'
 
 # 外部命令会把普通日志写到 stderr；PowerShell 5.1 在 Stop 模式下会把它当成致命错误，
@@ -70,8 +69,9 @@ if (-not $RustTarget) {
 } else {
     Info "Rust target: $RustTarget"
 }
-$SidecarName = "soulprout-desktop-sidecar-$RustTarget.exe"
-$SidecarPath = Join-Path $BinariesDir $SidecarName
+# PyInstaller 单目录产物，以及 tauri 打包时作为资源带进安装包的暂存目录（安装后位于 <安装目录>\sidecar）
+$SidecarDist   = Join-Path $DistDir 'soulprout-desktop-sidecar'
+$SidecarBundle = Join-Path $TauriDir 'sidecar-bundle'
 
 # ---- sidecar ----------------------------------------------------------
 if (-not $SkipDeps) {
@@ -94,22 +94,24 @@ if (-not $SkipPyInstaller) {
     $env:PATH = (($extra -join ';') + ';' + $env:PATH)
     Push-Location $ProjectRoot
     try {
-        $exe = Join-Path $DistDir 'soulprout-desktop-sidecar.exe'
-        if (Test-Path $exe) { Remove-Item -Force $exe }
+        if (Test-Path $SidecarDist) { Remove-Item -Recurse -Force $SidecarDist }
         Invoke-External {
             & $Python -m PyInstaller $SpecFile --distpath $DistDir --workpath (Join-Path $DesktopDir 'build') --noconfirm
         } "PyInstaller build failed"
     } finally { Pop-Location }
-    Success "PyInstaller done -> desktop\dist\soulprout-desktop-sidecar.exe"
+    Success "PyInstaller done -> desktop\dist\soulprout-desktop-sidecar\"
 } else {
     Warn "Step 3 skipped (-SkipPyInstaller)"
 }
 
-$SourceExe = Join-Path $DistDir 'soulprout-desktop-sidecar.exe'
+$SourceExe = Join-Path $SidecarDist 'soulprout-desktop-sidecar.exe'
 if (-not (Test-Path $SourceExe)) { Fail "$SourceExe not found. Run PyInstaller first (remove -SkipPyInstaller)." }
-New-Item -ItemType Directory -Force -Path $BinariesDir | Out-Null
-Copy-Item -Path $SourceExe -Destination $SidecarPath -Force
-Success "Copied to: $SidecarPath"
+# 整个目录复制进 tauri 的资源暂存目录（先清空，免得残留上一次的文件或开发占位文件）
+if (Test-Path $SidecarBundle) { Remove-Item -Recurse -Force $SidecarBundle }
+New-Item -ItemType Directory -Force -Path $SidecarBundle | Out-Null
+Copy-Item -Path (Join-Path $SidecarDist '*') -Destination $SidecarBundle -Recurse -Force
+$fileCount = (Get-ChildItem $SidecarBundle -Recurse -File | Measure-Object).Count
+Success "Sidecar staged: $SidecarBundle ($fileCount files)"
 
 # ---- 外壳 -------------------------------------------------------------
 if (-not $SkipTauri) {
@@ -122,7 +124,7 @@ if (-not $SkipTauri) {
     } finally { Pop-Location }
     Success "Installer at: $(Join-Path $TauriDir 'target\release\bundle\nsis')"
 } else {
-    Warn "Step 4/5 skipped (-SkipTauri). Sidecar ready at: $SidecarPath"
+    Warn "Step 4/5 skipped (-SkipTauri). Sidecar ready at: $SidecarBundle"
 }
 
 Write-Host ""

@@ -46,7 +46,9 @@ class CloudClient:
         on_cancel: Optional[Callable[[str], None]] = None,
         ws_url_builder: Optional[Callable[[str], list]] = None,
         ssl_connector_factory: Optional[Callable[[], Any]] = None,
+        on_auth_failed: Optional[Callable[[], None]] = None,
     ):
+        self._on_auth_failed = on_auth_failed
         self._executor = executor
         self._get_token = get_token
         self._get_agent_url = get_agent_url
@@ -173,6 +175,13 @@ class CloudClient:
                     # 云端在握手后立刻以 1008 关闭：凭证无效/过期，别再高频重试
                     self.state = "auth_failed"
                     self.last_error = "登录已失效，请重新登录"
+                    # 凭证已被云端拒绝，留着只会让界面误以为「已登录」（直接进聊天却什么都做不了），
+                    # 交给上层清掉，界面会回到登录页。
+                    if self._on_auth_failed is not None:
+                        try:
+                            self._on_auth_failed()
+                        except Exception:
+                            logger.warning("[Desktop] 清理失效登录态失败", exc_info=True)
         return reached_ready
 
     def _safe_channels(self) -> Dict[str, bool]:

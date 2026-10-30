@@ -125,6 +125,16 @@ public class WakeWordPlugin extends Plugin {
         }
 
         @Override
+        public void ensureAsr() {
+            NativeAsrSession s;
+            synchronized (asrLock) {
+                s = asrSession;
+            }
+            if (s != null && s.isOpen()) return;
+            openAsr();
+        }
+
+        @Override
         public void closeAsr() {
             closeAsrSession();
         }
@@ -319,6 +329,8 @@ public class WakeWordPlugin extends Plugin {
         boolean continuous = Boolean.TRUE.equals(call.getBoolean("continuous", true));
         String voice = call.getString("voice", "female");
         int speechRate = call.getInt("speechRate", 0);
+        String judge = call.getString("judgeUrl", "");
+        String stop = call.getString("stopUrl", "");
         if (asr != null && !asr.trim().isEmpty()) asrUrl = asr.trim();
         orchestrator.configure(
             asrUrl,
@@ -328,7 +340,9 @@ public class WakeWordPlugin extends Plugin {
             userId != null ? userId : "",
             continuous,
             voice,
-            speechRate
+            speechRate,
+            judge != null ? judge.trim() : "",
+            stop != null ? stop.trim() : ""
         );
         Log.i("Yavis", "configurePipeline ok enabled=" + orchestrator.isEnabled());
         call.resolve();

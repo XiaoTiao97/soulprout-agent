@@ -4,7 +4,7 @@
 
 :root {
   --dk-titlebar-h: 36px;
-  --dk-radius: 12px;
+  --dk-radius: 20px;
   --dk-vh: 100vh; /* 标题栏浮在页面上，不再扣高度 */
   --dk-accent: #16a34a;
   --dk-accent-soft: rgba(22, 163, 74, 0.1);
@@ -176,6 +176,20 @@ html.soulprout-desktop .dk-chat-drag {
 
 .dk-maximized .dk-win-btn.is-close {
   border-top-right-radius: 0;
+}
+
+/* 右侧「文件 / 子智能体 / 网页」面板：这组切换按钮居中放在面板顶端（约 210px 宽），
+   窗口按钮占右上角 138px。面板窄于约 490px 时两者会叠在一起，这时把按钮整体下移到窗口按钮下面。
+   按面板自己的宽度判断（容器查询），而不是窗口宽度——面板宽度是可拖动调整的。 */
+html.soulprout-desktop .extra-info {
+  container-type: inline-size;
+  container-name: dk-extra;
+}
+
+@container dk-extra (max-width: 540px) {
+  html.soulprout-desktop .preview-tab-bar {
+    padding-top: calc(var(--dk-titlebar-h) + 2px);
+  }
 }
 
 /* 左下角用户菜单：压过 ConversationWindow scoped 的 13px */

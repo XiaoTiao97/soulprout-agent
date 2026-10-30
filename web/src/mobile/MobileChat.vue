@@ -165,6 +165,7 @@
       :refresh-token="fileRefreshToken"
       @close="closeFiles"
     />
+    <RtcTestPage v-if="rtcOpen" @close="rtcOpen = false" />
   </div>
 </template>
 

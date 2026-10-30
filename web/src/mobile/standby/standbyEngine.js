@@ -150,6 +150,8 @@ export function createStandbyEngine() {
       state.reply = ''
       state.partial = value
       log(`原生断句→Agent：「${value.slice(0, 40)}」`)
+    } else if (key === 'judge') {
+      log(value === 'finished' ? '语义判断：说完了，发送' : '语义判断：没说完，继续听')
     } else if (key === 'replyAppend') state.reply += value
     else if (key === 'speakingText') state.speaking = value
     else if (key === 'speaking') state.speaking = state.speaking || ''

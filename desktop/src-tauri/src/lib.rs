@@ -28,10 +28,12 @@ fn force_kill_tree(pid: u32) {
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        // 只发起、不等待：taskkill /T 遍历进程树要三秒多，同步等它会让窗口卡着不关。
+        // 它是独立进程，本应用退出后也会继续把进程树清干净；sidecar 自己还有父进程看门狗兜底。
         let _ = std::process::Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .creation_flags(CREATE_NO_WINDOW)
-            .output();
+            .spawn();
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -77,36 +79,71 @@ fn random_secret() -> String {
     out
 }
 
-/// release：启动 PyInstaller 打包好的 sidecar。
+/// release：启动安装目录里 `sidecar/` 下 PyInstaller（onedir）打包好的 sidecar。
+///
+/// 不用 Tauri 的 externalBin：它只能是单个文件，而单文件的 PyInstaller 包每次启动都要把
+/// 二百多 MB 解压到临时目录，冷启动二十多秒。onedir 在安装时一次性释放，启动时直接加载。
 #[cfg(not(debug_assertions))]
 fn spawn_sidecar(app: &tauri::AppHandle, port: u16, secret: &str) -> Result<u32, String> {
-    use tauri_plugin_shell::process::CommandEvent;
-    use tauri_plugin_shell::ShellExt;
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use tauri::path::BaseDirectory;
 
-    let command = app
-        .shell()
-        .sidecar("soulprout-desktop-sidecar")
-        .map_err(|e| format!("找不到 sidecar：{e}"))?
-        .env("SOULPROUT_DESKTOP_PORT", port.to_string())
+    let name = if cfg!(windows) { "sidecar/soulprout-desktop-sidecar.exe" } else { "sidecar/soulprout-desktop-sidecar" };
+    let resolved = app
+        .path()
+        .resolve(name, BaseDirectory::Resource)
+        .map_err(|e| format!("找不到 sidecar：{e}"))?;
+    // Windows 上 canonicalize 出来的路径带 \\?\ 前缀，PyInstaller 的启动器不一定喜欢，去掉
+    let exe = std::path::PathBuf::from(resolved.to_string_lossy().trim_start_matches(r"\\?\"));
+    if !exe.is_file() {
+        return Err(format!("找不到 sidecar：{}", exe.display()));
+    }
+
+    let mut cmd = std::process::Command::new(&exe);
+    cmd.env("SOULPROUT_DESKTOP_PORT", port.to_string())
         .env("SOULPROUT_DESKTOP_SECRET", secret)
-        .env("SOULPROUT_PARENT_PID", std::process::id().to_string());
-    let (mut rx, child) = command.spawn().map_err(|e| format!("启动 sidecar 失败：{e}"))?;
-    let pid = child.pid();
-    println!("[Desktop] sidecar started pid={pid} port={port}");
+        .env("SOULPROUT_PARENT_PID", std::process::id().to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
 
-    // 把 sidecar 的输出读走并打印（管道没人读会写满后把它卡住）。child 句柄不能丢，丢了管道会被关掉。
-    tauri::async_runtime::spawn(async move {
-        let _child = child;
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
-                    println!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end());
-                }
-                CommandEvent::Terminated(payload) => {
-                    eprintln!("[Desktop] sidecar exited: {:?}", payload.code);
-                    break;
-                }
-                _ => {}
+    let mut child = cmd.spawn().map_err(|e| format!("启动 sidecar 失败（{}）：{e}", exe.display()))?;
+    let pid = child.id();
+    println!("[Desktop] sidecar started pid={pid} port={port} exe={}", exe.display());
+
+    // 把 sidecar 的输出读走并打印（管道没人读会写满后把它卡住）
+    if let Some(out) = child.stdout.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(out).lines().map_while(Result::ok) {
+                println!("[sidecar] {}", line.trim_end());
+            }
+        });
+    }
+    if let Some(err) = child.stderr.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(err).lines().map_while(Result::ok) {
+                eprintln!("[sidecar] {}", line.trim_end());
+            }
+        });
+    }
+
+    // sidecar 如果很快就退出了（缺文件、启动报错等），别让用户干等到超时
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Ok(status) = child.wait() {
+            eprintln!("[Desktop] sidecar exited: {status}");
+            if let Some(window) = app.get_webview_window("main") {
+                let message = format!("本机服务已退出（{status}）。请重新打开应用；仍然失败请重新安装。");
+                let _ = window.eval(&format!(
+                    "window.__spFail && window.__spFail('{}')",
+                    js_string(&message)
+                ));
             }
         }
     });
@@ -290,6 +327,8 @@ fn run_app() {
         // 窗口被关闭时立即退出整个应用，避免「窗口没了但进程还在」
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // 先把窗口藏起来：用户点了关闭就应该立刻看到窗口消失，清理在后台做
+                let _ = window.hide();
                 window.app_handle().exit(0);
             }
         });

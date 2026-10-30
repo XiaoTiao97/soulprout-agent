@@ -38,6 +38,20 @@ async function poll() {
     shell.state = await getState()
   } catch {
     shell.state = null
+    return
+  }
+  // 登录凭证被云端拒绝后 sidecar 会清掉它：还停在聊天页就回登录页，别让用户对着一个发不出消息的界面
+  if (shell.state?.cloud && !shell.state.cloud.logged_in && router.currentRoute.value.name === 'Chat') {
+    // 再确认一次：避免刚登录成功时拿到一份更早发出的、过期的状态而被误踢
+    try {
+      const fresh = await getState()
+      shell.state = fresh
+      if (fresh.cloud.logged_in || router.currentRoute.value.name !== 'Chat') return
+    } catch {
+      return
+    }
+    shell.panel = ''
+    router.replace('/register')
   }
 }
 

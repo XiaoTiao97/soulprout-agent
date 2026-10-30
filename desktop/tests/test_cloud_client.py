@@ -59,7 +59,7 @@ class FakeCloud:
 
 
 class CloudClientTests(_support.TempDirsCase):
-    async def start(self, cloud: FakeCloud, preset="danger-full-access", token="tok"):
+    async def start(self, cloud: FakeCloud, preset="danger-full-access", token="tok", on_auth_failed=None):
         app = web.Application()
         app.router.add_get("/desktop/ws", cloud.handler)
         server = TestServer(app)
@@ -75,6 +75,7 @@ class CloudClientTests(_support.TempDirsCase):
             get_channels=lambda: {"weixin": True, "feishu": False},
             on_cancel=broker.cancel_call,
             ws_url_builder=lambda base: [f"ws://127.0.0.1:{server.port}/desktop/ws"],
+            on_auth_failed=on_auth_failed,
         )
         stop = asyncio.Event()
         task = asyncio.create_task(client.run(stop))
@@ -171,6 +172,16 @@ class CloudClientTests(_support.TempDirsCase):
         self.assertEqual(client.state, "auth_failed")
         await asyncio.sleep(0.5)
         self.assertEqual(len(cloud.tokens), 1)
+
+    async def test_auth_failure_clears_the_stored_login(self):
+        cleared = []
+        cloud = FakeCloud(close_1008=True)
+        client, _ = await self.start(cloud, on_auth_failed=lambda: cleared.append(True))
+        for _ in range(60):
+            if cleared:
+                break
+            await asyncio.sleep(0.05)
+        self.assertEqual(cleared, [True])
 
     async def test_no_token_stays_idle_until_poked(self):
         cloud = FakeCloud()

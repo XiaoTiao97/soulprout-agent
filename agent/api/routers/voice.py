@@ -20,9 +20,11 @@ import logging
 from typing import Awaitable, Optional
 
 from fastapi import APIRouter, Depends, WebSocket
+from pydantic import BaseModel
 
 from agent.database.models.user import UserInfo
 from agent.services.auth import get_current_user, require_user
+from agent.services.voice_turn_judge import judge_user_finished
 from agent.services.doubao_speech.asr import ASR_RESOURCE_ID, DoubaoAsr, speech_configured
 from agent.services.doubao_speech.tts import DEFAULT_VOICE, TTS_RESOURCE_ID, VOICES, DoubaoTts
 
@@ -99,6 +101,20 @@ async def voice_config(_user: UserInfo = Depends(require_user)):
         "asr_sample_rate": 16000,
         "tts_sample_rate": 24000,
     }
+
+
+class TurnJudgeRequest(BaseModel):
+    # 当前对话窗口内用户说过的全部内容（含已发给 Agent 的部分）
+    total_voice_text: str = ""
+    # 尚未发给 Agent 的最新内容
+    current_voice_text: str = ""
+
+
+@router.post("/voice/turn-judge")
+async def voice_turn_judge(body: TurnJudgeRequest, _user: UserInfo = Depends(require_user)):
+    """语义判断用户这轮话是否说完。``user_finished`` 为 null 表示判断失败，调用方应按说完处理。"""
+    finished = await judge_user_finished(body.total_voice_text, body.current_voice_text)
+    return {"user_finished": finished}
 
 
 @router.websocket("/voice/asr")

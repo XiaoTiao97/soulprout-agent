@@ -24,7 +24,7 @@ from aiohttp import web
 from . import auth_store, paths, policy, settings
 from .approvals import ApprovalBroker
 from .cloud_client import CloudClient
-from .gateway_host import GatewayHost, find_free_port, redirect_platform_storage
+from .gateway_host import GatewayHost, find_free_port
 from .local_tools import LocalToolRunner
 from .server import AppContext, DesktopServer
 
@@ -88,8 +88,8 @@ async def run_app(*, port: Optional[int] = None, enable_gateway: Optional[bool] 
     paths.workspaces_root().mkdir(parents=True, exist_ok=True)
     auth_store.redirect_gateway_storage()
     auth_store.sync_gateway_agent_url()
-    if enable_gateway:
-        redirect_platform_storage()
+    # 各渠道的存储目录重定向要导入渠道模块（飞书 SDK 导入要二三十秒），交给 GatewayHost 在后台线程里做，
+    # 不能挡在界面服务启动之前。
 
     broker = ApprovalBroker()
     runner = LocalToolRunner(lambda: policy.standing_for(settings.preset()), broker)
@@ -107,6 +107,7 @@ async def run_app(*, port: Optional[int] = None, enable_gateway: Optional[bool] 
         get_channels=GatewayHost.channel_status,
         on_cancel=broker.cancel_call,
         ssl_connector_factory=make_connector,
+        on_auth_failed=auth_store.clear_login,
     )
     ctx = AppContext(secret=secret, port=port, broker=broker, cloud=cloud, gateway_info=gateway.info)
     app = DesktopServer(ctx).build_app()

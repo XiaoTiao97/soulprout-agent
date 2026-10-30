@@ -27,6 +27,7 @@ class FakeUpstream:
         self.deleted = []
         self.logout_called = False
         self.seen_auth = []
+        self.reject_token = False  # True：像云端收到失效 token 那样回应
 
     def app(self) -> web.Application:
         app = web.Application()
@@ -46,6 +47,8 @@ class FakeUpstream:
         return web.json_response(self.conversations)
 
     async def chat(self, request):
+        if self.reject_token:
+            return web.json_response({"detail": "无效或过期的 token"}, status=401)
         reader = await request.multipart()
         payload, files = {}, []
         async for part in reader:
@@ -65,6 +68,8 @@ class FakeUpstream:
         return web.json_response({"files": self.cloud_files, "conversation_id": request.query.get("conversation_id")})
 
     async def me(self, request):
+        if self.reject_token:  # 真实云端：失效 token 在 /user/me 上是 200 + code 1003，不是 401
+            return web.json_response({"success": False, "message": "无效或过期的 token", "code": 1003})
         auth = request.headers.get("Authorization")
         return web.json_response({"success": bool(auth), "auth": auth})
 
@@ -116,7 +121,7 @@ class ServerCase(_support.TempDirsCase):
         jar = aiohttp.CookieJar(unsafe=True)
         self.client = aiohttp.ClientSession(cookie_jar=jar)
         async with self.client.get(f"{self.base}/__boot?s={SECRET}", allow_redirects=False) as resp:
-            assert resp.status == 302, resp.status
+            assert resp.status == 200, resp.status
 
     async def asyncTearDown(self):
         await self.client.close()
@@ -165,6 +170,15 @@ class SecurityTests(ServerCase):
         self.assertIn(COOKIE_NAME, cookie)
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Strict", cookie)
+
+    async def test_boot_does_not_redirect(self):
+        # 302 会让 Strict cookie 在「外壳页面（tauri.localhost）→ 127.0.0.1」这条跨站链上带不到 "/"，
+        # 必须是 200 页面，由同站页面自己跳转。
+        async with aiohttp.ClientSession() as bare:
+            async with bare.get(f"{self.base}/__boot?s={SECRET}", allow_redirects=False) as resp:
+                self.assertEqual(resp.status, 200)
+                self.assertNotIn("Location", resp.headers)
+                self.assertIn("location.replace('/')", await resp.text())
 
 
 class StaticAndStateTests(ServerCase):
@@ -230,6 +244,42 @@ class ProxyTests(ServerCase):
         self.assertNotIn("token", body)
         self.assertEqual(auth_store.get_token(), "jwt-abc")
         self.assertEqual(auth_store.get_user_id(), "u1")
+
+    async def test_rejected_token_on_user_me_clears_login(self):
+        self.upstream.reject_token = True
+        async with self.client.get(f"{self.base}/api/user/me") as resp:
+            body = await resp.json()
+        self.assertEqual(body["code"], 1003)  # 响应原样交给界面
+        self.assertEqual(auth_store.get_token(), "")
+        async with self.client.get(f"{self.base}/__desktop/state") as resp:
+            self.assertFalse((await resp.json())["cloud"]["logged_in"])
+
+    async def test_chat_401_clears_login(self):
+        self.upstream.reject_token = True
+        payload = {"message": "hi", "conversation_id": "c1", "agent_use": "select-agent"}
+        async with self.client.post(f"{self.base}/api/message/chat", data=self.chat_form(payload)) as resp:
+            self.assertEqual(resp.status, 401)
+            await resp.read()
+        self.assertEqual(auth_store.get_token(), "")
+
+    async def test_stale_401_does_not_clear_a_newer_login(self):
+        # 请求发出时用的是旧 token，响应回来前已经重新登录：不能把新 token 清掉
+        self.upstream.reject_token = True
+        auth_store.save_login(token="tok-new", user_id="u1", email="a@b.c")
+        original = auth_store.get_token
+        calls = {"n": 0}
+
+        def flip():
+            calls["n"] += 1
+            return "tok-1" if calls["n"] == 1 else original()  # 第一次（组装请求头）还是旧的
+
+        auth_store.get_token = flip
+        try:
+            async with self.client.get(f"{self.base}/api/user/me") as resp:
+                await resp.read()
+        finally:
+            auth_store.get_token = original
+        self.assertEqual(auth_store.get_token(), "tok-new")
 
     async def test_logout_clears_local_credentials(self):
         async with self.client.post(f"{self.base}/api/user/logout") as resp:

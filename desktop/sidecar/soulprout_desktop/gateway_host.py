@@ -62,6 +62,8 @@ class GatewayHost:
         self.enabled = enabled
         self.web_port: Optional[int] = None
         self._task: Optional["asyncio.Task"] = None
+        self._watch_task: Optional["asyncio.Task"] = None
+        self.listening = False  # 管理页面的端口已经能连上
         self.error = ""
 
     def start(self, parent_pid: str = "") -> None:
@@ -74,10 +76,22 @@ class GatewayHost:
             os.environ["GATEWAY_PARENT_PID"] = parent_pid
         self._task = asyncio.create_task(self._run(), name="desktop-gateway")
 
+    @staticmethod
+    def _preload() -> None:
+        """导入 gateway 及各渠道模块，并把它们的存储目录重定向到状态目录。
+
+        这一步很慢：飞书 SDK（lark_oapi）有上万个模块，光导入就要二三十秒。所以必须放在线程里做，
+        而且不能挡在界面服务启动之前——否则用户要对着开屏页干等半分钟，而聊天、本机工具根本用不到渠道。
+        """
+        redirect_platform_storage()
+        import gateway.main  # noqa: F401
+
     async def _run(self) -> None:
         try:
+            await asyncio.to_thread(self._preload)
             from gateway.main import run
 
+            self._watch_task = asyncio.create_task(self._watch_listening(), name="desktop-gateway-listening")
             await run(cli_mode=False, daemon_mode=False)
         except asyncio.CancelledError:
             raise
@@ -85,8 +99,24 @@ class GatewayHost:
             self.error = str(exc)
             logger.error("[Desktop] gateway 异常退出: %s", exc, exc_info=True)
 
+    async def _watch_listening(self, timeout: float = 180.0) -> None:
+        """等管理页面的端口真的能连上，界面才把「多端互联」当作可用（之前显示「正在启动」）。"""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            try:
+                _reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", self.web_port), 1.0)
+                writer.close()
+                self.listening = True
+                return
+            except (OSError, asyncio.TimeoutError):
+                await asyncio.sleep(0.5)
+
     async def stop(self) -> None:
         task, self._task = self._task, None
+        watch, self._watch_task = self._watch_task, None
+        if watch is not None:
+            watch.cancel()
         if task is None:
             return
         task.cancel()
@@ -108,7 +138,7 @@ class GatewayHost:
     def info(self) -> Dict[str, Any]:
         return {
             "enabled": self.enabled,
-            "url": f"http://127.0.0.1:{self.web_port}/" if self.enabled and self.web_port else None,
+            "url": f"http://127.0.0.1:{self.web_port}/" if self.enabled and self.web_port and self.listening else None,
             "channels": self.channel_status(),
             "error": self.error,
         }

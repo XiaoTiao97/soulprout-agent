@@ -37,6 +37,9 @@ export async function configureNativePipeline(opts) {
     asrUrl: absWs('/api/voice/asr', { token, end_window_ms: String(endWindowMs) }),
     ttsUrl: absWs('/api/voice/tts', ttsParams),
     chatUrl: absHttp('/api/message/chat'),
+    // 语义断句判断（后端 Ark 轻量模型）与终止 Agent 运行
+    judgeUrl: absHttp('/api/voice/turn-judge'),
+    stopUrl: absHttp('/api/message/stop'),
     token,
     userId: String(opts.userId || ''),
     continuous: !!opts.continuous,

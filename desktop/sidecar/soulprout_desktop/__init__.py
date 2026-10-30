@@ -9,4 +9,4 @@
 - ``gateway_host``   把原有 gateway（微信 / 飞书等渠道）作为桌面端的一部分运行。
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

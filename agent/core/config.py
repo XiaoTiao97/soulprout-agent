@@ -60,6 +60,10 @@ class Config:
         # 豆包语音（火山引擎）：待命模式的流式识别 + 双向流式合成
         # 火山引擎新版控制台的 API Key（请求头 X-Api-Key）；资源 ID 与音色固定写在代码里
         self.doubao_speech_api_key = os.getenv("DOUBAO_SPEECH_API_KEY")
+        # 待命语音「是否说完话」语义判断模型（需要快、便宜）。来源对应 .model.json 的 model_source，
+        # 模型名需在该来源下可用；留空则使用默认值（火山方舟 doubao-seed-2-1-lite-260915）。
+        self.voice_judge_model_source = (os.getenv("VOICE_JUDGE_MODEL_SOURCE") or "ark").strip()
+        self.voice_judge_model = (os.getenv("VOICE_JUDGE_MODEL") or "doubao-seed-2-1-lite-260915").strip()
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
         self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"

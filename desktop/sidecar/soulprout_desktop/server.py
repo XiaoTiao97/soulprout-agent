@@ -47,6 +47,14 @@ logger = logging.getLogger(__name__)
 
 COOKIE_NAME = "soulprout_desktop"
 
+# /__boot 的落地页：背景给实色，免得跳转前的瞬间在透明窗口里露出桌面。
+_BOOT_PAGE = (
+    '<!doctype html><html><head><meta charset="utf-8">'
+    '<meta http-equiv="refresh" content="0;url=/">'
+    "<style>html,body{margin:0;height:100%;background:#f2f2f2}</style>"
+    "</head><body><script>location.replace('/')</script></body></html>"
+)
+
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("application/javascript", ".mjs")
 mimetypes.add_type("text/css", ".css")
@@ -238,9 +246,17 @@ class DesktopServer:
         secret = request.query.get("s", "")
         if not secret or not hmac.compare_digest(secret, self.ctx.secret):
             return web.Response(status=401, text="unauthorized")
-        resp = web.HTTPFound("/")
+        # 不能直接 302 到 "/"：外壳页面来自 http://tauri.localhost，对 127.0.0.1 来说是跨站，
+        # 整条重定向链都算「跨站发起」，浏览器不会把 SameSite=Strict 的 cookie 带到 "/"，结果 401。
+        # 先返回 200 页面种下 cookie，再由这个同站页面自己跳转，Strict cookie 就能带上。
+        resp = web.Response(
+            text=_BOOT_PAGE,
+            content_type="text/html",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
         resp.set_cookie(COOKIE_NAME, self.ctx.secret, httponly=True, samesite="Strict", path="/")
-        raise resp
+        return resp
 
     async def static(self, request: web.Request) -> web.StreamResponse:
         root = self.ctx.ui_dir or paths.ui_dist_dir()
@@ -484,9 +500,44 @@ class DesktopServer:
         async with upstream:
             if path in _LOGIN_PATHS and request.method == "POST":
                 return await self._finish_login(upstream)
+            if path == "user/me" and request.method == "GET":
+                return await self._finish_me(upstream)
             return await self._stream_back(request, upstream)
 
+    def _expire_login(self, upstream: aiohttp.ClientResponse) -> None:
+        """云端说本机保存的登录凭证无效：清掉它，界面才会回到登录页，而不是带着失效的登录态进聊天页。"""
+        token = auth_store.get_token()
+        if not token:
+            return
+        sent = upstream.request_info.headers.get("Authorization", "")
+        if sent != f"Bearer {token}":
+            return  # 请求发出时用的不是当前这份凭证（期间重新登录过），别误清新的
+        logger.warning("[Desktop] 云端拒绝了已保存的登录凭证，已清除，需要重新登录")
+        auth_store.clear_login()
+        self.convs.invalidate()
+        self.ctx.cloud.poke()
+
+    async def _finish_me(self, upstream: aiohttp.ClientResponse) -> web.Response:
+        """``/user/me`` 在凭证无效时返回 200 + ``code 1003``（不是 401），这里一并识别。"""
+        raw = await upstream.read()
+        headers = response_headers(upstream)
+        headers.pop("Content-Length", None)
+        headers.pop("Content-Encoding", None)
+        if upstream.status == 401:
+            self._expire_login(upstream)
+        else:
+            try:
+                body = json.loads(raw.decode("utf-8"))
+            except Exception:
+                body = None
+            if isinstance(body, dict) and body.get("success") is False and body.get("code") == 1003:
+                self._expire_login(upstream)
+        return web.Response(status=upstream.status, body=raw, headers=headers)
+
     async def _stream_back(self, request: web.Request, upstream: aiohttp.ClientResponse) -> web.StreamResponse:
+        # 带着凭证被云端回 401 = 凭证失效（rokid 的 401 是另一回事，不算）
+        if upstream.status == 401 and "/rokid" not in upstream.url.path:
+            self._expire_login(upstream)
         resp = web.StreamResponse(status=upstream.status, headers=response_headers(upstream))
         await resp.prepare(request)
         try:

@@ -251,6 +251,7 @@ dist-mobile/
 # sidecar 的 PyInstaller 配置要纳入版本控制（上面的 *.spec 规则会误伤）
 !desktop/sidecar/*.spec
 desktop/src-tauri/binaries/*.exe
+desktop/src-tauri/sidecar-bundle/
 desktop/src-tauri/gen/
 desktop/src-tauri/target/
 desktop/build/
