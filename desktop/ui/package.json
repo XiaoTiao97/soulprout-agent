@@ -1,7 +1,7 @@
 {
   "name": "soulprout-desktop-ui",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "桌面端界面：复用 ../../web/src 的页面，只在这里加桌面外壳（标题栏、审批弹窗、本机权限设置）。依赖直接使用 web/node_modules，不单独安装。",
   "scripts": {

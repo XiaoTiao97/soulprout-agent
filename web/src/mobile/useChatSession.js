@@ -893,6 +893,8 @@ export function useChatSession() {
         payload.kb_use = []
         payload.conversation_id = currentUserId.value
       }
+      // 标记消息来源：灵芽模式下后端会在用户消息前附 `Source: Mobile ...`，而不是默认的 Web
+      payload.client = 'mobile'
       formData.append('chat_request', JSON.stringify(payload))
       files.forEach((file) => formData.append('files', file))
       const response = await apiFetch('/api/message/chat', {

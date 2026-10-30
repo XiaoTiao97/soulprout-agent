@@ -135,6 +135,8 @@ final class NativeAgentSession {
             payload.put("message", message);
             payload.put("conversation_id", userId);
             payload.put("agent_use", "soulprout");
+            // 消息来源：手机端（待命语音），后端据此在用户消息前标注 Source: Mobile
+            payload.put("client", "mobile");
             payload.put("agent_id", JSONObject.NULL);
             payload.put("agent_name", JSONObject.NULL);
             payload.put("tools_use", true);

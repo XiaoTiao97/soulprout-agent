@@ -83,10 +83,22 @@ cd desktop; npm install; npm run dev  # 可用 SOULPROUT_PYTHON 指定解释器
 ## 构建安装包
 
 ```powershell
-.\desktop\scripts\build.ps1                 # 全流程，产物在 desktop/src-tauri/target/release/bundle/nsis
-.\desktop\scripts\build.ps1 -Python D:\anaconda\envs\soulprout\python.exe
+.\desktop\scripts\build.ps1                 # 全流程，产物在 desktop/release/
+.\desktop\scripts\build.ps1 -Version 0.1.5 -Python D:\anaconda\envs\soulprout\python.exe
 .\desktop\scripts\build.ps1 -SkipDeps -SkipUi   # 已经装好依赖 / 构建过界面时
 ```
+
+## 发版（构建 + 上传官网 OSS）
+
+官网「下载 Windows 版」固定指向 `desktop/Soulprout-setup.exe`，发版脚本会按版本号重新打包并覆盖上传。
+
+```powershell
+.\desktop\scripts\release.ps1 -Version 0.1.5 -Python D:\anaconda\envs\soulprout\python.exe
+.\desktop\scripts\release.ps1                  # 版本号在 tauri.conf.json 上自动 patch +1
+.\desktop\scripts\release.ps1 -UploadOnly -Version 0.1.5   # 只上传 desktop/release/ 已有产物
+```
+
+OSS 凭证复用 `gateway-app\.release.local.json`。
 
 ## 测试
 

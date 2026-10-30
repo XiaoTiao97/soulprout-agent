@@ -259,3 +259,4 @@ desktop/dist/
 desktop/ui/dist/
 desktop/.dev-python
 desktop/.dev-agent-url
+desktop/release/

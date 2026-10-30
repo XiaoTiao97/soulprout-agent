@@ -1,4 +1,4 @@
-# Publish Android APK + force-update manifest to Aliyun OSS.
+﻿# Publish Android APK + force-update manifest to Aliyun OSS.
 #
 #   .\web\android\scripts\publish-update.ps1 -ApkPath .\app-release.apk -Version 1.0.1 -VersionCode 2 -Notes "fix wake"
 #
@@ -35,10 +35,12 @@ foreach ($field in 'accessKeyId', 'accessKeySecret', 'bucket', 'region') {
     if (-not $config.$field) { Fail "Missing $field in $ConfigPath" }
 }
 
+# 清单里的下载地址必须走自定义域名。bucket.oss-cn-hangzhou.aliyuncs.com
+# 在绑定了 CNAME 后会对 APK 返回 HTTP 400，手机点「立即更新」就会失败。
 $baseUrl = if ($env:ANDROID_UPDATE_BASE_URL) {
     $env:ANDROID_UPDATE_BASE_URL.TrimEnd('/')
 } else {
-    "https://$($config.bucket).oss-$($config.region).aliyuncs.com"
+    'https://oss.soulprout.com'
 }
 
 $versionedKey = "android/updates/$Version/Soulprout-$Version.apk"

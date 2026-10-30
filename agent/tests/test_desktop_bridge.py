@@ -254,6 +254,8 @@ class PromptAndHeaderTests(BridgeTestCase):
         self.assertIsNone(bridge.source_header(task))
         wechat = SimpleNamespace(agent_use="soulprout", client=None, source_channel="weixin", runtime_mode="main")
         self.assertTrue(bridge.source_header(wechat).startswith("Source: Wechat "))
+        mobile = SimpleNamespace(agent_use="soulprout", client="mobile", source_channel=None, runtime_mode="main")
+        self.assertTrue(bridge.source_header(mobile).startswith("Source: Mobile "))
         sched = SimpleNamespace(agent_use="soulprout", client=None, source_channel=None, runtime_mode="scheduled")
         self.assertTrue(bridge.source_header(sched).startswith("Source: Scheduled "))
 

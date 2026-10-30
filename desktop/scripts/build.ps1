@@ -5,6 +5,9 @@
 # 结构参考 gateway-app/scripts/build.ps1。
 
 param(
+    # 发布版本 X.Y.Z；传入时写回 tauri.conf.json / Cargo.toml
+    [string]$Version,
+    [string]$Notes,
     [switch]$SkipDeps,
     [switch]$SkipUi,
     [switch]$SkipPyInstaller,
@@ -29,6 +32,13 @@ $SidecarDir  = Join-Path $DesktopDir 'sidecar'
 $SpecFile    = Join-Path $SidecarDir 'soulprout_desktop.spec'
 $TauriDir    = Join-Path $DesktopDir 'src-tauri'
 $DistDir     = Join-Path $DesktopDir 'dist'
+$ConfPath    = Join-Path $TauriDir 'tauri.conf.json'
+$CargoPath   = Join-Path $TauriDir 'Cargo.toml'
+$ReleaseDir  = Join-Path $DesktopDir 'release'
+
+function Write-Utf8NoBom($Path, $Text) {
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
 
 # 外部命令会把普通日志写到 stderr；PowerShell 5.1 在 Stop 模式下会把它当成致命错误，
 # 所以临时放宽，改用退出码判断成败。
@@ -40,6 +50,24 @@ function Invoke-External([scriptblock]$Command, [string]$ErrorMessage) {
 }
 
 Info "Project root: $ProjectRoot"
+
+if ($Version) {
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "Version must be X.Y.Z, got: $Version" }
+    $conf = Get-Content $ConfPath -Raw
+    $confRe = [regex]'("version"\s*:\s*")[^"]*(")'
+    if (-not $confRe.IsMatch($conf)) { Fail 'No version field in tauri.conf.json' }
+    Write-Utf8NoBom $ConfPath $confRe.Replace($conf, "`${1}$Version`${2}", 1)
+    $cargo = Get-Content $CargoPath -Raw
+    $cargoRe = [regex]'(?m)^(version\s*=\s*")[^"]*(")'
+    if (-not $cargoRe.IsMatch($cargo)) { Fail 'No version field in Cargo.toml' }
+    Write-Utf8NoBom $CargoPath $cargoRe.Replace($cargo, "`${1}$Version`${2}", 1)
+    Success "Version set to $Version"
+} else {
+    $verMatch = [regex]::Match((Get-Content $ConfPath -Raw), '"version"\s*:\s*"([^"]+)"')
+    if (-not $verMatch.Success) { Fail 'Cannot read version from tauri.conf.json' }
+    $Version = $verMatch.Groups[1].Value
+    Info "Version: $Version (from tauri.conf.json)"
+}
 
 # ---- 界面 -------------------------------------------------------------
 if (-not $SkipUi) {
@@ -122,7 +150,22 @@ if (-not $SkipTauri) {
         Info "Step 5 - tauri build..."
         Invoke-External { npm run build } "tauri build failed"
     } finally { Pop-Location }
-    Success "Installer at: $(Join-Path $TauriDir 'target\release\bundle\nsis')"
+
+    $NsisDir = Join-Path $TauriDir 'target\release\bundle\nsis'
+    if (-not (Test-Path $NsisDir)) { Fail "NSIS output dir not found: $NsisDir" }
+    $Installer = Get-ChildItem -Path $NsisDir -Filter "*_${Version}_*-setup.exe" |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if (-not $Installer) { Fail "No installer matching *_${Version}_*-setup.exe in $NsisDir" }
+
+    if (Test-Path $ReleaseDir) { Remove-Item -Recurse -Force $ReleaseDir }
+    New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
+
+    $VersionedName = "Soulprout_${Version}_x64-setup.exe"
+    Copy-Item $Installer.FullName (Join-Path $ReleaseDir $VersionedName) -Force
+    Copy-Item $Installer.FullName (Join-Path $ReleaseDir 'Soulprout-setup.exe') -Force
+    Success "Release: $ReleaseDir\$VersionedName"
+    Success "Release: $ReleaseDir\Soulprout-setup.exe (官网下载用固定名)"
 } else {
     Warn "Step 4/5 skipped (-SkipTauri). Sidecar ready at: $SidecarBundle"
 }

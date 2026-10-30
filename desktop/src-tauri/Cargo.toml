@@ -1,6 +1,6 @@
 [package]
 name = "soulprout-desktop"
-version = "0.1.1"
+version = "0.1.6"
 description = "Soulprout Desktop"
 authors = ["Soulprout"]
 edition = "2021"
