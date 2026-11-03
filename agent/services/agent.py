@@ -42,6 +42,11 @@ import aiofiles
 import aiofiles.os
 from pathlib import Path
 from openai import BadRequestError
+import logging
+
+from agent.core.logging_setup import bind_user_id
+
+logger = logging.getLogger(__name__)
 
 class Chat:
     def __init__(self, request):
@@ -52,6 +57,7 @@ class Chat:
 
         self.messages = []
         self.user_id = request.user_id
+        bind_user_id(self.user_id)
         self.conversation_id = request.conversation_id
         self.input_text = request.message
         self.input_message_id = getattr(request, 'input_message_id', None)
@@ -194,7 +200,10 @@ class Chat:
             self.research_last_verdict = match.group(1).upper()
         else:
             # 子智能体未按格式输出时，不覆盖上一次结论，但保证“已调用”状态成立
-            print(f"深度研究验收子智能体未返回可识别的 VERDICT，保留上一次结论：{self.research_last_verdict}")
+            logger.warning(
+                "深度研究验收子智能体未返回可识别的 VERDICT，保留上一次结论：%s",
+                self.research_last_verdict,
+            )
 
     def _research_start(self) -> str:
         self.research_mode = True
@@ -242,8 +251,8 @@ class Chat:
                 if len(content) > 8000:
                     content = content[:8000] + "\n...<truncated>"
                 section = f"Current content of `{research_file}`:\n```\n{content}\n```"
-        except Exception as e:
-            print(f"读取 {research_file} 失败：{e}")
+        except Exception:
+            logger.exception("读取 %s 失败", research_file)
         return prompt.RESEARCH_REMINDER_PROMPT.format(
             research_file=research_file,
             reviewer_agent=self.config.research_reviewer_agent_name,
@@ -272,7 +281,7 @@ class Chat:
                     messages, error, getattr(self, "_request_message_ids", []), self.get_runtime_history,
                 ):
                     raise
-                print(f"[image] 请求因不受支持的图片被拒绝，已移除后重试：{error}")
+                logger.warning("[image] 请求因不受支持的图片被拒绝，已移除后重试：%s", error)
 
     async def _llm_stream_once(self, messages, model_config):
         tool_call = False
@@ -292,7 +301,7 @@ class Chat:
         async for chunk in stream:
             if len(chunk.choices) == 0:
                 self.total_tokens = chunk.usage.total_tokens if hasattr(chunk, 'usage') and chunk.usage else None
-                print("tokens: ", self.total_tokens)
+                logger.info("tokens: %s", self.total_tokens)
                 continue
             delta = chunk.choices[0].delta
 
@@ -360,7 +369,7 @@ class Chat:
                                     update_file_match = True
                                     match_file_path = re.search(pattern_file_path, arguments_total)
                                     if match_file_path:
-                                        print(f"file_path匹配结果: {match_file_path.group(1)}")
+                                        logger.info("file_path匹配结果: %s", match_file_path.group(1))
                                         file_name = match_file_path.group(1)
                             else:
                                 file_tool_message.json_table = {"file_path": file_name, "content": function.arguments}
@@ -373,7 +382,7 @@ class Chat:
                                     correct_file_match = True
                                     match_file_path = re.search(pattern_file_path, arguments_total)
                                     if match_file_path:
-                                        print(f"file_path匹配结果: {match_file_path.group(1)}")
+                                        logger.info("file_path匹配结果: %s", match_file_path.group(1))
                                         file_name = match_file_path.group(1)
                             elif not past_text_match:
                                 past_text += function.arguments
@@ -382,7 +391,7 @@ class Chat:
                                 if match_past_text:
                                     past_text_match = True
                                     past_text = match_past_text.group(1)
-                                    print(f"past_text匹配结果: {match_past_text.group(1)}")
+                                    logger.info("past_text匹配结果: %s", match_past_text.group(1))
                                     file_tool_message.json_table = {"file_path": file_name, "past_text": past_text}
                                     yield file_tool_message
                             else:
@@ -398,8 +407,8 @@ class Chat:
             try:
                 file_tool_message.json_table = json.loads(arguments_total)
                 yield file_tool_message
-            except Exception as e:
-                print("file_tool_message_json_error: ", e)
+            except Exception:
+                logger.exception("file_tool_message_json_error")
                 pass
         if file_stop:
             file_tool_message.json_table = {"file_stop": "true"}
@@ -444,10 +453,10 @@ class Chat:
             message=[{"role": "system", "content": prompt.ABSTRACT_SYSTEM_PROMPT}]
             message.append({"role": "user", "content": prompt.ABSTRACT_USER_PROMPT.format(input_text=self.input_text)})
             abstract = await self.llm.chat_no_stream(message, model_config)
-            print(abstract)
-        except Exception as e:
+            logger.info("abstract: %s", abstract)
+        except Exception:
             abstract = self.input_text[0:12]
-            print(f"Abstract Error: {e}")
+            logger.exception("Abstract Error")
         return abstract
 
     async def get_kb_prompt(self):
@@ -458,7 +467,7 @@ class Chat:
             res_total = {"kb_id": res.get("kb_id"), "kb_name_zh": res.get("kb_name_zh"), "kb_description": res.get("kb_description")}
             result_total += str(res_total)+"\n"
         kb_prompt = prompt.KB_PROMPT.format(result_total=result_total)
-        print("kb_prompt: ", kb_prompt)
+        logger.info("kb_prompt: %s", kb_prompt)
         return kb_prompt
 
     def _build_blueprint(self):
@@ -491,7 +500,7 @@ class Chat:
                 dst_file = dst_path / rel_path
                 file_list.append((src_file, dst_file))
 
-        print(f"找到 {len(file_list)} 个文件")
+        logger.info("找到 %s 个文件", len(file_list))
 
         # 定义单个文件的复制任务
         async def copy_one(src, dst):
@@ -514,10 +523,10 @@ class Chat:
                     async with aiofiles.open(dst, 'wb') as f_dst:
                         while chunk := await f_src.read(8192):
                             await f_dst.write(chunk)
-                print(f"已复制: {src}")
+                logger.info("已复制: %s", src)
                 return True
-            except Exception as e:
-                print(f"失败: {src} - {e}")
+            except Exception:
+                logger.exception("复制失败: %s", src)
                 return False
 
         # 创建并执行所有任务
@@ -525,7 +534,7 @@ class Chat:
         results = await asyncio.gather(*tasks)
 
         success = sum(1 for r in results if r)
-        print(f"\n完成: {success}/{len(file_list)} 个文件处理成功")
+        logger.info("完成: %s/%s 个文件处理成功", success, len(file_list))
         # 本地会话：把刚复制好的智能体文件推送到用户电脑的工作区（其它会话是空操作）
         await desktop_bridge.sync_to_device(self.config, self.conversation_id)
         return success
@@ -546,8 +555,8 @@ class Chat:
 
             return file_names
 
-        except Exception as e:
-            print(f"错误: {e}")
+        except Exception:
+            logger.exception("读取会话文件列表失败")
             return []
 
     async def check_folder_exists(self, target_name: str) -> bool:
@@ -575,8 +584,8 @@ class Chat:
 
             return False
 
-        except Exception as e:
-            print(f"检查文件夹错误: {e}")
+        except Exception:
+            logger.exception("检查文件夹错误")
             return False
 
     async def expert_load_skills(self, skills):
@@ -618,12 +627,12 @@ class Chat:
                 workspace_base=self.config.local_file_path,
             )
             if result.get("success"):
-                print(f"✅ 加载技能成功: {result.get('data')}")
+                logger.info("加载技能成功: %s", result.get("data"))
                 await desktop_bridge.sync_to_device(self.config, self.conversation_id)
                 return result
             raise Exception(f"加载失败: {result.get('error')}")
         else:
-            print("无技能或技能已加载")
+            logger.info("无技能或技能已加载")
 
         return skills_list
 
@@ -712,8 +721,8 @@ class Chat:
                 userinfo_text = (getattr(user, "userinfo", "") or "").strip()
                 agent_name = (getattr(user, "agentname", "") or "").strip() or prompt.DEFAULT_AGENT_NAME
                 agentinfo_text = (getattr(user, "agentinfo", "") or "").strip()
-        except Exception as e:
-            print(f"加载 UserInfo 失败：{e}")
+        except Exception:
+            logger.exception("加载 UserInfo 失败")
 
         agent_info_section = (
             "# PERSONAL INFO\n"
@@ -771,8 +780,8 @@ class Chat:
         purpose = arguments.get("purpose")
         sid = arguments.get("session_id")
         session_id = sid if sid and len(sid) == 4 else None
-        print("arguments: ", arguments)
-        print("session_id: ", session_id)
+        logger.info("arguments: %s", arguments)
+        logger.info("session_id: %s", session_id)
         target_agent_id = self.agents_dict.get(target_name)
         if not target_agent_id and target_name:
             target_card = await self.config.db_agent_card.find_one({"name": target_name})
@@ -820,7 +829,7 @@ class Chat:
                 agent_use="temp-expert-agent",
                 temp_sub_agent=temp_sub_agent,
             )
-        print(f"Sending request: {chat_request_data}")
+        logger.info("Sending request: %s", chat_request_data)
         sub_chat = Chat(chat_request_data)
         async for chunk in sub_chat.run():
             yield chunk
@@ -1080,8 +1089,8 @@ class Chat:
                 except StopAsyncIteration:
                     # 该生成器已经处理完毕
                     pass
-                except Exception as e:
-                    print(f"处理生成器时出错: {e}")
+                except Exception:
+                    logger.exception("处理生成器时出错")
 
     async def agents_and_tools_call(self, message, name_list, arguments_list):
         tasks = [self.process_single_agent(name, arguments_list[i], message, i) if name == "call_sub_agent" else self.process_single_tool(name, arguments_list[i], message, i) for i, name in enumerate(name_list)]
@@ -1128,7 +1137,7 @@ class Chat:
 
         # 删除源目录
         await aioshutil.rmtree(source_dir)
-        print("已移动临时文件，删除临时目录")
+        logger.info("已移动临时文件，删除临时目录")
 
     async def upload_files(self):
         if not self.file_name_list:
@@ -1226,7 +1235,7 @@ class Chat:
                 if mid not in seen:
                     seen.add(mid)
                     unique_ids.append(mid)
-            print(f"[history_check] 清理非法消息数={len(unique_ids)}")
+            logger.info("[history_check] 清理非法消息数=%s", len(unique_ids))
             await self.delete_runtime_messages(unique_ids)
 
     async def edit_message_process(self):
@@ -1234,12 +1243,12 @@ class Chat:
         del_id_list = []
         if_del = False
         for message in history:
-            print(message.id, self.input_message_id)
+            logger.info("edit message id=%s input_message_id=%s", message.id, self.input_message_id)
             if str(message.id) == self.input_message_id:
                 if_del = True
             if if_del:
                 del_id_list.append(message.id)
-        print(del_id_list)
+        logger.info("delete message ids: %s", del_id_list)
         await delete_messages_by_ids(del_id_list)
 
     async def sub_agent_process(self):
@@ -1314,7 +1323,7 @@ class Chat:
         tools = await self.sub_agent_process()
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
         tool_name_list = [tool.get("function").get("name") for tool in tools]
-        print(f"子智能体加载tools数量：{len(tools)}，加载的tool:{tool_name_list}")
+        logger.info("子智能体加载tools数量：%s，加载的tool:%s", len(tools), tool_name_list)
 
         await self.ensure_sub_agent_conversation()
         self.model_config = ModelConfig(model_source=self.model_source, model=self.model, tools=tools, stream=True)
@@ -1387,8 +1396,8 @@ class Chat:
                             self._inject_tool_runtime_args(arguments, name)
                         async for agents_and_tools_response in self.agents_and_tools_call(message, name_list, arguments_list):
                             yield agents_and_tools_response
-                    except Exception as e:
-                        print(e)
+                    except Exception:
+                        logger.exception("子智能体工具参数解析失败")
                         content = "arguments解析错误，请分批次多次调用工具执行"
                         await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[0].id, created_at=datetime.utcnow()))
                         self.messages.append({"role": "tool", "content": content, "tool_call_id": message.tool_calls[0].id})
@@ -1419,7 +1428,7 @@ class Chat:
                 if self.research_mode and self.research_remind_count < self.config.research_remind_limit:
                     self.research_remind_count += 1
                     reminder = await self._build_research_reminder()
-                    print(f"深度研究兜底提醒（第 {self.research_remind_count} 次）")
+                    logger.info("深度研究兜底提醒（第 %s 次）", self.research_remind_count)
                     await self.save_message(AgentMessage(
                         user_id=self.user_id,
                         conversation_id=self.conversation_id,
@@ -1528,15 +1537,15 @@ class Chat:
 
         # 对于知识库的系统提示词处理
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
-        print("system_prompt:", self.system_prompt)
+        logger.info("system_prompt: %s", self.system_prompt)
         # 召回相关记忆（hybrid_search Top10 & score>=0.6 & 排除已加载），命中后写入 memory 类型消息
         await self.recall_memory_process()
 
         tool_name_list = [tool.get("function").get("name") for tool in tools]
-        print(f"load tools:{tool_name_list}")
+        logger.info("load tools: %s", tool_name_list)
 
         self.model_config = ModelConfig(model_source=self.model_source, model=self.model, tools=tools, stream=True)
-        print("model_source:", self.model_source, "model:", self.model)
+        logger.info("model_source: %s model: %s", self.model_source, self.model)
         user_msg_type = "user_feedback" if self.user_feedback else "text"
         result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow(), meta=desktop_bridge.source_header(self)))
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="user_message", role="user", content=self.input_text).model_dump_json()
@@ -1608,7 +1617,7 @@ class Chat:
                     yield ChatResponse(**message_save).model_dump_json()
 
                     try:
-                        print(message.tool_calls)
+                        logger.info("tool_calls: %s", message.tool_calls)
                         name_list = [tool_call.function.name for tool_call in message.tool_calls]
                         arguments_list = [json.loads(tool_call.function.arguments) for tool_call in message.tool_calls]
                         for name, arguments in zip(name_list, arguments_list):

@@ -1,4 +1,6 @@
 import asyncio
+import contextvars
+import logging
 from io import BytesIO
 from pdfminer.high_level import extract_text
 from docx import Document
@@ -20,6 +22,8 @@ try:
     _ALIYUN_AVAILABLE = True
 except ImportError:
     _ALIYUN_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 class AsyncFileProcess:
@@ -55,21 +59,22 @@ class AsyncFileProcess:
             markdown_str = ""
             for layout in data["layouts"]:
                 markdown_str += layout["markdownContent"] + "\n"
-            print(markdown_str)
+            logger.info("aliyun 文档解析完成 file=%s chars=%s\n%s", file, len(markdown_str), markdown_str)
             return markdown_str
         except Exception as error:
-            # 如有需要，请打印 error
+            logger.warning("aliyun 文档解析失败 file=%s: %s", file, getattr(error, "message", error))
             UtilClient.assert_as_string(error.message)
             return error.message
 
     async def aliyun_file_parse_async(self, file):
-        loop = asyncio.get_event_loop()
-        text = await loop.run_in_executor(self.executor, self.aliyun_file_parse, file)
+        loop = asyncio.get_running_loop()
+        ctx = contextvars.copy_context()
+        text = await loop.run_in_executor(self.executor, ctx.run, self.aliyun_file_parse, file)
         return text
 
     async def pdf_parse(self, file):
         """异步解析PDF文件"""
-        print(file)
+        logger.info("解析 PDF: %s", file)
         # PDF解析是CPU密集型任务，放到线程池中执行
         loop = asyncio.get_event_loop()
         text = await loop.run_in_executor(self.executor, extract_text, file)
@@ -141,8 +146,8 @@ class AsyncFileProcess:
 
     async def pptx_parse(self, file):
         """异步解析PDF文件"""
-        print(file)
-        # PDF解析是CPU密集型任务，放到线程池中执行
+        logger.info("解析 PPTX: %s", file)
+        # PPTX 解析是 CPU 密集型任务，放到线程池中执行
         loop = asyncio.get_event_loop()
         text = await loop.run_in_executor(self.executor, extract_ppt_complete_info, file)
         return text
@@ -209,7 +214,7 @@ class AsyncFileProcess:
                     tokens = await loop.run_in_executor(None, encoding.encode, text)
                     return len(tokens)
                 except ImportError:
-                    print("tiktoken未安装，自动切换到mixed方法")
+                    logger.warning("tiktoken未安装，自动切换到mixed方法")
                     return await count_tokens_mixed(text)
 
             else:

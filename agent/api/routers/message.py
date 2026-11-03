@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Query
 from agent.services.auth import ensure_conversation_owner, require_user
@@ -16,6 +17,8 @@ import time
 
 # 工具执行期间可能长时间无业务事件；定期发 SSE comment 保活。
 _SSE_HEARTBEAT_INTERVAL_S = 15.0
+
+logger = logging.getLogger(__name__)
 
 config = Config()
 models_info_list = config.models_info_list
@@ -170,9 +173,9 @@ async def chat_stream(
                 async with aiofiles.open(temp_file_path, "wb") as buffer:
                     await buffer.write(content)
                 temp_file_paths.append(temp_file_path)
-                print(f"文件临时保存: {temp_file_path}")
-            except Exception as e:
-                print(f"文件保存失败 {file.filename}: {e}")
+                logger.info("文件临时保存: %s", temp_file_path)
+            except Exception:
+                logger.exception("文件保存失败 %s", file.filename)
                 continue
     # 桌面端的本地会话由本机保存附件，只把文件名随请求带上来，这里不要把它覆盖成空列表
     if file_name_list or not getattr(chat_request, "file_name_list", None):

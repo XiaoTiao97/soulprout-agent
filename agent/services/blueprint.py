@@ -25,6 +25,7 @@ MAX_REVIEW_CYCLES 次，上限耗尽后取最新蓝图作为最终结果，循�
 """
 
 import json
+import logging
 import os
 
 from agent.api.models.message import ChatResponse, ModelConfig
@@ -40,6 +41,8 @@ from agent.skill.skill_server import (
 )
 from agent.utils.llm import LLM
 from agent.utils.vdb_client import VDBClient
+
+logger = logging.getLogger(__name__)
 
 SKILL_COLLECTION = os.getenv("VDB_SKILL_COLLECTION", "skill_collection")
 BLUEPRINT_DISCARDED_TEXT = (
@@ -275,8 +278,8 @@ class Blueprint:
                 f"Agent-name: {(getattr(user, 'agentname', '') or '').strip()}\n"
                 f"Agent-info: {(getattr(user, 'agentinfo', '') or '').strip()}"
             )
-        except Exception as e:
-            print(f"Blueprint user info error: {e}")
+        except Exception:
+            logger.exception("Blueprint user info error")
             return "Failed to load user profile."
 
     async def _get_memory_briefs(self):
@@ -312,8 +315,8 @@ class Blueprint:
                     "description": item.get("description") or "",
                     "score": score,
                 })
-        except Exception as e:
-            print(f"Blueprint memory recall error: {e}")
+        except Exception:
+            logger.exception("Blueprint memory recall error")
         return memories
 
     async def _get_kb_info_brief(self):
@@ -335,8 +338,8 @@ class Blueprint:
                 }
                 async for row in rows
             ]
-        except Exception as e:
-            print(f"Blueprint kb_info error: {e}")
+        except Exception:
+            logger.exception("Blueprint kb_info error")
             return []
 
     def _format_resource_prompt(self, user_info, memories, kb_list):
@@ -395,8 +398,8 @@ class Blueprint:
                     "name": name,
                     "description": item.get("description") or "",
                 })
-        except Exception as e:
-            print(f"Blueprint system skill recall error: {e}")
+        except Exception:
+            logger.exception("Blueprint system skill recall error")
 
         user_skills: list[dict] = []
         if self.user_id:
@@ -413,8 +416,8 @@ class Blueprint:
                         "name": name,
                         "description": item.get("description") or "",
                     })
-            except Exception as e:
-                print(f"Blueprint user skill list error: {e}")
+            except Exception:
+                logger.exception("Blueprint user skill list error")
 
         return system_skills + user_skills
 
@@ -547,7 +550,7 @@ class Blueprint:
                         count = min(int(args.get("count") or 5), 5)
                     except Exception:
                         count = 5
-                    print(f"blueprint generator web_search: query={query!r}, count={count}")
+                    logger.info("blueprint generator web_search: query=%r, count=%s", query, count)
                     result = await self.tool_executor.call_tool(
                         "web_search",
                         {
@@ -712,7 +715,7 @@ class Blueprint:
                 ):
                     yield chunk
                 blueprint_text = holder[0] if holder else blueprint_text
-                print(f"blueprint revised (round {round_index + 1})")
+                logger.info("blueprint revised (round %s)", round_index + 1)
 
             critic_holder: list = []
             async for chunk in self._stream_plain_agent(
@@ -723,12 +726,12 @@ class Blueprint:
             critique = critic_holder[0] if critic_holder else ""
 
             if CRITIC_PASS_TOKEN in critique:
-                print(f"critic passed at round {round_index + 1}")
+                logger.info("critic passed at round %s", round_index + 1)
                 if result_holder is not None:
                     result_holder.append(blueprint_text)
                 return
             discussion.append({"agent": "critic", "content": critique})
-            print(f"critic feedback (round {round_index + 1}):", critique)
+            logger.info("critic feedback (round %s): %s", round_index + 1, critique)
 
         if discussion and discussion[-1]["agent"] == "critic":
             holder = []
@@ -737,7 +740,7 @@ class Blueprint:
             ):
                 yield chunk
             blueprint_text = holder[0] if holder else blueprint_text
-            print("discussion rounds exhausted, final revision applied")
+            logger.info("discussion rounds exhausted, final revision applied")
         if result_holder is not None:
             result_holder.append(blueprint_text)
 
@@ -768,7 +771,7 @@ class Blueprint:
             ):
                 yield chunk
             blueprint_text = holder[0] if holder else ""
-            print("blueprint initial draft generated")
+            logger.info("blueprint initial draft generated")
 
             # 阶段二/三：讨论循环 + 最终审核循环
             for review_cycle in range(MAX_REVIEW_CYCLES + 1):
@@ -780,7 +783,7 @@ class Blueprint:
                 blueprint_text = disc_holder[0] if disc_holder else blueprint_text
 
                 if review_cycle == MAX_REVIEW_CYCLES:
-                    print("review cycles exhausted, using latest blueprint")
+                    logger.info("review cycles exhausted, using latest blueprint")
                     break
 
                 review_holder: list = []
@@ -792,9 +795,9 @@ class Blueprint:
                 verdict = review_holder[0] if review_holder else ""
 
                 if REVIEWER_PASS_TOKEN in verdict:
-                    print(f"final reviewer approved at cycle {review_cycle + 1}")
+                    logger.info("final reviewer approved at cycle %s", review_cycle + 1)
                     break
-                print(f"final reviewer rejected (cycle {review_cycle + 1}):", verdict)
+                logger.info("final reviewer rejected (cycle %s): %s", review_cycle + 1, verdict)
                 discussion.append({
                     "agent": "critic",
                     "content": BLUEPRINT_REVIEWER_FEEDBACK_WRAPPER.format(
@@ -811,9 +814,9 @@ class Blueprint:
                 )
 
             self.last_blueprint_text = plan
-            print("action_blueprint generated:", plan)
+            logger.info("action_blueprint generated: %s", plan)
 
-        except Exception as e:
+        except Exception:
             self.last_blueprint_text = ""
             yield self._sse_chunk(PLAN_FINAL_TYPE, "")
-            print(f"Blueprint Error: {e}")
+            logger.exception("Blueprint Error")

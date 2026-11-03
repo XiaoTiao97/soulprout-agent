@@ -16,6 +16,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from agent.api.models.message import ChatRequest
+from agent.core.logging_setup import bind_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,7 @@ class RunManager:
     async def _execute(self, run: ConversationRun, pending: PendingTurn) -> None:
         from agent.services.agent import Chat
 
+        bind_user_id(getattr(pending.request, "user_id", None) or run.user_id)
         await self._fill_abstract(run)
         async with run.lock:
             if run.stop_requested:

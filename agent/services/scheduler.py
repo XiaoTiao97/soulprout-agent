@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from agent.api.models.message import ChatRequest
+from agent.core.logging_setup import user_log_scope
 from agent.database.crud.outbound_delivery import (
     delivery_to_payload,
     enqueue_delivery,
@@ -107,6 +108,11 @@ async def flush_pending_to_online_gateways() -> None:
 
 async def _execute_task(task: ScheduledTask) -> None:
     kind = resolve_task_kind(getattr(task, "kind", None), task.instruction or "", task.notify_text or "")
+    with user_log_scope(task.user_id):
+        await _execute_task_for_user(task, kind)
+
+
+async def _execute_task_for_user(task: ScheduledTask, kind: str) -> None:
     logger.info("[Scheduler] 触发 task=%s kind=%s channel=%s", task.task_id, kind, task.channel)
     try:
         if kind == "agent":

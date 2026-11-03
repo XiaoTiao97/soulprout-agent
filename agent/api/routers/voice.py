@@ -22,6 +22,7 @@ from typing import Awaitable, Optional
 from fastapi import APIRouter, Depends, WebSocket
 from pydantic import BaseModel
 
+from agent.core.logging_setup import bind_user_id
 from agent.database.models.user import UserInfo
 from agent.services.auth import get_current_user, require_user
 from agent.services.voice_turn_judge import judge_user_finished
@@ -122,6 +123,7 @@ async def voice_asr(ws: WebSocket):
     user = await _accept_and_auth(ws)
     if user is None:
         return
+    bind_user_id(str(user.user_id))
 
     try:
         end_window_ms = int(ws.query_params.get("end_window_ms") or DEFAULT_END_WINDOW_MS)
@@ -178,6 +180,7 @@ async def voice_tts(ws: WebSocket):
     user = await _accept_and_auth(ws)
     if user is None:
         return
+    bind_user_id(str(user.user_id))
 
     voice = (ws.query_params.get("voice") or "").strip() or None
     try:

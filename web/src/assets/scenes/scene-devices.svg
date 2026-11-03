@@ -1,0 +1,57 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" fill="#f4f3f1"/>
+  <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(400 300) rotate(90) scale(190)">
+    <stop stop-color="#1eb48c" stop-opacity="0.16"/>
+    <stop offset="1" stop-color="#1eb48c" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="800" height="600" fill="url(#glow2)"/>
+
+  <!-- hS -->
+  <ellipse cx="400" cy="300" rx="245" ry="150" stroke="#d9d6d2" stroke-width="2" stroke-dasharray="3 12" stroke-linecap="round"/>
+
+  <!-- uBKI -->
+  <circle cx="400" cy="300" r="60" fill="#1eb48c" opacity="0.1"/>
+  <circle cx="400" cy="300" r="38" fill="#1eb48c" opacity="0.18"/>
+  <circle cx="400" cy="300" r="18" fill="#1eb48c"/>
+  <circle cx="392" cy="292" r="6" fill="#ffffff" opacity="0.75"/>
+
+  <!-- Þ¿ -->
+  <path d="M255 210 Q320 260 372 288" stroke="#c9c6c1" stroke-width="2" stroke-linecap="round"/>
+  <path d="M545 210 Q480 260 428 288" stroke="#c9c6c1" stroke-width="2" stroke-linecap="round"/>
+  <path d="M255 398 Q320 348 372 314" stroke="#c9c6c1" stroke-width="2" stroke-linecap="round"/>
+  <path d="M545 398 Q480 348 428 314" stroke="#c9c6c1" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- AI <\ -->
+  <g stroke="#3a3a3a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff">
+    <path d="M205 190 h34 q10 0 10 10 v6 q0 10 -10 10 h-24 q-10 0 -10 -10 v-6 q0 -10 10 -10 z"/>
+    <path d="M255 190 h34 q10 0 10 10 v6 q0 10 -10 10 h-24 q-10 0 -10 -10 v-6 q0 -10 10 -10 z"/>
+    <path d="M249 197 h6" fill="none"/>
+    <path d="M205 197 l-16 -6 M299 197 l16 -6" fill="none"/>
+  </g>
+
+  <!-- K: -->
+  <g stroke="#3a3a3a" stroke-width="3" fill="#ffffff">
+    <rect x="556" y="152" width="52" height="94" rx="12"/>
+    <circle cx="582" cy="230" r="3" fill="#3a3a3a" stroke="none"/>
+  </g>
+
+  <!-- Lb>:h -->
+  <g stroke="#3a3a3a" stroke-width="3" stroke-linejoin="round" fill="#ffffff">
+    <rect x="185" y="352" width="120" height="78" rx="10"/>
+    <path d="M245 430 v14 M225 448 h40" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- ó± -->
+  <g stroke="#3a3a3a" stroke-width="3" fill="#ffffff">
+    <rect x="548" y="346" width="68" height="88" rx="16"/>
+    <circle cx="582" cy="378" r="9" stroke-width="2.5"/>
+    <path d="M566 412 h32" stroke-linecap="round" stroke-width="2.5"/>
+  </g>
+
+  <!-- ¾
+„uB®I -->
+  <circle cx="227" cy="203" r="4" fill="#1eb48c"/>
+  <circle cx="582" cy="170" r="4" fill="#1eb48c"/>
+  <circle cx="245" cy="368" r="4" fill="#1eb48c"/>
+  <circle cx="582" cy="378" r="4" fill="#1eb48c"/>
+</svg>

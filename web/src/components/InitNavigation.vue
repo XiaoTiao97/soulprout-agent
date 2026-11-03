@@ -8,6 +8,7 @@
 
       <!-- Links -->
       <div class="sp-nav-links">
+        <button class="sp-nav-link" @click="scrollTo('scenes')">{{ t('nav.scenes') }}</button>
         <button class="sp-nav-link" @click="scrollTo('capabilities')">{{ t('nav.capabilities') }}</button>
         <button class="sp-nav-link" @click="scrollTo('connectivity')">{{ t('nav.connectivity') }}</button>
         <button class="sp-nav-link" @click="scrollTo('intelligence')">{{ t('nav.openSource') }}</button>
@@ -130,6 +131,14 @@ function openDocs() {
   background: #22c99d;
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(30, 180, 140, 0.28);
+}
+@media (max-width: 1280px) {
+  .sp-nav-inner { padding: 0 1.25rem; }
+  .sp-nav-links { gap: 0.85rem; }
+  .sp-nav-link {
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+  }
 }
 @media (max-width: 640px) {
   .sp-nav-links { display: none; }

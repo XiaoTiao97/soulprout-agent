@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from beanie.operators import Eq
 
 from agent.api.models.message import ChatRequest
+from agent.core.logging_setup import bind_user_id
 from agent.database.models.rokid_credential import RokidCredential
 from agent.services.agent import Chat
 
@@ -229,6 +230,7 @@ async def stream_soul_as_rokid(
     user_id: str,
     agent_id: str,
 ) -> AsyncIterator[str]:
+    bind_user_id(user_id)
     message_id = str(body.get("message_id") or "").strip() or "0"
     user_text = build_user_message(body)
 

@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Form, File, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from agent.core.config import Config
@@ -17,6 +18,7 @@ from collections import defaultdict
 from agent.tool.registry import get_all_tool_schemas
 from agent.skill.skill_server import SkillServer
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 skill_server = SkillServer()
 
@@ -182,7 +184,7 @@ async def get_files(conversation_id: str = Query(...), user: UserInfo = Depends(
     result = []
     def on_walk_error(err: OSError):
         # 遇到某个无权限子目录，跳过继续，不要整接口失败
-        print(f"os.walk warning: {err}")
+        logger.warning("os.walk warning: %s", err)
     for root, dirs, files in os.walk(conv_dir, topdown=True, onerror=on_walk_error):
         # 过滤不可进入的子目录，避免 PermissionError
         dirs[:] = [d for d in dirs if os.access(Path(root) / d, os.R_OK | os.X_OK)]

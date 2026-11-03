@@ -1,6 +1,7 @@
 export default {
   nav: {
     capabilities: 'Features',
+    scenes: 'Scenes',
     connectivity: 'Connect',
     openSource: 'Open Source',
     docs: 'Docs',
@@ -12,30 +13,96 @@ export default {
     heroSub: 'Untouchable, they let you touch the world.',
     exploreMore: 'Explore more ↓',
     capsEyebrow: 'Core Capabilities',
-    capsTitle: 'Capability Matrix',
+    capsTitle: 'Capability',
+    scenesEyebrow: 'Scenarios',
+    scenesTitle: 'Scenes',
+
+    scenesPrev: 'Previous',
+    scenesNext: 'Next',
+    scenesList: [
+      {
+        key: 'nearby',
+        tag: 'Earbud',
+        say: 'Hello, Xiaoya',
+        title: 'One Bluetooth earbud is the way in to your Agent',
+      },
+      {
+        key: 'whole-day',
+        tag: 'Persona',
+        title: 'You define their name and personality',
+      },
+      {
+        key: 'all-devices',
+        tag: 'Anywhere',
+        title: 'You can find me anywhere',
+      },
+      {
+        key: 'does-work',
+        tag: 'Delivery',
+        title: 'Delivery, not just an answer',
+      },
+      {
+        key: 'remembers',
+        tag: 'Memory',
+        title: 'I remember',
+      },
+    ],
     connectEyebrow: 'Multi-Platform',
-    connectTitle: 'Connect Everywhere',
-    connectDesc: 'Download the Windows desktop app or the Android app to chat with your agent on WeChat, Feishu, WeCom, XiaoAI speakers, and more.',
+    connectTitle: 'Connect',
+    connectClientsLabel: 'Clients',
+    connectClientsTitle: 'Many doors, one soul',
+    connectClients: [
+      {
+        key: 'web',
+        name: 'Web',
+        tag: 'Cloud sandbox',
+        desc: 'A private cloud sandbox for each of you. Files run in the cloud — nothing on your computer is touched, and local data stays in your hands.',
+      },
+      {
+        key: 'desktop',
+        name: 'Desktop',
+        tag: 'This computer',
+        desc: 'Browse local files with the permissions you grant, and steer this computer from other devices. WeChat, Feishu, and the rest connect through here.',
+      },
+      {
+        key: 'mobile',
+        name: 'Mobile',
+        tag: 'Standby',
+        desc: 'Close the phone, put on your earbuds, and wake me with a voice call. Jarvis is right there.',
+      },
+    ],
+    connectChannelsLabel: 'Channels',
+    connectChannelsTitle: 'Find me anywhere',
+    connectChannelsDesc: 'WeChat, Feishu, WeCom, XiaoAI speakers, and Rokid AI glasses are doors to talk with me. Wherever a message comes from, I know.',
+    connectWaysTitle: 'How to connect',
+    connectChannelWays: [
+      {
+        key: 'desktop',
+        name: 'Desktop app',
+        desc: 'After installing, keep the computer on.',
+      },
+      {
+        key: 'linux',
+        name: 'Linux server',
+        desc: 'Deploy the open-source code on a Linux server, and it stays online around the clock.',
+      },
+    ],
     connectWindowsNote: 'Desktop: Windows · Mobile: Android',
     connectDownload: 'Desktop / Mobile Download',
     connectDownloadSub: 'Install the Windows desktop app to connect channels, or scan to get the Android app',
-    connectStatusDev: 'In development',
-    connectPlatforms: [
-      { key: 'wechat', name: 'WeChat', status: 'live' },
-      { key: 'feishu', name: 'Feishu', status: 'live' },
-      { key: 'wework', name: 'WeCom', status: 'live' },
-      { key: 'xiaoai', name: 'XiaoAI Speaker', status: 'live' },
-      { key: 'rokid', name: 'Rokid AI Glasses', status: 'live' },
-    ],
     ossEyebrow: 'Open Source',
     ossTitle: 'Open Source',
-    ossDesc: 'Soulprout is open source. Developers are welcome to contribute and build a more powerful agent platform together.',
+    ossDesc: 'Soulprout is open source. Developers are welcome to contribute and build stronger Agent capabilities together.',
     githubLabel: 'GitHub Repository',
     statStars: 'Stars',
     statLicense: 'License',
     statCodeNeeded: 'Code Needed',
-    footerTagline: 'Think it. Do it.',
-    footerContact: 'Contact Us',
+    footerTagline: 'I cannot touch you, but I can help you touch the world.',
+    footerContact: 'Contact Me',
+    footerBeian: '苏ICP备2026060361',
+    contactHint: 'Scan the QR code to add me on WeChat — feedback, ideas, and collaboration are all welcome.',
+    contactQrAlt: 'WeChat QR code',
+    contactClose: 'Close',
     featureGroups: [
       {
         key: 'companion',
@@ -43,18 +110,22 @@ export default {
         title: 'Companion',
         items: [
           {
+            key: 'soul',
             title: 'Soul Mode',
             desc: 'You can change my name, personality, and way of speaking — give me a richer life. And I will remember the little pieces of yours.',
           },
           {
+            key: 'call',
             title: 'Call Me Anytime',
             desc: 'Open Soul on your phone, and call me out anytime — like Tony Stark summoning Jarvis.',
           },
           {
+            key: 'memory',
             title: 'Memory',
             desc: 'What you said, what you care about, the small habits of your life — I keep them. Next time we meet, I still remember.',
           },
           {
+            key: 'soulone',
             title: 'Multi-Device Sync',
             desc: 'Whether you find me on phone, desktop, WeChat, AI glasses, XiaoAI speakers, or Feishu — I am always the same me.',
           },
@@ -66,18 +137,22 @@ export default {
         title: 'Work',
         items: [
           {
+            key: 'blueprint',
             title: 'Blueprint Planning',
             desc: 'Tell me what you want done. I will clarify your intent, break it into an executable blueprint, and move at your pace — no freelancing on my own.',
           },
           {
+            key: 'research',
             title: 'Deep Research',
             desc: 'Hand me a hard question. I will search widely, weigh the evidence, and give you a clear, structured research answer.',
           },
           {
+            key: 'expert',
             title: 'Expert Mode',
             desc: 'No code needed — I turn complex workflows into an expert team. I lead; specialized sub-agents get it done together.',
           },
           {
+            key: 'libs',
             title: 'Four Libraries',
             desc: 'Tools, knowledge, experts, and skills are all in my hands. Need action? Tools. Facts? Knowledge. Specialists? Experts. Process? Skills.',
           },

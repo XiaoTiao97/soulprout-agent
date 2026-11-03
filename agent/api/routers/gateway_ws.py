@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from agent.core.logging_setup import bind_user_id
 from agent.database.crud.outbound_delivery import (
     delivery_to_payload,
     list_pending_deliveries,
@@ -43,6 +44,7 @@ async def gateway_outbound_ws(ws: WebSocket):
         return
 
     user_id = str(user.user_id)
+    bind_user_id(user_id)
     await hub.register(user_id, ws)
     try:
         pending = await list_pending_deliveries(user_id)

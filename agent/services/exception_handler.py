@@ -1,9 +1,12 @@
 """运行时异常处理。请求被模型或历史数据卡住时，在这里修复并重试。后续同类异常也放在这个模块。"""
 
 import base64
+import logging
 import re
 
 from agent.tool.tools import SoulproutToolFunction
+
+logger = logging.getLogger(__name__)
 
 IMAGE_SKIP_TEXT = "[图片已跳过：当前模型只接受 png、jpeg、gif、webp，该图片格式无效或不受支持]"
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
@@ -45,7 +48,7 @@ def is_accepted_image(media_type, encoded) -> bool:
 def build_image_user_content(text, encoded, media_type):
     """构造可写入历史的图片消息。格式不合法时返回 None，不落库。"""
     if not is_accepted_image(media_type, encoded):
-        print(f"[image] 跳过不受支持的图片，未写入历史：{media_type}")
+        logger.info("[image] 跳过不受支持的图片，未写入历史：%s", media_type)
         return None
     return [
         {"type": "text", "text": text},
@@ -95,9 +98,9 @@ async def sanitize_stored_images(history) -> None:
         item.content = new_content
         try:
             await item.save()
-            print(f"[image] 已替换历史中的非法图片 message_id={item.id}")
-        except Exception as e:
-            print(f"[image] 写回非法图片消息失败 message_id={getattr(item, 'id', None)}: {e}")
+            logger.info("[image] 已替换历史中的非法图片 message_id=%s", item.id)
+        except Exception:
+            logger.exception("[image] 写回非法图片消息失败 message_id=%s", getattr(item, "id", None))
 
 
 def request_message_ids(history_ids, leading_synthetic: int):
@@ -133,6 +136,6 @@ async def drop_rejected_image(messages, error, request_ids, load_history) -> boo
             if item.id == message_id:
                 item.content = new_content
                 await item.save()
-                print(f"[image] 模型拒绝图片，已从历史移除 message_id={message_id}")
+                logger.info("[image] 模型拒绝图片，已从历史移除 message_id=%s", message_id)
                 break
     return changed

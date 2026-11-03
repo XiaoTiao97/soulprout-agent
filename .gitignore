@@ -57,6 +57,8 @@ cover/
 
 # Django stuff:
 *.log
+# Agent 按天滚动的日志（agent.log.YYYY-MM-DD 不匹配 *.log）
+agent/logs/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal

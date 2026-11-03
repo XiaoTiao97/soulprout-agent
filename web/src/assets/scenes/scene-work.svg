@@ -1,0 +1,38 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" fill="#f4f3f1"/>
+  <radialGradient id="glow4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(400 300) rotate(90) scale(230)">
+    <stop stop-color="#1eb48c" stop-opacity="0.1"/>
+    <stop offset="1" stop-color="#1eb48c" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="800" height="600" fill="url(#glow4)"/>
+
+  <!-- Ýþ•? -->
+  <g transform="rotate(-6 400 300)">
+    <rect x="280" y="170" width="240" height="270" rx="12" fill="#eef7f3" stroke="#9ed9c5" stroke-width="2.5"/>
+    <g stroke="#bfe6d7" stroke-width="1.4">
+      <path d="M310 170 v270 M340 170 v270 M370 170 v270 M400 170 v270 M430 170 v270 M460 170 v270 M490 170 v270"/>
+      <path d="M280 215 h240 M280 260 h240 M280 305 h240 M280 350 h240 M280 395 h240"/>
+    </g>
+    <path d="M320 360 L400 250 L470 330" stroke="#1eb48c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.75"/>
+    <circle cx="400" cy="250" r="6" fill="#1eb48c" opacity="0.8"/>
+  </g>
+
+  <!-- ¤Ø„Á -->
+  <g transform="rotate(4 420 320)">
+    <rect x="310" y="200" width="230" height="280" rx="12" fill="#ffffff" stroke="#3a3a3a" stroke-width="3"/>
+    <rect x="340" y="238" width="120" height="10" rx="5" fill="#d6d3ce"/>
+    <rect x="340" y="266" width="170" height="8" rx="4" fill="#e3e0dc"/>
+    <rect x="340" y="290" width="170" height="8" rx="4" fill="#e3e0dc"/>
+    <rect x="340" y="314" width="130" height="8" rx="4" fill="#e3e0dc"/>
+    <rect x="340" y="338" width="150" height="8" rx="4" fill="#e3e0dc"/>
+    <!-- Œ„p° -->
+    <circle cx="462" cy="428" r="24" fill="#1eb48c"/>
+    <path d="M451 428 l8 8 l15 -16" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- ÿ½ -->
+  <path d="M180 470 v-34" stroke="#3a3a3a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M180 446 q-26 -4 -34 -30 q30 0 34 30 z" fill="#1eb48c"/>
+  <path d="M180 436 q26 -6 32 -34 q-30 2 -32 34 z" fill="#35c99e"/>
+  <path d="M150 470 h60 l-8 26 h-44 z" fill="#ffffff" stroke="#3a3a3a" stroke-width="3" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,46 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" fill="#f4f3f1"/>
+  <radialGradient id="sun5" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(150 130) rotate(90) scale(230)">
+    <stop stop-color="#ffd9a3" stop-opacity="0.6"/>
+    <stop offset="1" stop-color="#ffd9a3" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="800" height="600" fill="url(#sun5)"/>
+
+  <!-- hI -->
+  <g stroke="#f2cf9d" stroke-width="3" stroke-linecap="round" opacity="0.8">
+    <path d="M150 60 v-28"/>
+    <path d="M220 88 l20 -20"/>
+    <path d="M84 92 l-20 -20"/>
+    <path d="M232 150 h30"/>
+    <path d="M64 150 h-30"/>
+  </g>
+  <circle cx="150" cy="130" r="34" fill="#ffcf8e"/>
+  <circle cx="150" cy="130" r="48" stroke="#ffcf8e" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- Lb -->
+  <line x1="90" y1="440" x2="710" y2="440" stroke="#d8d5d1" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- 
+„K: -->
+  <g transform="rotate(-8 320 430)">
+    <rect x="270" y="402" width="100" height="52" rx="12" fill="#3a3a3a"/>
+    <circle cx="320" cy="428" r="7" fill="#1eb48c"/>
+  </g>
+
+  <!-- 3:…}-„>ô¯ -->
+  <g>
+    <circle cx="470" cy="352" r="52" fill="#1eb48c" opacity="0.1"/>
+    <path d="M448 336 q-4 -26 22 -30 q26 4 22 30 l-6 34 q-3 14 -16 14 q-13 0 -16 -14 z" fill="#ffffff" stroke="#3a3a3a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M508 352 q0 -20 20 -20 q20 0 20 20 l-4 24 q-2 12 -13 12 q-11 0 -13 -12 z" fill="#ffffff" stroke="#3a3a3a" stroke-width="3" stroke-linejoin="round"/>
+    <!-- ðj -->
+    <path d="M420 322 q-14 18 0 36" stroke="#1eb48c" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M398 308 q-24 32 0 64" stroke="#1eb48c" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.55"/>
+    <path d="M586 320 q14 18 0 36" stroke="#1eb48c" stroke-width="3" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- Æ= -->
+  <path d="M640 440 v-30" stroke="#3a3a3a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M640 418 q-24 -4 -30 -28 q28 0 30 28 z" fill="#1eb48c"/>
+  <path d="M640 408 q24 -6 28 -32 q-28 2 -28 32 z" fill="#35c99e"/>
+  <path d="M612 440 h56 l-8 26 h-40 z" fill="#ffffff" stroke="#3a3a3a" stroke-width="3" stroke-linejoin="round"/>
+</svg>

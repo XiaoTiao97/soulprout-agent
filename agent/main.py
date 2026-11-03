@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ if str(_root) not in sys.path:
 import uvicorn
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from agent.database.models.user import UserInfo
 from agent.database.crud.agent_card import update_or_create_agent_card_by_agent_id
@@ -23,17 +24,44 @@ from agent.database.models.scheduled_task import ScheduledTask
 from agent.database.models.outbound_delivery import OutboundDelivery
 from agent.database.models.user_channel_binding import UserChannelBinding
 from agent.core.config import Config
+from agent.core.logging_setup import bind_user_id, reset_user_id, setup_logging
+
+setup_logging()
+
+from agent.utils.jwt_utils import verify_token
 from agent.skill.skill_indexer import init_skill_collection
 from agent.utils.vdb_client import VDBClient
 from contextlib import asynccontextmanager
 from agent.api.routers import router as api_router
 import asyncio
 
+logger = logging.getLogger(__name__)
+
 config = Config()
+
+
+def _request_user_id(request: Request) -> str | None:
+    """从 Cookie 或 Bearer 里取出 user_id。无效 token 不当成错误。"""
+    token = request.cookies.get("token")
+    if not token:
+        auth = request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+    if not token:
+        return None
+    try:
+        payload = verify_token(token)
+    except Exception:
+        return None
+    if not payload or not payload.get("user_id"):
+        return None
+    return str(payload["user_id"])
 
 # Use lifespan for startup and shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # uvicorn 可能在导入之后才配置自己的 logger，这里再收编一次。
+    setup_logging()
     # Startup event
     client = AsyncIOMotorClient(config.mongodb_url)
     await init_beanie(
@@ -61,15 +89,15 @@ async def lifespan(app: FastAPI):
 
     try:
         count = await init_skill_collection()
-        print(f"系统技能向量化完成: 共 {count} 条")
-    except Exception as e:
-        print(f"系统技能向量化失败: {e}")
+        logger.info("系统技能向量化完成: 共 %s 条", count)
+    except Exception:
+        logger.exception("系统技能向量化失败")
 
     try:
         await VDBClient().ensure_collection(config.kb_collection, "kb")
-        print(f"知识库向量 collection 就绪: {config.kb_collection}")
-    except Exception as e:
-        print(f"知识库向量 collection 初始化失败: {e}")
+        logger.info("知识库向量 collection 就绪: %s", config.kb_collection)
+    except Exception:
+        logger.exception("知识库向量 collection 初始化失败")
 
     scheduler_task = asyncio.create_task(
         _run_scheduler(),
@@ -110,5 +138,17 @@ app.add_middleware(
 )
 app.include_router(api_router)
 
+
+@app.middleware("http")
+async def bind_log_user(request: Request, call_next):
+    token = bind_user_id(_request_user_id(request))
+    try:
+        return await call_next(request)
+    finally:
+        reset_user_id(token)
+
+
 if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=8080)
+    setup_logging()
+    # 不再让 uvicorn 用自己的 dictConfig 盖掉上面的 handler。
+    uvicorn.run(app, host='0.0.0.0', port=8080, log_config=None)

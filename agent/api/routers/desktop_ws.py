@@ -28,6 +28,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from agent.core.logging_setup import bind_user_id
 from agent.services.auth import get_current_user
 from agent.services.desktop_hub import HEARTBEAT_TIMEOUT_S, DesktopConn, hub
 
@@ -74,6 +75,7 @@ async def desktop_ws(ws: WebSocket):
         await ws.close(code=1008)
         return
     user_id = str(user.user_id)
+    bind_user_id(user_id)
 
     try:
         hello = await asyncio.wait_for(ws.receive_json(), timeout=_HELLO_TIMEOUT_S)
