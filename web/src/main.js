@@ -2,8 +2,11 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
+import { initTheme } from './utils/theme.js'
 import './assets/css/init.css'
+import './assets/css/dark.css'
 
+initTheme()
 createApp(App).use(router).use(i18n).mount('#app')
 
 document.body.addEventListener('mouseover', (event) => {

@@ -852,4 +852,106 @@ onMounted(() => {
     flex-wrap: wrap;
   }
 }
+
+html[data-theme='dark'] .tools-option-overlay {
+  background-color: rgba(0, 0, 0, 0.68);
+}
+html[data-theme='dark'] .tools-option-container {
+  background: #212121;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 60px -12px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='dark'] .tools-option-header,
+html[data-theme='dark'] .tabs-container {
+  background: #212121;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .tools-option-header h2,
+html[data-theme='dark'] .tool-name,
+html[data-theme='dark'] .property-name {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .tabs-track {
+  background: #171717;
+}
+html[data-theme='dark'] .tab-indicator {
+  background: #303030;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .tab-btn {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tab-btn:hover:not(.active),
+html[data-theme='dark'] .tab-btn.active {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .tab-count {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tab-btn.active .tab-count {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .tools-content {
+  background: #191919;
+}
+html[data-theme='dark'] .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: #f5f5f5;
+}
+html[data-theme='dark'] .retry-btn {
+  background: #f5f5f5;
+  color: #171717;
+}
+html[data-theme='dark'] .class-zh-name {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .class-zh-header:hover .class-zh-toggle {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .class-zh-tools {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .tool-item + .tool-item {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .tool-shell:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+html[data-theme='dark'] .tool-header:hover .tool-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .tool-details {
+  background: #1d1d1d;
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .property-item {
+  background: #282828;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .property-item:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme='dark'] .property-type {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .property-description,
+html[data-theme='dark'] .tool-description {
+  color: #a3a3a3;
+}
 </style>

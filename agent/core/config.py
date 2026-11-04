@@ -67,7 +67,7 @@ class Config:
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
         self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"
-        self.agent_default_tools = ["read", "write", "edit", "bash", "read_picture"]
+        self.agent_default_tools = ["read", "write", "edit", "bash", "picture"]
 
         # ─── 深度研究（Deep Research）────────────────────────────────────────
         # 目标/验收标准文件名（相对当前会话工作区），由主智能体在开启深度研究后写入
@@ -380,7 +380,7 @@ class Config:
 # Workflow
 1. 读取 `{self.research_file_name}`，提取目标、交付物、验收标准、约束，以及 Progress Log 中的轮次与历史尝试。
 2. 打开所有交付物和参考文件，实际阅读；不要凭主智能体的描述下结论。
-3. 对影响结论的关键点做必要验证（bash 跑代码、web_search / web_fetch 核实关键事实、read_picture 查看图片），验证到"足以判断方向和可用性"为止，不必逐字逐句核对。
+3. 对影响结论的关键点做必要验证（bash 跑代码、web_search / web_fetch 核实关键事实、picture(module=read) 查看图片），验证到"足以判断方向和可用性"为止，不必逐字逐句核对。
 4. 按 Perspective 的优先级形成判断；如果打算 FAIL，先用 skills / list_info / base_memory 了解可用能力，再写建议。
 5. 应用 Stop Rule，决定是要求改进、建议标注局限性，还是建议向用户求助。
 6. 输出结论。
@@ -412,7 +412,7 @@ FAIL 时：一句话说明距离通过还差什么。
 - 建议要能落地：写名称、写用途、写预期结果，不写"进一步完善""继续优化"这类空话。""",
                 supervisor_history=True,
                 files=[],
-                tools=["read", "bash", "read_picture", "web_search", "web_fetch", "knowledge_base", "skills", "list_info", "base_memory"],
+                tools=["read", "bash", "picture", "web_search", "web_fetch", "knowledge_base", "skills", "list_info", "base_memory"],
                 skills=None,
                 kbs=[],
                 agents=None,

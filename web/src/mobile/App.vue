@@ -47,4 +47,8 @@ onMounted(async () => {
   color: #6b7280;
   background: #f2f2f2;
 }
+html[data-theme='dark'] .booting {
+  color: #9ca3af;
+  background: #0b0d12;
+}
 </style>

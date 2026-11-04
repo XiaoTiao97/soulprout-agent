@@ -115,7 +115,7 @@ class Chat:
             "read",
             "write",
             "edit",
-            "read_picture",
+            "picture",
             "bash",
             "list_info",
             "skills",
@@ -651,6 +651,8 @@ class Chat:
 
         self.system_prompt = agent_card.system_prompt
         tools_use_list = list(agent_card.tools or [])
+        if "read_picture" in tools_use_list and "picture" not in tools_use_list:
+            tools_use_list.append("picture")
 
         if agent_card.agents:
             sub_agent_name_list = []
@@ -898,18 +900,20 @@ class Chat:
             ).model_dump_json()
 
     async def process_single_tool(self, name, arguments, message, tool_id):
-        if name == "read_picture":
+        if name in ("read_picture", "picture") and (
+            name == "read_picture" or str(arguments.get("module") or "read").strip().lower() == "read"
+        ):
             result = await self.mcp_call_tool(name=name, arguments=arguments)
             if not ("deepseek" in self.model or "doubao" in self.model or "kimi" in self.model or "mimo" in self.model):
                 content = f"{self.model}不支持阅读图片"
-            elif result.get("ok") and exception_handler.is_accepted_image(result.get("media_type"), result.get("base64")):
+            elif isinstance(result, dict) and result.get("ok") and exception_handler.is_accepted_image(result.get("media_type"), result.get("base64")):
                 self.picture_base64_result.append({
                     "base64": result.get("base64"),
                     "media_type": result.get("media_type"),
                 })
                 content = result.get("message", "成功读取图片")
             else:
-                content = result.get("message", "路径不存在")
+                content = result.get("message", "路径不存在") if isinstance(result, dict) else str(result)
             self.messages.append({"role": "tool", "content": content, "tool_call_id": message.tool_calls[tool_id].id})
             yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[tool_id].id).model_dump_json()
             await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type="tool", role="tool", content=content, tool_call_id=message.tool_calls[tool_id].id, created_at=datetime.utcnow()))
@@ -1283,7 +1287,9 @@ class Chat:
 
         tools_use_final = []
         tools = await self.mcp_list_tools()
-        tools_use_list = agent_card.tools or []
+        tools_use_list = list(agent_card.tools or [])
+        if "read_picture" in tools_use_list and "picture" not in tools_use_list:
+            tools_use_list.append("picture")
         for tool in tools:
             tool_name = tool.get("function").get("name")
             if tool_name in tools_use_list:

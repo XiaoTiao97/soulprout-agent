@@ -152,6 +152,7 @@ class LocalToolRunner:
             "read": self._read,
             "write": self._write,
             "edit": self._edit,
+            "picture": self._picture,
             "read_picture": self._read_picture,
             "bash": self._bash,
             "sync_manifest": self._sync_manifest,
@@ -319,7 +320,69 @@ class LocalToolRunner:
             fh.write(dst)
         return True
 
-    # ------------------------------------------------------------------ read_picture
+    # ------------------------------------------------------------------ picture / read_picture
+
+    async def _picture(self, args: Dict[str, Any], ctx: CallContext) -> Dict[str, Any]:
+        module = str(args.get("module") or "read").strip().lower()
+        if module == "read":
+            return await self._read_picture(args, ctx)
+        if module == "read_ref":
+            return await self._read_ref_picture(args, ctx)
+        if module == "write_output":
+            return await self._write_output_picture(args, ctx)
+        return {"ok": False, "message": f"错误：不支持的 picture module：{module}", "base64": None, "media_type": None}
+
+    async def _read_ref_picture(self, args: Dict[str, Any], ctx: CallContext) -> Dict[str, Any]:
+        file_name = str(args.get("file_name") or "")
+
+        def fail(message: str) -> Dict[str, Any]:
+            return {"ok": False, "message": message, "base64": None}
+
+        try:
+            sp, just = self._pop_escalation(args)
+            target = _resolve(ctx.workspace, file_name)
+            mode = await self._effective_mode(
+                ctx, "picture", sp, just, subject="operation", title="读取参考图片", detail=policy.canonical_path(target)
+            )
+            decision = policy.check_read(target, mode=mode, kind=ctx.kind, workspace=ctx.workspace)
+            if not decision.allowed:
+                return fail(policy.denial_text(decision, mode=mode, subject="operation"))
+            if not os.path.exists(target):
+                return fail(f"参考图片路径不存在：{file_name}")
+            raw = await asyncio.to_thread(self._read_bytes, target)
+            return {
+                "ok": True,
+                "message": "成功读取参考图片",
+                "base64": base64.b64encode(raw).decode("utf-8"),
+            }
+        except policy.EscalationError as exc:
+            return fail(f"错误：{exc}")
+        except Exception as exc:
+            return fail(f"读取参考图片失败: {exc}")
+
+    async def _write_output_picture(self, args: Dict[str, Any], ctx: CallContext) -> Dict[str, Any]:
+        file_name = str(args.get("file_name") or "")
+        b64_data = str(args.get("b64") or "")
+
+        def fail(message: str) -> Dict[str, Any]:
+            return {"ok": False, "message": message}
+
+        try:
+            sp, just = self._pop_escalation(args)
+            target = _resolve(ctx.workspace, file_name)
+            mode = await self._effective_mode(
+                ctx, "picture", sp, just, subject="operation", title="保存生成图片", detail=policy.canonical_path(target)
+            )
+            decision = policy.check_write(target, mode=mode, workspace=ctx.workspace)
+            if not decision.allowed:
+                return fail(policy.denial_text(decision, mode=mode, subject="operation"))
+            raw = base64.b64decode(b64_data)
+            await asyncio.to_thread(self._write_bytes, target, raw, False)
+            return {"ok": True, "message": f"成功保存图片 {file_name}"}
+        except policy.EscalationError as exc:
+            return fail(f"错误：{exc}")
+        except Exception as exc:
+            return fail(f"保存图片失败: {exc}")
 
     async def _read_picture(self, args: Dict[str, Any], ctx: CallContext) -> Dict[str, Any]:
         file_name = str(args.get("file_name") or "")

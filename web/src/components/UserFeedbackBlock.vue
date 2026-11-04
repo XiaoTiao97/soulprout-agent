@@ -512,4 +512,85 @@ function handleSubmit() {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+html[data-theme='dark'] .ufb-card {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .ufb-header,
+html[data-theme='dark'] .ufb-footer {
+  border-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .ufb-badge {
+  background: #303030;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .ufb-desc,
+html[data-theme='dark'] .ufb-custom-label {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .ufb-meta,
+html[data-theme='dark'] .ufb-hint,
+html[data-theme='dark'] .ufb-submitted {
+  color: #737373;
+}
+html[data-theme='dark'] .ufb-question {
+  background: #1f1f1f;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .ufb-question-index {
+  background: rgba(255, 255, 255, 0.07);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .ufb-question-prompt {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .ufb-option {
+  background: #292929;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .ufb-option:hover:not(:disabled) {
+  background: #333333;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+html[data-theme='dark'] .ufb-option--active {
+  background: rgba(30, 180, 140, 0.14);
+  border-color: rgba(34, 201, 157, 0.45);
+}
+html[data-theme='dark'] .ufb-option-key {
+  background: rgba(255, 255, 255, 0.07);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .ufb-option--active .ufb-option-key {
+  background: rgba(34, 201, 157, 0.25);
+  color: #22c99d;
+}
+html[data-theme='dark'] .ufb-option-label {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .ufb-option--active .ufb-option-label {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .ufb-input {
+  background: #1a1a1a;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .ufb-input:focus {
+  border-color: rgba(34, 201, 157, 0.45);
+  box-shadow: 0 0 0 2px rgba(30, 180, 140, 0.15);
+}
+html[data-theme='dark'] .ufb-input:disabled {
+  background: #212121;
+}
+html[data-theme='dark'] .ufb-submit {
+  background: #f3f4f6;
+  border-color: #f3f4f6;
+  color: #111827;
+}
+html[data-theme='dark'] .ufb-submit:hover:not(:disabled) {
+  background: #ffffff;
+}
 </style>

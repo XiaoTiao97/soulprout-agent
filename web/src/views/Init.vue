@@ -2,7 +2,7 @@
   <div class="sp-page">
     <!-- Loading Screen：与桌面端开屏一致，Logo + 三个圆点 -->
     <div v-if="!loaded" class="sp-loading">
-      <img class="sp-loading-logo" src="@/assets/images/logo.png" alt="Soulprout" />
+      <img class="sp-loading-logo" :src="isDark ? logoDark : logoLight" alt="Soulprout" />
       <div class="sp-loading-dots" aria-hidden="true"><i></i><i></i><i></i></div>
     </div>
 
@@ -14,12 +14,13 @@
 
       <!-- ── Hero ── -->
       <section class="sp-hero" ref="heroSectionRef">
-        <OrbScene v-if="heroInView" />
-        <GrowingParticles v-if="heroInView" />
+        <OrbScene v-if="heroInView && !isDark" />
+        <GrowingParticles v-if="heroInView && !isDark" />
+        <div v-if="isDark" class="sp-hero-frosted" aria-hidden="true" />
 
         <div class="sp-hero-inner">
           <div class="sp-hero-logo">
-            <img src="@/assets/images/logo.png" alt="Soulprout" />
+            <img :src="isDark ? logoDark : logoLight" alt="Soulprout" />
           </div>
 
           <h1 class="sp-hero-title">
@@ -75,11 +76,9 @@
               <div class="sp-scene-media">
                 <img :src="sceneImages[scene.key]" :alt="scene.title" loading="lazy" draggable="false" />
                 <span class="sp-scene-tag">{{ scene.tag }}</span>
-                <p v-if="scene.say" class="sp-scene-say">{{ scene.say }}</p>
+                <p v-if="scene.say" class="sp-scene-say" :class="{ 'is-long': scene.say.length > 12 }">{{ scene.say }}</p>
               </div>
-              <div class="sp-scene-body">
-                <h3 class="sp-scene-title">{{ scene.title }}</h3>
-              </div>
+              <h3 class="sp-scene-title">{{ scene.title }}</h3>
             </article>
           </div>
 
@@ -177,106 +176,207 @@
 
       <!-- ── Multi-Platform Connectivity ── -->
       <section id="connectivity" class="sp-connect-section">
-        <div class="sp-connect-bg-radial" />
-
         <div class="sp-connect-inner">
-          <div class="sp-section-header">
+          <div class="sp-section-header sp-connect-header">
             <p class="sp-section-eyebrow">{{ t('init.connectEyebrow') }}</p>
             <h2 class="sp-section-title">
               <span class="sp-reveal-wrap" ref="connectTitleRef">
                 <span class="sp-reveal-text">{{ t('init.connectTitle') }}</span>
               </span>
             </h2>
+            <div class="sp-connect-lead-wrap sp-connect-reveal">
+              <span class="sp-connect-lead-line" aria-hidden="true" />
+              <span class="sp-connect-lead-badge">{{ t('init.connectClientsLabel') }}</span>
+              <p class="sp-connect-lead">{{ t('init.connectClientsTitle') }}</p>
+              <span class="sp-connect-lead-line" aria-hidden="true" />
+            </div>
           </div>
 
-          <div class="sp-connect-split">
-            <article class="sp-connect-col">
-              <header class="sp-connect-col-head">
-                <span class="sp-connect-col-index">01</span>
-                <div>
-                  <p class="sp-connect-col-label">{{ t('init.connectClientsLabel') }}</p>
-                  <h3 class="sp-connect-col-title">{{ t('init.connectClientsTitle') }}</h3>
-                </div>
-              </header>
+          <!-- 三大运行端：发布会级独立硬件展台卡片 -->
+          <ul class="sp-connect-clients">
+            <li
+              v-for="(item, idx) in connectClients"
+              :key="item.key"
+              class="sp-connect-client sp-connect-reveal"
+              :class="[`is-${item.key}`, { 'is-featured': item.key === 'desktop' }]"
+              :style="{ transitionDelay: (idx * 90) + 'ms' }"
+            >
+              <div class="sp-connect-client-glow" aria-hidden="true" />
 
-              <ul class="sp-connect-clients">
-                <li
-                  v-for="item in connectClients"
-                  :key="item.key"
-                  class="sp-connect-client"
-                >
-                  <div class="sp-connect-client-icon" aria-hidden="true">
-                    <svg v-if="item.key === 'web'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-                      <path d="M7.2 18h9.6a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.5-1.4A3.6 3.6 0 0 0 7.2 18z" stroke-linejoin="round" />
-                    </svg>
-                    <svg v-else-if="item.key === 'desktop'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-                      <rect x="3.5" y="4" width="17" height="11.5" rx="1.6" />
-                      <path d="M8 20h8M12 15.5V20" stroke-linecap="round" />
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-                      <rect x="7.5" y="3" width="9" height="18" rx="2" />
-                      <path d="M11 18.5h2" stroke-linecap="round" />
-                    </svg>
-                  </div>
-                  <div class="sp-connect-client-body">
-                    <div class="sp-connect-client-top">
-                      <h4>{{ item.name }}</h4>
-                      <span>{{ item.tag }}</span>
+              <!-- 顶部微缩设备舞台视觉 -->
+              <div class="sp-connect-stage-visual" aria-hidden="true">
+                <!-- Web 云端沙盒视觉 -->
+                <div v-if="item.key === 'web'" class="sp-device-art sp-device-web">
+                  <div class="sp-art-window">
+                    <div class="sp-art-dots"><i /><i /><i /></div>
+                    <div class="sp-art-cloud-core">
+                      <span class="sp-art-ring sp-art-ring-1" />
+                      <span class="sp-art-ring sp-art-ring-2" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                        <path d="M7.2 18h9.6a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.5-1.4A3.6 3.6 0 0 0 7.2 18z" stroke-linejoin="round" />
+                      </svg>
                     </div>
-                    <p>{{ item.desc }}</p>
                   </div>
-                </li>
-              </ul>
-            </article>
-
-            <article class="sp-connect-col">
-              <header class="sp-connect-col-head">
-                <span class="sp-connect-col-index">02</span>
-                <div>
-                  <p class="sp-connect-col-label">{{ t('init.connectChannelsLabel') }}</p>
-                  <h3 class="sp-connect-col-title">{{ t('init.connectChannelsTitle') }}</h3>
                 </div>
-              </header>
 
-              <p class="sp-connect-channels-desc">{{ t('init.connectChannelsDesc') }}</p>
+                <!-- Desktop 本地电脑中枢视觉 -->
+                <div v-else-if="item.key === 'desktop'" class="sp-device-art sp-device-desktop">
+                  <div class="sp-art-screen">
+                    <div class="sp-art-screen-bar" />
+                    <div class="sp-art-hub-nodes">
+                      <span class="sp-art-node is-left" />
+                      <span class="sp-art-beam" />
+                      <div class="sp-art-hub-center">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                          <rect x="3.5" y="4" width="17" height="11.5" rx="1.8" />
+                          <path d="M8 20h8M12 15.5V20" stroke-linecap="round" />
+                        </svg>
+                      </div>
+                      <span class="sp-art-beam" />
+                      <span class="sp-art-node is-right" />
+                    </div>
+                  </div>
+                  <div class="sp-art-laptop-base" />
+                </div>
 
-              <div class="sp-connect-chips">
-                <span
-                  v-for="platform in connectPlatforms"
-                  :key="platform"
-                  class="sp-connect-chip"
-                >{{ connectPlatformNames[platform] }}</span>
+                <!-- Mobile 随身待命视觉 -->
+                <div v-else class="sp-device-art sp-device-mobile">
+                  <div class="sp-art-phone">
+                    <div class="sp-art-notch" />
+                    <div class="sp-art-voice-orb">
+                      <span class="sp-art-wave w1" />
+                      <span class="sp-art-wave w2" />
+                      <span class="sp-art-wave w3" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                        <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" stroke-linecap="round" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div class="sp-connect-ways">
-                <p class="sp-connect-ways-title">{{ t('init.connectWaysTitle') }}</p>
+              <div class="sp-connect-client-body">
+                <div class="sp-connect-client-meta">
+                  <span class="sp-connect-client-tag">
+                    <i class="sp-connect-tag-dot" aria-hidden="true" />
+                    {{ item.tag }}
+                  </span>
+                  <span class="sp-connect-client-index">0{{ idx + 1 }}</span>
+                </div>
+                <h4 class="sp-connect-client-name">{{ item.name }}</h4>
+                <p class="sp-connect-client-desc">{{ item.desc }}</p>
+              </div>
+            </li>
+          </ul>
+
+          <!-- 全场景生态渠道与接入架构 Bento 展板 -->
+          <div class="sp-connect-bento sp-connect-reveal">
+            <div class="sp-connect-channels-main">
+              <div class="sp-connect-panel-head">
+                <span class="sp-connect-label">{{ t('init.connectChannelsLabel') }}</span>
+                <h3 class="sp-connect-channels-title">{{ t('init.connectChannelsTitle') }}</h3>
+                <p class="sp-connect-channels-desc">{{ t('init.connectChannelsDesc') }}</p>
+              </div>
+
+              <!-- 生态设备磁贴矩阵 -->
+              <div class="sp-connect-matrix">
+                <div
+                  v-for="(platform, pIdx) in connectPlatforms"
+                  :key="platform"
+                  class="sp-connect-tile"
+                  :style="{ animationDelay: (pIdx * 0.4) + 's' }"
+                >
+                  <div class="sp-connect-tile-icon" aria-hidden="true">
+                    <!-- 微信 -->
+                    <svg v-if="platform === 'wechat'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                      <path d="M9.5 4C5.36 4 2 6.91 2 10.5c0 1.98 1.03 3.75 2.66 4.95L4 18l2.74-1.37c.87.24 1.8.37 2.76.37.34 0 .68-.02 1.01-.06A5.95 5.95 0 0 1 10 14.5c0-3.04 2.91-5.5 6.5-5.5.33 0 .65.02.96.06C16.82 6.16 13.5 4 9.5 4z" stroke-linejoin="round" />
+                      <path d="M16.5 9c-3.59 0-6.5 2.46-6.5 5.5s2.91 5.5 6.5 5.5c.78 0 1.53-.12 2.22-.34L21 21l-.55-2.16C21.99 17.84 23 16.27 23 14.5 23 11.46 20.09 9 16.5 9z" stroke-linejoin="round" />
+                    </svg>
+                    <!-- 飞书 -->
+                    <svg v-else-if="platform === 'feishu'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                      <path d="M21 4L3 10.5l6.5 2.8L19 6.5l-6.2 8.8 2.9 5.7L21 4z" stroke-linejoin="round" />
+                    </svg>
+                    <!-- 企业微信 -->
+                    <svg v-else-if="platform === 'wework'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                      <rect x="3" y="6" width="18" height="14" rx="2.5" />
+                      <path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6" />
+                      <path d="M3 11.5h18" />
+                    </svg>
+                    <!-- 小爱音箱 -->
+                    <svg v-else-if="platform === 'xiaoai'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                      <rect x="6" y="2.5" width="12" height="19" rx="3.5" />
+                      <circle cx="12" cy="14" r="3.2" />
+                      <path d="M10.5 6.5h3" stroke-linecap="round" />
+                    </svg>
+                    <!-- Rokid AI 眼镜 -->
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                      <rect x="2.5" y="9" width="7.5" height="6" rx="2" />
+                      <rect x="14" y="9" width="7.5" height="6" rx="2" />
+                      <path d="M10 11.5h4M2.5 11L1 9.5M21.5 11L23 9.5" stroke-linecap="round" />
+                    </svg>
+                  </div>
+                  <div class="sp-connect-tile-info">
+                    <span class="sp-connect-tile-name">{{ connectPlatformNames[platform] }}</span>
+                    <span class="sp-connect-tile-status">
+                      <i aria-hidden="true" />SYNC
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧：如何接通 -->
+            <div class="sp-connect-ways">
+              <div class="sp-connect-ways-head">
+                <span class="sp-connect-label">{{ t('init.connectWaysTitle') }}</span>
+              </div>
+              <div class="sp-connect-ways-list">
                 <div
                   v-for="(way, index) in connectChannelWays"
                   :key="way.key"
-                  class="sp-connect-way"
+                  class="sp-connect-way-card"
                 >
-                  <span class="sp-connect-way-num">{{ String(index + 1).padStart(2, '0') }}</span>
-                  <div>
+                  <div class="sp-connect-way-badge">
+                    <span class="sp-connect-way-num">{{ String(index + 1).padStart(2, '0') }}</span>
+                    <div class="sp-connect-way-icon" aria-hidden="true">
+                      <svg v-if="way.key === 'desktop'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                        <rect x="3" y="4" width="18" height="12" rx="2" />
+                        <path d="M8 20h8M12 16v4" stroke-linecap="round" />
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                        <rect x="3" y="4" width="18" height="6.5" rx="1.5" />
+                        <rect x="3" y="13.5" width="18" height="6.5" rx="1.5" />
+                        <circle cx="7" cy="7.25" r="0.8" fill="currentColor" />
+                        <circle cx="7" cy="16.75" r="0.8" fill="currentColor" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="sp-connect-way-body">
                     <strong>{{ way.name }}</strong>
                     <p>{{ way.desc }}</p>
                   </div>
                 </div>
               </div>
-            </article>
+            </div>
           </div>
 
-          <p class="sp-connect-note">{{ t('init.connectWindowsNote') }}</p>
-
-          <button type="button" class="sp-cta-btn" @click="openDownloadClients">
-            <span>{{ t('init.connectDownload') }}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-              <path d="M12 3v12" stroke-linecap="round" />
-              <path d="M8 11l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" />
-            </svg>
-          </button>
-
-          <p class="sp-connect-hint">{{ t('init.connectDownloadSub') }}</p>
+          <!-- 底部发布会级下载召唤坞 -->
+          <div class="sp-connect-dock sp-connect-reveal">
+            <div class="sp-connect-dock-platforms">
+              <i class="sp-connect-dock-dot" aria-hidden="true" />
+              <span class="sp-connect-note">{{ t('init.connectWindowsNote') }}</span>
+            </div>
+            <button type="button" class="sp-cta-btn sp-connect-cta" @click="openDownloadClients">
+              <span>{{ t('init.connectDownload') }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M12 3v12" stroke-linecap="round" />
+                <path d="M8 11l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" />
+              </svg>
+            </button>
+            <p v-if="t('init.connectDownloadSub')" class="sp-connect-hint">{{ t('init.connectDownloadSub') }}</p>
+          </div>
         </div>
       </section>
 
@@ -339,7 +439,7 @@
         <div class="sp-footer-top-line" />
         <div class="sp-footer-inner">
           <div class="sp-footer-main">
-            <img src="@/assets/images/logo.png" alt="Soulprout" class="sp-footer-logo" />
+            <img :src="isDark ? logoDark : logoLight" alt="Soulprout" class="sp-footer-logo" />
             <p class="sp-footer-tagline">{{ t('init.footerTagline') }}</p>
             <button class="sp-cta-btn" @click="handleStart">
               <span>{{ t('nav.start') }}</span>
@@ -388,26 +488,29 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUpdated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { startExperience } from '@/utils/startExperience.js'
+import { isDark } from '@/utils/theme.js'
+import logoLight from '@/assets/images/logo.png'
+import logoDark from '@/assets/images/logo_dark.png'
 import InitNavigation from '@/components/InitNavigation.vue'
 import OrbScene from '@/components/OrbScene.vue'
 import GrowingParticles from '@/components/GrowingParticles.vue'
 import DownloadClientsDialog from '@/components/DownloadClientsDialog.vue'
 import contactQrUrl from '@/assets/docs-images/weixinhao.jpg'
-import sceneDevices from '@/assets/scenes/scene-devices.svg'
+import sceneDevices from '@/assets/images/whereever.jpeg'
 import sceneMemory from '@/assets/scenes/scene-memory.svg'
-import sceneWork from '@/assets/scenes/scene-work.svg'
 import sceneEarphone from '@/assets/images/earphone.png'
-import sceneDiy from '@/assets/images/diy.png'
+import sceneDiy from '@/assets/images/diy.jpeg'
+import sceneLaptop from '@/assets/images/laptop.jpeg'
 
 const sceneImages = {
   'whole-day': sceneDiy,
   'all-devices': sceneDevices,
   remembers: sceneMemory,
-  'does-work': sceneWork,
+  'does-work': sceneLaptop,
   nearby: sceneEarphone,
 }
 
@@ -470,7 +573,7 @@ const connectPlatformNames = computed(() => ({
 
 const scenes = computed(() => {
   const list = tm('init.scenesList')
-  return Array.isArray(list) ? list : []
+  return Array.isArray(list) ? list.filter((scene) => scene.key !== 'remembers') : []
 })
 
 const activeSceneIndex = ref(0)
@@ -569,6 +672,19 @@ function onContactKeydown(event) {
 }
 
 let heroObserver = null
+let revealObs = null
+let cardObs = null
+
+function observeReveals() {
+  if (revealObs) {
+    ;[heroTitleRef.value, capTitleRef.value, connectTitleRef.value, openTitleRef.value, scenesTitleRef.value].forEach(el => {
+      if (el && !el.classList.contains('is-inview')) revealObs.observe(el)
+    })
+  }
+  if (cardObs) {
+    document.querySelectorAll('.sp-cap-item:not(.is-visible), .sp-connect-reveal:not(.is-visible)').forEach(el => cardObs.observe(el))
+  }
+}
 
 onMounted(() => {
   window.addEventListener('keydown', onContactKeydown)
@@ -584,7 +700,7 @@ onMounted(() => {
     heroObserver.observe(heroSectionRef.value)
   }
 
-  const revealObs = new IntersectionObserver(
+  revealObs = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -595,11 +711,8 @@ onMounted(() => {
     },
     { threshold: 0.2 }
   )
-  ;[heroTitleRef.value, capTitleRef.value, connectTitleRef.value, openTitleRef.value, scenesTitleRef.value].forEach(el => {
-    if (el) revealObs.observe(el)
-  })
 
-  const cardObs = new IntersectionObserver(
+  cardObs = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -610,13 +723,20 @@ onMounted(() => {
     },
     { threshold: 0.05, rootMargin: '0px 0px -60px 0px' }
   )
-  document.querySelectorAll('.sp-cap-item').forEach(el => cardObs.observe(el))
+
+  observeReveals()
   armSceneTimer(SCENE_AUTOPLAY_MS)
+})
+
+onUpdated(() => {
+  observeReveals()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onContactKeydown)
   heroObserver?.disconnect()
+  revealObs?.disconnect()
+  cardObs?.disconnect()
   stopSceneTimer()
 })
 
@@ -834,7 +954,7 @@ const scrollTo = (id) => {
 /* 3D 卡组舞台 */
 .sp-scenes-stage {
   position: relative;
-  height: calc(var(--scene-card) * 0.75 + 92px);
+  height: calc(var(--scene-card) * 0.75);
   perspective: 1700px;
   transform-style: preserve-3d;
 }
@@ -843,8 +963,6 @@ const scrollTo = (id) => {
   top: 0;
   left: 50%;
   width: var(--scene-card);
-  display: flex;
-  flex-direction: column;
   background: transparent;
   border: none;
   overflow: visible;
@@ -864,8 +982,7 @@ const scrollTo = (id) => {
 }
 .sp-scene-media {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   background: #f4f3f1;
   overflow: hidden;
   border: 1px solid rgba(15, 15, 15, 0.07);
@@ -885,24 +1002,26 @@ const scrollTo = (id) => {
 }
 .sp-scene-tag {
   position: absolute;
-  top: 18px;
-  left: 18px;
-  font-size: 12px;
+  left: 0;
+  right: 0;
+  bottom: 1.35rem;
+  text-align: center;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: 0.1em;
-  color: #0f7a5e;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 999px;
-  padding: 0.35rem 0.85rem;
-  box-shadow: 0 2px 10px rgba(15, 15, 15, 0.06);
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 0, 0, 0.35);
+}
+.sp-scene-tag::before {
+  display: none;
 }
 .sp-scene-say {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 1.35rem;
+  top: 1.5rem;
   margin: 0;
   text-align: center;
   font-size: 1.15rem;
@@ -911,22 +1030,25 @@ const scrollTo = (id) => {
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.35);
 }
+.sp-scene-say.is-long {
+  left: 1.4rem;
+  right: 1.4rem;
+  line-height: 1.65;
+}
 .sp-scene-card.is-dark .sp-scene-media img {
   object-position: 38% center;
 }
-.sp-scene-body {
-  flex: none;
-  padding: 1.15rem 0.5rem 0;
-  text-align: center;
-  background: transparent;
-}
 .sp-scene-title {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 400;
-  line-height: 1.45;
-  color: #0f0f0f;
-  letter-spacing: -0.02em;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .sp-scene-timer {
   width: 120px;
@@ -1147,225 +1269,626 @@ const scrollTo = (id) => {
   color: #17a27d;
 }
 
-/* ─── Connectivity ─────────────────────── */
+/* ─── Connectivity（发布会级硬件与生态互联展台） ─── */
 .sp-connect-section {
   position: relative;
-  padding: 9rem 1.5rem;
+  padding: 9.5rem 1.5rem 8.5rem;
   overflow: hidden;
   background: #f8f8f8;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 980px;
 }
-.sp-connect-bg-radial {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(30,180,140,0.03) 0%, transparent 70%);
-}
+
 .sp-connect-inner {
   position: relative;
   z-index: 10;
-  max-width: 1080px;
+  max-width: 1120px;
   margin: 0 auto;
   text-align: center;
 }
-.sp-connect-inner .sp-section-header {
-  margin-bottom: 0;
+.sp-connect-header {
+  margin-bottom: 4.25rem;
 }
-.sp-connect-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-  margin: 4.5rem 0 2.75rem;
-  text-align: left;
-  align-items: stretch;
+.sp-connect-lead-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  margin-top: 2rem;
+  padding: 0.45rem 1.15rem 0.45rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(30, 180, 140, 0.16);
+  box-shadow: 0 10px 30px rgba(15, 15, 15, 0.04);
+  backdrop-filter: blur(12px);
 }
-.sp-connect-col {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  background: #ffffff;
-  border: 1px solid rgba(15, 15, 15, 0.06);
-  border-radius: 1.25rem;
-  padding: 2rem 1.85rem 1.85rem;
-  box-shadow: 0 10px 40px rgba(15, 15, 15, 0.03);
+.sp-connect-lead-line {
+  display: none;
 }
-.sp-connect-col-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1.75rem;
-}
-.sp-connect-col-index {
-  font-size: 0.75rem;
+.sp-connect-lead-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.16em;
-  color: #1eb48c;
-  padding-top: 0.35rem;
-}
-.sp-connect-col-label {
-  margin: 0 0 0.4rem;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(30, 180, 140, 0.7);
+  color: #ffffff;
+  background: linear-gradient(135deg, #1eb48c 0%, #159674 100%);
+  box-shadow: 0 4px 12px rgba(30, 180, 140, 0.25);
 }
-.sp-connect-col-title {
+.sp-connect-lead {
   margin: 0;
-  font-size: 1.55rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
-  color: #0f0f0f;
+  font-size: 0.98rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(15, 15, 15, 0.78);
 }
+
+.sp-connect-reveal {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.85s cubic-bezier(0.25, 1, 0.5, 1),
+              transform 0.85s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ─── 三大运行端：发布会 Bento 硬件展台卡片 ─── */
 .sp-connect-clients {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  text-align: left;
+}
+.sp-connect-client {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 1.75rem;
+  padding: 0.65rem 0.65rem 2.1rem;
+  background: #ffffff;
+  border: 1px solid rgba(15, 15, 15, 0.06);
+  box-shadow:
+    0 24px 56px rgba(15, 15, 15, 0.06),
+    0 2px 0 rgba(255, 255, 255, 0.9) inset;
+  overflow: hidden;
+  transition: transform 0.55s cubic-bezier(0.25, 1, 0.5, 1),
+              box-shadow 0.55s cubic-bezier(0.25, 1, 0.5, 1),
+              border-color 0.45s ease;
+}
+.sp-connect-client.is-featured {
+  border-color: rgba(15, 15, 15, 0.1);
+  box-shadow:
+    0 28px 64px rgba(15, 15, 15, 0.08),
+    0 2px 0 rgba(255, 255, 255, 0.95) inset;
+}
+.sp-connect-client:hover {
+  transform: translateY(-8px);
+  border-color: rgba(15, 15, 15, 0.14);
+  box-shadow:
+    0 36px 80px rgba(15, 15, 15, 0.11),
+    0 2px 0 rgba(255, 255, 255, 0.95) inset;
+}
+.sp-connect-client-glow {
+  display: none;
+}
+
+/* 顶部微缩硬件舞台 */
+.sp-connect-stage-visual {
+  position: relative;
+  height: 168px;
+  border-radius: 1.3rem;
+  background: linear-gradient(180deg, #f5f5f7 0%, #efeff2 100%);
+  border: 1px solid rgba(15, 15, 15, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.sp-connect-client.is-featured .sp-connect-stage-visual {
+  background: linear-gradient(180deg, #f3f4f6 0%, #eceef1 100%);
+  border-color: rgba(15, 15, 15, 0.07);
+}
+
+/* 硬件艺术示意图通用 */
+.sp-device-art {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.55s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.sp-connect-client:hover .sp-device-art {
+  transform: scale(1.05) translateY(-2px);
+}
+
+/* 1. Web 云端沙盒微缩窗 */
+.sp-art-window {
+  width: 168px;
+  height: 108px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 15, 15, 0.08);
+  box-shadow: 0 14px 32px rgba(15, 15, 15, 0.07);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sp-art-dots {
+  display: flex;
+  gap: 5px;
+  padding: 8px 11px;
+  border-bottom: 1px solid rgba(15, 15, 15, 0.05);
+}
+.sp-art-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(15, 15, 15, 0.14);
+}
+.sp-art-dots i:first-child {
+  background: #1eb48c;
+}
+.sp-art-cloud-core {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #17a27d;
+}
+.sp-art-cloud-core svg {
+  position: relative;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+}
+.sp-art-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(30, 180, 140, 0.22);
+}
+.sp-art-ring-1 {
+  width: 54px;
+  height: 54px;
+}
+.sp-art-ring-2 {
+  width: 78px;
+  height: 78px;
+  border-style: dashed;
+  border-color: rgba(30, 180, 140, 0.15);
+}
+
+/* 2. Desktop 本地电脑中枢微缩窗 */
+.sp-art-screen {
+  width: 176px;
+  height: 104px;
+  border-radius: 12px 12px 4px 4px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid rgba(30, 180, 140, 0.28);
+  box-shadow: 0 16px 36px rgba(30, 180, 140, 0.14);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.sp-art-screen-bar {
+  position: absolute;
+  top: 7px;
+  width: 36px;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(30, 180, 140, 0.25);
+}
+.sp-art-hub-nodes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.sp-art-hub-center {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1eb48c 0%, #159674 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(30, 180, 140, 0.32);
+}
+.sp-art-hub-center svg {
+  width: 22px;
+  height: 22px;
+}
+.sp-art-beam {
+  width: 22px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(30, 180, 140, 0.2), #1eb48c, rgba(30, 180, 140, 0.2));
+  border-radius: 2px;
+}
+.sp-art-node {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #1eb48c;
+  box-shadow: 0 0 0 4px rgba(30, 180, 140, 0.12);
+}
+.sp-art-laptop-base {
+  width: 198px;
+  height: 7px;
+  margin-top: -1px;
+  border-radius: 2px 2px 8px 8px;
+  background: linear-gradient(90deg, #dce5e1 0%, #eef3f1 50%, #dce5e1 100%);
+  border: 1px solid rgba(15, 15, 15, 0.08);
+}
+
+/* 3. Mobile 手机待命微缩窗 */
+.sp-art-phone {
+  width: 82px;
+  height: 124px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1.5px solid rgba(15, 15, 15, 0.1);
+  box-shadow: 0 14px 32px rgba(15, 15, 15, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.sp-art-notch {
+  position: absolute;
+  top: 7px;
+  width: 22px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(15, 15, 15, 0.14);
+}
+.sp-art-voice-orb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(30, 180, 140, 0.12);
+  color: #17a27d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sp-art-voice-orb svg {
+  position: relative;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+}
+.sp-art-wave {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(30, 180, 140, 0.35);
+  animation: spVoicePulse 2.8s infinite ease-out;
+}
+.sp-art-wave.w2 { animation-delay: 0.9s; }
+.sp-art-wave.w3 { animation-delay: 1.8s; }
+@keyframes spVoicePulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  100% { transform: scale(1.65); opacity: 0; }
+}
+
+/* 卡片正文区 */
+.sp-connect-client-body {
+  padding: 1.65rem 1.5rem 0;
   display: flex;
   flex-direction: column;
   flex: 1;
 }
-.sp-connect-client {
+.sp-connect-client-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+.sp-connect-client-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #148f72;
+  background: rgba(30, 180, 140, 0.09);
+  border: 1px solid rgba(30, 180, 140, 0.16);
+}
+.sp-connect-tag-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1eb48c;
+}
+.sp-connect-client-index {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(15, 15, 15, 0.24);
+}
+.sp-connect-client-name {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.5rem, 2.2vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #0f0f0f;
+  transition: color 0.3s;
+}
+.sp-connect-client:hover .sp-connect-client-name {
+  color: #17a27d;
+}
+.sp-connect-client-desc {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.78;
+  color: rgba(15, 15, 15, 0.62);
+  overflow-wrap: break-word;
+}
+
+/* ─── 全场景生态渠道与接入架构 Bento 大展板 ─── */
+.sp-connect-bento {
+  position: relative;
+  margin-top: 1.75rem;
+  border-radius: 1.85rem;
+  padding: 2.8rem 2.8rem;
+  background: #ffffff;
+  border: 1px solid rgba(15, 15, 15, 0.06);
+  box-shadow:
+    0 28px 64px rgba(15, 15, 15, 0.06),
+    0 2px 0 rgba(255, 255, 255, 0.9) inset;
   display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: 1rem;
-  align-items: flex-start;
-  padding: 1.2rem 0;
-  border-top: 1px solid rgba(15, 15, 15, 0.07);
+  grid-template-columns: 1.25fr 1fr;
+  gap: 3rem;
+  text-align: left;
+  align-items: center;
 }
-.sp-connect-client:first-child {
-  padding-top: 0;
-  border-top: none;
+.sp-connect-label {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #1eb48c;
 }
-.sp-connect-client-icon {
-  width: 44px;
-  height: 44px;
+.sp-connect-channels-title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.65rem, 2.6vw, 2.15rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #0f0f0f;
+}
+.sp-connect-channels-desc {
+  margin: 0 0 1.85rem;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: rgba(15, 15, 15, 0.6);
+  max-width: 520px;
+}
+
+/* 生态渠道硬件磁贴矩阵 */
+.sp-connect-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  gap: 0.85rem;
+}
+.sp-connect-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1.1rem;
+  background: #f5f5f7;
+  border: 1px solid rgba(15, 15, 15, 0.06);
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.sp-connect-tile:hover {
+  transform: translateY(-3px);
+  background: #ffffff;
+  border-color: rgba(30, 180, 140, 0.32);
+  box-shadow: 0 12px 28px rgba(15, 15, 15, 0.07);
+}
+.sp-connect-tile-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 15, 15, 0.06);
+  color: #17a27d;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: rgba(30, 180, 140, 0.08);
-  color: #17a27d;
   flex-shrink: 0;
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
 }
-.sp-connect-client-icon svg {
+.sp-connect-tile:hover .sp-connect-tile-icon {
+  background: #1eb48c;
+  border-color: #1eb48c;
+  color: #ffffff;
+}
+.sp-connect-tile-icon svg {
   width: 20px;
   height: 20px;
 }
-.sp-connect-client-body {
+.sp-connect-tile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
   min-width: 0;
 }
-.sp-connect-client-top {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-bottom: 0.45rem;
-}
-.sp-connect-client-top h4 {
-  margin: 0;
-  font-size: 1.05rem;
+.sp-connect-tile-name {
+  font-size: 0.88rem;
   font-weight: 600;
   color: #0f0f0f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.sp-connect-client-top span {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: #148f72;
-  background: rgba(30, 180, 140, 0.08);
-  border-radius: 999px;
-  padding: 0.18rem 0.55rem;
-}
-.sp-connect-client-body p {
-  margin: 0;
-  font-size: 0.925rem;
-  line-height: 1.75;
-  color: rgba(15, 15, 15, 0.62);
-  overflow-wrap: break-word;
-}
-.sp-connect-channels-desc {
-  margin: 0 0 1.25rem;
-  font-size: 0.95rem;
-  line-height: 1.8;
-  color: rgba(15, 15, 15, 0.62);
-  overflow-wrap: break-word;
-}
-.sp-connect-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.sp-connect-chip {
-  font-size: 0.8rem;
-  line-height: 1;
-  padding: 0.55rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid rgba(30, 180, 140, 0.16);
-  background: rgba(30, 180, 140, 0.05);
-  color: #148f72;
-  transition: background 0.25s, border-color 0.25s;
-}
-.sp-connect-chip:hover {
-  background: rgba(30, 180, 140, 0.12);
-  border-color: rgba(30, 180, 140, 0.3);
-}
-.sp-connect-ways {
-  margin-top: auto;
-  padding-top: 1.5rem;
-}
-.sp-connect-ways-title {
-  margin: 0 0 0.85rem;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(15, 15, 15, 0.35);
-}
-.sp-connect-way {
-  display: grid;
-  grid-template-columns: 2rem 1fr;
-  gap: 0.75rem;
-  padding: 0.95rem 1rem;
-  border-radius: 0.9rem;
-  background: #f7faf9;
-}
-.sp-connect-way + .sp-connect-way {
-  margin-top: 0.65rem;
-}
-.sp-connect-way-num {
-  font-size: 0.72rem;
+.sp-connect-tile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  color: #1eb48c;
-  padding-top: 0.15rem;
+  color: rgba(15, 15, 15, 0.45);
 }
-.sp-connect-way strong {
+.sp-connect-tile-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1eb48c;
+}
+
+/* 右侧：如何接通 */
+.sp-connect-ways {
+  padding-left: 2.8rem;
+  border-left: 1px solid rgba(15, 15, 15, 0.07);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.sp-connect-ways-head {
+  margin-bottom: 0.5rem;
+}
+.sp-connect-ways-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.sp-connect-way-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.2rem 1.25rem;
+  border-radius: 1.2rem;
+  background: #f5f5f7;
+  border: 1px solid rgba(15, 15, 15, 0.05);
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.sp-connect-way-card:hover {
+  background: #ffffff;
+  border-color: rgba(30, 180, 140, 0.25);
+  box-shadow: 0 12px 28px rgba(15, 15, 15, 0.05);
+  transform: translateX(4px);
+}
+.sp-connect-way-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.sp-connect-way-num {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  color: #1eb48c;
+}
+.sp-connect-way-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(30, 180, 140, 0.18);
+  color: #17a27d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sp-connect-way-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.sp-connect-way-body {
+  min-width: 0;
+  padding-top: 0.1rem;
+}
+.sp-connect-way-body strong {
   display: block;
   margin-bottom: 0.3rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
+  line-height: 1.35;
   color: #0f0f0f;
 }
-.sp-connect-way p {
+.sp-connect-way-body p {
   margin: 0;
   font-size: 0.875rem;
-  line-height: 1.7;
+  line-height: 1.65;
   color: rgba(15, 15, 15, 0.58);
 }
+
+/* ─── 底部发布会下载召唤坞 ─── */
+.sp-connect-dock {
+  margin-top: 3.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.15rem;
+}
+.sp-connect-dock-platforms {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.035);
+  border: 1px solid rgba(15, 15, 15, 0.06);
+}
+.sp-connect-dock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1eb48c;
+}
 .sp-connect-note {
-  margin: 0 0 1.75rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  color: rgba(15, 15, 15, 0.35);
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: rgba(15, 15, 15, 0.52);
+}
+.sp-connect-cta {
+  padding: 17px 44px;
+  box-shadow:
+    0 10px 30px rgba(30, 180, 140, 0.28),
+    0 0 0 4px rgba(30, 180, 140, 0.1);
+}
+.sp-connect-cta:hover {
+  box-shadow:
+    0 14px 36px rgba(30, 180, 140, 0.36),
+    0 0 0 6px rgba(30, 180, 140, 0.14);
 }
 .sp-connect-hint {
-  margin: 1.25rem 0 0;
+  margin: 0.2rem 0 0;
   font-size: 0.8rem;
   font-weight: 300;
   line-height: 1.6;
-  color: rgba(15, 15, 15, 0.35);
+  color: rgba(15, 15, 15, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-connect-reveal { transition: none; }
+  .sp-art-wave { animation: none; }
 }
 
 /* ─── Open Source ──────────────────────── */
@@ -1644,9 +2167,6 @@ const scrollTo = (id) => {
   .sp-scenes-head {
     margin-bottom: 2.25rem;
   }
-  .sp-scene-title {
-    font-size: 1.2rem;
-  }
   .sp-caps-section,
   .sp-connect-section,
   .sp-oss-section {
@@ -1668,19 +2188,30 @@ const scrollTo = (id) => {
   .sp-caps-group-title {
     font-size: clamp(1.85rem, 3vw, 2.6rem);
   }
-  .sp-connect-split {
-    gap: 1rem;
+  .sp-connect-clients {
+    gap: 1.2rem;
   }
-  .sp-connect-col {
-    padding: 1.6rem 1.45rem 1.35rem;
+  .sp-connect-bento {
+    gap: 2.2rem;
+    padding: 2.2rem 2rem;
   }
-  .sp-connect-col-title {
-    font-size: 1.35rem;
+  .sp-connect-ways {
+    padding-left: 2.2rem;
   }
 }
-@media (max-width: 1080px) {
-  .sp-connect-split {
+@media (max-width: 980px) {
+  .sp-connect-clients {
     grid-template-columns: 1fr;
+  }
+  .sp-connect-bento {
+    grid-template-columns: 1fr;
+    gap: 2.25rem;
+  }
+  .sp-connect-ways {
+    padding-left: 0;
+    padding-top: 2rem;
+    border-left: none;
+    border-top: 1px solid rgba(15, 15, 15, 0.07);
   }
 }
 @media (max-width: 900px) {
@@ -1692,14 +2223,14 @@ const scrollTo = (id) => {
   .sp-cap-item {
     padding: 1.35rem 0;
   }
-  .sp-connect-col {
-    padding: 1.5rem 1.2rem 1.35rem;
+  .sp-connect-bento {
+    padding: 1.85rem 1.35rem;
   }
-  .sp-connect-col-title {
-    font-size: 1.3rem;
+  .sp-connect-header {
+    margin-bottom: 3rem;
   }
-  .sp-connect-client {
-    grid-template-columns: 40px 1fr;
+  .sp-connect-matrix {
+    grid-template-columns: repeat(2, 1fr);
   }
   .sp-stats-row {
     gap: 2rem;
@@ -1731,16 +2262,412 @@ const scrollTo = (id) => {
     margin-top: 1.75rem;
     gap: 1rem;
   }
-  .sp-scene-body {
-    padding: 0.95rem 1.15rem 1.05rem;
-  }
   .sp-scene-say {
-    bottom: 1rem;
+    top: 1.1rem;
     font-size: 1rem;
     letter-spacing: 0.14em;
   }
-  .sp-scene-title {
-    font-size: 1.15rem;
+  .sp-scene-tag {
+    bottom: 1rem;
   }
+}
+
+/* ─── Dark Mode (Pure Matte Black + Subtle Localized Frosted Sage) ───────────────────────── */
+html[data-theme='dark'] .sp-page {
+  color: #f2f2f2;
+  background-color: #0b0b0c;
+  background-image: none;
+}
+html[data-theme='dark'] .sp-loading {
+  background: #0b0b0c;
+}
+html[data-theme='dark'] .sp-hero {
+  background: #0b0b0c;
+}
+/* 仅在 Hero 局部保留一处克制、低饱和的暗磨砂绿质感，不铺满全屏 */
+.sp-hero-frosted {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 38% 32% at 50% 42%, rgba(46, 102, 86, 0.16) 0%, rgba(28, 64, 54, 0.06) 55%, transparent 100%),
+    #0b0b0c;
+}
+.sp-hero-frosted::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+html[data-theme='dark'] .sp-cta-btn {
+  background: rgba(34, 122, 98, 0.82);
+  border: 1px solid rgba(110, 185, 162, 0.25);
+  color: #f5f5f5;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+html[data-theme='dark'] .sp-cta-btn:hover {
+  background: rgba(40, 138, 112, 0.92);
+  border-color: rgba(130, 200, 178, 0.35);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+html[data-theme='dark'] .sp-hero-title,
+html[data-theme='dark'] .sp-hero-title .sp-reveal-text,
+html[data-theme='dark'] .sp-section-title,
+html[data-theme='dark'] .sp-section-title .sp-reveal-text,
+html[data-theme='dark'] .sp-scenes-title,
+html[data-theme='dark'] .sp-oss-title,
+html[data-theme='dark'] .sp-caps-group-title,
+html[data-theme='dark'] .sp-cap-title,
+html[data-theme='dark'] .sp-connect-client-name,
+html[data-theme='dark'] .sp-connect-channels-title,
+html[data-theme='dark'] .sp-connect-tile-name,
+html[data-theme='dark'] .sp-connect-way-body strong {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .sp-hero-sub {
+  color: rgba(229, 229, 229, 0.68);
+}
+html[data-theme='dark'] .sp-explore-btn {
+  color: rgba(229, 229, 229, 0.55);
+}
+html[data-theme='dark'] .sp-explore-btn:hover {
+  color: #6ab09c;
+}
+html[data-theme='dark'] .sp-section-eyebrow,
+html[data-theme='dark'] .sp-caps-group-label,
+html[data-theme='dark'] .sp-connect-label,
+html[data-theme='dark'] .sp-connect-way-num {
+  color: #6ab09c;
+}
+html[data-theme='dark'] .sp-caps-group-rule {
+  background: #4d8f7c;
+}
+
+/* Scenes Dark */
+html[data-theme='dark'] .sp-scenes-section {
+  background: #0e0e10;
+}
+html[data-theme='dark'] .sp-scene-media {
+  background: #161618;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='dark'] .sp-scene-card.is-active .sp-scene-media {
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.75);
+}
+html[data-theme='dark'] .sp-scene-timer {
+  background: rgba(255, 255, 255, 0.12);
+}
+html[data-theme='dark'] .sp-scene-timer-bar {
+  background: #589e8b;
+}
+html[data-theme='dark'] .sp-scenes-nav {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(242, 242, 242, 0.78);
+}
+html[data-theme='dark'] .sp-scenes-nav:hover:not(:disabled) {
+  background: #266b58;
+  border-color: rgba(110, 185, 162, 0.3);
+  color: #ffffff;
+}
+html[data-theme='dark'] .sp-scenes-dot {
+  background: rgba(255, 255, 255, 0.18);
+}
+html[data-theme='dark'] .sp-scenes-dot:hover {
+  background: rgba(106, 176, 156, 0.5);
+}
+html[data-theme='dark'] .sp-scenes-dot.is-active {
+  background: #589e8b;
+}
+
+/* Capabilities Dark */
+html[data-theme='dark'] .sp-caps-section {
+  background: #0b0b0c;
+}
+html[data-theme='dark'] .sp-caps-bg-radial {
+  background: none;
+}
+html[data-theme='dark'] .sp-caps-ring-lg,
+html[data-theme='dark'] .sp-caps-ring-sm {
+  display: none;
+}
+html[data-theme='dark'] .sp-caps-panel {
+  background: linear-gradient(180deg, rgba(24, 24, 27, 0.92) 0%, rgba(19, 19, 22, 0.95) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 28px 60px rgba(0, 0, 0, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+html[data-theme='dark'] .sp-caps-panel::before {
+  background: radial-gradient(ellipse 60% 40% at 15% 0%, rgba(56, 118, 100, 0.08) 0%, transparent 70%);
+}
+html[data-theme='dark'] .sp-caps-panel:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 38px 80px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+html[data-theme='dark'] .sp-cap-item {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .sp-cap-item:hover .sp-cap-title {
+  color: #72b8a4;
+}
+html[data-theme='dark'] .sp-cap-desc {
+  color: rgba(212, 212, 216, 0.68);
+}
+html[data-theme='dark'] .sp-cap-desc :deep(strong) {
+  color: #72b8a4;
+}
+
+/* Connectivity Dark */
+html[data-theme='dark'] .sp-connect-section {
+  background: #0e0e10;
+}
+html[data-theme='dark'] .sp-connect-lead-wrap {
+  background: rgba(24, 24, 27, 0.88);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+html[data-theme='dark'] .sp-connect-lead-badge {
+  background: rgba(42, 115, 94, 0.45);
+  border: 1px solid rgba(106, 176, 156, 0.25);
+  color: #d5ece5;
+  box-shadow: none;
+}
+html[data-theme='dark'] .sp-connect-lead {
+  color: rgba(242, 242, 242, 0.85);
+}
+html[data-theme='dark'] .sp-connect-client {
+  background: #151518;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 24px 56px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+html[data-theme='dark'] .sp-connect-client.is-featured {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+html[data-theme='dark'] .sp-connect-client:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 36px 80px rgba(0, 0, 0, 0.62),
+    0 1px 0 rgba(255, 255, 255, 0.09) inset;
+}
+/* 框内舞台背景：深黑灰底 + 局部微弱的暗磨砂绿质感，无荧光感 */
+html[data-theme='dark'] .sp-connect-stage-visual,
+html[data-theme='dark'] .sp-connect-client.is-featured .sp-connect-stage-visual {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(46, 102, 86, 0.1) 0%, transparent 70%),
+    #1b1b1f;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .sp-art-window,
+html[data-theme='dark'] .sp-art-screen,
+html[data-theme='dark'] .sp-art-phone {
+  background: rgba(32, 32, 36, 0.95);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .sp-art-screen {
+  border-color: rgba(106, 176, 156, 0.25);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .sp-art-hub-center {
+  background: linear-gradient(135deg, #267862 0%, #1d5e4d 100%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+html[data-theme='dark'] .sp-art-cloud-core,
+html[data-theme='dark'] .sp-art-voice-orb {
+  color: #6ab09c;
+}
+html[data-theme='dark'] .sp-art-dots {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .sp-art-dots i:first-child {
+  background: #589e8b;
+}
+html[data-theme='dark'] .sp-art-dots i:not(:first-child),
+html[data-theme='dark'] .sp-art-notch {
+  background: rgba(255, 255, 255, 0.22);
+}
+html[data-theme='dark'] .sp-art-node {
+  background: #1b1b1f;
+  border-color: #589e8b;
+  box-shadow: 0 0 0 4px rgba(88, 158, 139, 0.12);
+}
+html[data-theme='dark'] .sp-art-laptop-base {
+  background: linear-gradient(90deg, #27272c 0%, #34343b 50%, #27272c 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+/* 局部胶囊标签：磨砂暗绿质感，去除刺眼荧光 */
+html[data-theme='dark'] .sp-connect-client-tag {
+  color: #8cc4b3;
+  background: rgba(46, 108, 90, 0.18);
+  border-color: rgba(106, 176, 156, 0.2);
+  backdrop-filter: blur(8px);
+}
+html[data-theme='dark'] .sp-connect-tag-dot,
+html[data-theme='dark'] .sp-connect-tile-status i,
+html[data-theme='dark'] .sp-connect-dock-dot {
+  background: #589e8b;
+}
+html[data-theme='dark'] .sp-connect-client-index {
+  color: rgba(255, 255, 255, 0.25);
+}
+html[data-theme='dark'] .sp-connect-client:hover .sp-connect-client-name {
+  color: #72b8a4;
+}
+html[data-theme='dark'] .sp-connect-client-desc,
+html[data-theme='dark'] .sp-connect-channels-desc,
+html[data-theme='dark'] .sp-connect-way-body p {
+  color: rgba(212, 212, 216, 0.65);
+}
+html[data-theme='dark'] .sp-connect-bento {
+  background: #151518;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.48),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+html[data-theme='dark'] .sp-connect-tile,
+html[data-theme='dark'] .sp-connect-way-card {
+  background: #1c1c20;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .sp-connect-tile:hover,
+html[data-theme='dark'] .sp-connect-way-card:hover {
+  background: #232328;
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+html[data-theme='dark'] .sp-connect-tile-icon,
+html[data-theme='dark'] .sp-connect-way-icon {
+  background: rgba(46, 108, 90, 0.16);
+  border-color: rgba(106, 176, 156, 0.18);
+  color: #7ab8a6;
+}
+html[data-theme='dark'] .sp-connect-tile:hover .sp-connect-tile-icon {
+  background: #266b58;
+  border-color: rgba(110, 185, 162, 0.3);
+  color: #ffffff;
+}
+html[data-theme='dark'] .sp-connect-tile-status {
+  color: rgba(212, 212, 216, 0.48);
+}
+html[data-theme='dark'] .sp-connect-ways {
+  border-left-color: rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .sp-connect-dock-platforms {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .sp-connect-note {
+  color: rgba(212, 212, 216, 0.62);
+}
+html[data-theme='dark'] .sp-connect-hint {
+  color: rgba(212, 212, 216, 0.46);
+}
+
+/* Open Source & Footer Dark */
+html[data-theme='dark'] .sp-oss-section {
+  background: #0b0b0c;
+}
+html[data-theme='dark'] .sp-oss-bg-radial {
+  background: radial-gradient(ellipse 45% 35% at 50% 50%, rgba(46, 102, 86, 0.08) 0%, transparent 70%);
+}
+html[data-theme='dark'] .sp-oss-desc {
+  color: rgba(212, 212, 216, 0.68);
+}
+html[data-theme='dark'] .sp-github-card {
+  background: #161619;
+  border-color: rgba(255, 255, 255, 0.09);
+}
+html[data-theme='dark'] .sp-github-card:hover {
+  border-color: rgba(106, 176, 156, 0.32);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .sp-github-card:hover .sp-github-icon,
+html[data-theme='dark'] .sp-github-card:hover .sp-github-repo,
+html[data-theme='dark'] .sp-github-card:hover .sp-github-arrow {
+  color: #72b8a4;
+}
+html[data-theme='dark'] .sp-github-icon {
+  color: rgba(242, 242, 242, 0.85);
+}
+html[data-theme='dark'] .sp-github-label {
+  color: rgba(212, 212, 216, 0.55);
+}
+html[data-theme='dark'] .sp-github-repo {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .sp-github-arrow {
+  color: rgba(242, 242, 242, 0.55);
+}
+html[data-theme='dark'] .sp-stat-num {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .sp-stat-label {
+  color: rgba(212, 212, 216, 0.55);
+}
+html[data-theme='dark'] .sp-stat-divider {
+  background: rgba(255, 255, 255, 0.12);
+}
+html[data-theme='dark'] .sp-footer {
+  background: #080809;
+}
+html[data-theme='dark'] .sp-footer-top-line {
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+html[data-theme='dark'] .sp-footer-tagline {
+  color: rgba(212, 212, 216, 0.62);
+}
+html[data-theme='dark'] .sp-footer-bottom {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .sp-footer-copy,
+html[data-theme='dark'] .sp-footer-link {
+  color: rgba(212, 212, 216, 0.6);
+}
+html[data-theme='dark'] .sp-footer-link:hover,
+html[data-theme='dark'] .sp-footer-beian:hover {
+  color: #72b8a4;
+}
+html[data-theme='dark'] .sp-footer-beian {
+  color: rgba(212, 212, 216, 0.48);
+}
+html[data-theme='dark'] .sp-contact-mask {
+  background: rgba(0, 0, 0, 0.65);
+}
+html[data-theme='dark'] .sp-contact-dialog {
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #f2f2f2;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+html[data-theme='dark'] .sp-contact-head {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .sp-contact-head-text span {
+  color: #a1a1aa;
+}
+html[data-theme='dark'] .sp-contact-close {
+  color: #a1a1aa;
+}
+html[data-theme='dark'] .sp-contact-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f2f2;
 }
 </style>

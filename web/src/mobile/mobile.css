@@ -8,6 +8,13 @@ body,
   font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
 }
 
+html[data-theme='dark'],
+html[data-theme='dark'] body,
+html[data-theme='dark'] #app {
+  background: #0b0d12;
+  color: #f3f4f6;
+}
+
 body {
   overflow: hidden;
 }

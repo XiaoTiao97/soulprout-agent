@@ -1,0 +1,543 @@
+/* ==========================================================================
+ * Soulprout Night Mode (高级简约纯正中性灰黑暗色主题)
+ * 通过 html[data-theme='dark'] 统一驱动全局与组件级暗色表现
+ * ========================================================================== */
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --sp-bg-canvas: #141414;
+  --sp-bg-surface: #1f1f1f;
+  --sp-bg-elevated: #262626;
+  --sp-bg-subtle: #2e2e2e;
+  --sp-text-primary: #f2f2f2;
+  --sp-text-secondary: #a3a3a3;
+  --sp-text-muted: #737373;
+  --sp-border-subtle: rgba(255, 255, 255, 0.07);
+  --sp-border-default: rgba(255, 255, 255, 0.11);
+  --sp-accent: #1eb48c;
+  --sp-accent-bright: #22c99d;
+}
+
+html[data-theme='dark'],
+html[data-theme='dark'] body {
+  background-color: #141414;
+  color: #e5e5e5;
+}
+
+/* ── 主聊天布局与侧边栏 (Chat / ConversationWindow) ── */
+html[data-theme='dark'] .main-container {
+  background-color: #141414;
+}
+
+html[data-theme='dark'] .main-use-container {
+  background-color: #171717 !important;
+}
+
+html[data-theme='dark'] .conversation-answer {
+  background-color: #212121 !important;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme='dark'] .extra-info-panel {
+  background-color: #171717 !important;
+}
+
+html[data-theme='dark'] .close-sidebar {
+  color: #d4d4d4 !important;
+}
+
+html[data-theme='dark'] .close-sidebar:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .hover-hint::after {
+  background-color: #2b2b2b !important;
+  color: #f5f5f5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.38);
+}
+
+html[data-theme='dark'] .tool-option-btn {
+  color: #d4d4d4 !important;
+}
+
+html[data-theme='dark'] .tool-option-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme='dark'] .create-conversation-button-agent,
+html[data-theme='dark'] .create-conversation-button-usual {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .create-conversation-button-agent:hover,
+html[data-theme='dark'] .create-conversation-button-usual:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+html[data-theme='dark'] .create-conversation-text {
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .history-choose::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+html[data-theme='dark'] .history-choose::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+html[data-theme='dark'] .history-agent:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme='dark'] .history-agent.selected {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme='dark'] .conversation_abstract {
+  color: #a3a3a3 !important;
+}
+
+html[data-theme='dark'] .history-agent.selected .conversation_abstract {
+  color: #fafafa !important;
+}
+
+html[data-theme='dark'] .conversation_option:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[data-theme='dark'] .conversation-option-menu {
+  background: #262626 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-theme='dark'] .conversation-option-item {
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .conversation-option-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .conversation-option-item.conversation-delete {
+  color: #f87171 !important;
+}
+
+html[data-theme='dark'] .confirm-popover {
+  background: #262626 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-theme='dark'] .confirm-main {
+  color: #f5f5f5 !important;
+}
+
+html[data-theme='dark'] .confirm-sub,
+html[data-theme='dark'] .confirm-content {
+  color: #a3a3a3 !important;
+}
+
+html[data-theme='dark'] .confirm-cancel {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .confirm-cancel:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+html[data-theme='dark'] .conversation-edit-input {
+  background: #1a1a1a !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #f5f5f5 !important;
+}
+
+/* ── 对话区滚动条与欢迎卡片 (ChatWindow) ── */
+html[data-theme='dark'] .answer-container::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+html[data-theme='dark'] .answer-container::-webkit-scrollbar-track {
+  background-color: transparent !important;
+}
+
+html[data-theme='dark'] .answer-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.26) !important;
+}
+
+html[data-theme='dark'] .no-history-content1 {
+  color: #f5f5f5 !important;
+}
+
+html[data-theme='dark'] .no-history-content2 {
+  color: #a3a3a3 !important;
+}
+
+html[data-theme='dark'] .suggestion-card-general {
+  background: linear-gradient(165deg, #2a2a2a 0%, #262626 50%, #232323 100%) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-theme='dark'] .suggestion-card-agent {
+  background: linear-gradient(165deg, #2a2a2a 0%, #262626 50%, #232323 100%) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-theme='dark'] .suggestion-card:hover {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42) !important;
+}
+
+html[data-theme='dark'] .card-title {
+  color: #f5f5f5 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+html[data-theme='dark'] .card-desc,
+html[data-theme='dark'] .suggestion-card-agent .card-desc,
+html[data-theme='dark'] .example-list {
+  color: #d4d4d4 !important;
+}
+
+html[data-theme='dark'] .example-list li {
+  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme='dark'] .example-list li::before {
+  background: #737373 !important;
+}
+
+html[data-theme='dark'] .example-list li:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* ── 消息气泡与 Markdown 渲染 ── */
+html[data-theme='dark'] .answer-me-content {
+  background-color: #303030 !important;
+  color: #f5f5f5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+}
+
+html[data-theme='dark'] .answer-robot-content,
+html[data-theme='dark'] .answer-robot-content-us {
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .answer-robot-content a {
+  color: #8cc4b3 !important;
+  background-color: rgba(46, 108, 90, 0.16) !important;
+}
+
+html[data-theme='dark'] .answer-robot-content a:hover {
+  color: #a7d7c8 !important;
+  background-color: rgba(46, 108, 90, 0.26) !important;
+}
+
+html[data-theme='dark'] .answer-robot-event {
+  background-color: #292929 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #d4d4d4 !important;
+}
+
+html[data-theme='dark'] .answer-robot-tool-name {
+  color: #a3a3a3 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+html[data-theme='dark'] .answer-robot-tool-name:hover {
+  color: #f5f5f5 !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+
+html[data-theme='dark'] .p-content-markdown {
+  color: #e5e5e5;
+}
+
+html[data-theme='dark'] .p-content-markdown code,
+html[data-theme='dark'] code {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .p-content-markdown pre code,
+html[data-theme='dark'] pre.hljs code {
+  background-color: transparent !important;
+  border: none !important;
+  color: inherit !important;
+}
+
+html[data-theme='dark'] .p-content-markdown blockquote {
+  border-left-color: rgba(255, 255, 255, 0.2) !important;
+  color: #a3a3a3 !important;
+}
+
+html[data-theme='dark'] .p-content-markdown table {
+  background-color: #262626 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme='dark'] .p-content-markdown th {
+  background-color: #2e2e2e !important;
+  color: #f5f5f5 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme='dark'] .p-content-markdown td {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #d4d4d4 !important;
+}
+
+html[data-theme='dark'] .p-content-markdown tr:nth-child(even) {
+  background-color: #222222 !important;
+}
+
+html[data-theme='dark'] .p-content-markdown tr:hover {
+  background-color: #303030 !important;
+}
+
+/* ── 代码块与 Highlight.js 暗色语法高亮 ── */
+html[data-theme='dark'] .code-wrapper {
+  background-color: #181818 !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32) !important;
+}
+
+html[data-theme='dark'] .code-title {
+  background-color: #222222 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  color: #a3a3a3 !important;
+}
+
+html[data-theme='dark'] pre.hljs {
+  background: #181818 !important;
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .hljs {
+  color: #d4d4d4 !important;
+  background: #181818 !important;
+}
+
+html[data-theme='dark'] .hljs-doctag,
+html[data-theme='dark'] .hljs-keyword,
+html[data-theme='dark'] .hljs-meta .hljs-keyword,
+html[data-theme='dark'] .hljs-template-tag,
+html[data-theme='dark'] .hljs-template-variable,
+html[data-theme='dark'] .hljs-type,
+html[data-theme='dark'] .hljs-variable.language_ {
+  color: #ff7b72 !important;
+}
+
+html[data-theme='dark'] .hljs-title,
+html[data-theme='dark'] .hljs-title.class_,
+html[data-theme='dark'] .hljs-title.class_.inherited__,
+html[data-theme='dark'] .hljs-title.function_ {
+  color: #d2a8ff !important;
+}
+
+html[data-theme='dark'] .hljs-attr,
+html[data-theme='dark'] .hljs-attribute,
+html[data-theme='dark'] .hljs-literal,
+html[data-theme='dark'] .hljs-meta,
+html[data-theme='dark'] .hljs-number,
+html[data-theme='dark'] .hljs-operator,
+html[data-theme='dark'] .hljs-variable,
+html[data-theme='dark'] .hljs-selector-attr,
+html[data-theme='dark'] .hljs-selector-class,
+html[data-theme='dark'] .hljs-selector-id {
+  color: #79c0ff !important;
+}
+
+html[data-theme='dark'] .hljs-regexp,
+html[data-theme='dark'] .hljs-string,
+html[data-theme='dark'] .hljs-meta .hljs-string {
+  color: #a5d6ff !important;
+}
+
+html[data-theme='dark'] .hljs-built_in,
+html[data-theme='dark'] .hljs-symbol {
+  color: #ffa657 !important;
+}
+
+html[data-theme='dark'] .hljs-comment,
+html[data-theme='dark'] .hljs-code,
+html[data-theme='dark'] .hljs-formula {
+  color: #a3a3a3 !important;
+}
+
+/* ── 底部悬浮输入框 (MessageInput) ── */
+html[data-theme='dark'] .query-form {
+  background-color: rgba(42, 42, 42, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.32),
+    0 12px 28px -4px rgba(0, 0, 0, 0.42),
+    0 24px 52px -12px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .query-form:focus-within {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.38),
+    0 14px 32px -4px rgba(0, 0, 0, 0.48),
+    0 28px 60px -12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme='dark'] .input_field {
+  color: #f5f5f5 !important;
+}
+
+html[data-theme='dark'] .input_field::placeholder {
+  color: #737373 !important;
+}
+
+html[data-theme='dark'] .input_button {
+  background-color: #3a3a3a !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-theme='dark'] .input_button:hover {
+  background-color: #474747 !important;
+}
+
+/* ── 分隔拖拽条与右侧栏展开球 (Resizer & Info Button) ── */
+html[data-theme='dark'] .resizer:hover::after {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+html[data-theme='dark'] .resizer.resizing::after {
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+html[data-theme='dark'] .info-button {
+  background: radial-gradient(circle at 30% 30%, #363636, #292929 65%, #212121 100%) !important;
+  color: #d4d4d4 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.45),
+    0 4px 12px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme='dark'] .info-button:hover {
+  background: radial-gradient(circle at 30% 30%, #404040, #303030 60%, #262626 100%) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+html[data-theme='dark'] .info-button.shifted {
+  background: radial-gradient(circle at 30% 30%, #303030, #242424 70%) !important;
+}
+
+html[data-theme='dark'] .info-icon {
+  filter: brightness(1.7) !important;
+}
+
+/* ── Toast UI Editor 暗色适配 ── */
+html[data-theme='dark'] .toastui-editor-defaultUI {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme='dark'] .toastui-editor-defaultUI-toolbar {
+  background-color: #242424 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .toastui-editor-defaultUI-toolbar button {
+  border-color: transparent !important;
+  filter: invert(0.82) brightness(1.1);
+}
+
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-md-container,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-ww-container {
+  background-color: #1c1c1c !important;
+  border-right-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .toastui-editor-defaultUI .ProseMirror,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-contents p,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-contents h1,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-contents h2,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-contents h3,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-contents h4,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-contents li,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-md-preview * {
+  color: #e5e5e5 !important;
+}
+
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-md-preview table th,
+html[data-theme='dark'] .toastui-editor-defaultUI .toastui-editor-ww-container table th {
+  color: #f5f5f5 !important;
+  background: linear-gradient(180deg, #2e2e2e 0%, #242424 100%) !important;
+}
+
+/* ── 桌面端顶栏按钮暗色适配 (TitleBar) ── */
+html[data-theme='dark'] .dk-win-btn {
+  color: #a3a3a3;
+}
+
+html[data-theme='dark'] .dk-win-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f5f5;
+}
+
+html[data-theme='dark'] .dk-input,
+html[data-theme='dark'] .dk-btn {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+
+html[data-theme='dark'] .dk-btn:hover {
+  background: #303030;
+}
+
+html[data-theme='dark'] .dk-btn.is-primary {
+  background: #f5f5f5;
+  border-color: #f5f5f5;
+  color: #171717;
+}
+
+html[data-theme='dark'] .dk-segment button.is-active {
+  background: #363636;
+  color: #f5f5f5;
+}
+
+/* ── 静态单色 SVG 图标暗色提亮适配 ── */
+html[data-theme='dark'] .close-sidebar img,
+html[data-theme='dark'] .tool-option-btn img,
+html[data-theme='dark'] .user-icon,
+html[data-theme='dark'] .user-menu-item img:not([src*='logout']),
+html[data-theme='dark'] .conversation_option img,
+html[data-theme='dark'] .conversation-option-item:not(.conversation-delete) img,
+html[data-theme='dark'] .upload-option img,
+html[data-theme='dark'] .message-action-btn-icon,
+html[data-theme='dark'] .code-copy-btn,
+html[data-theme='dark'] .icon-button,
+html[data-theme='dark'] .edit-kb img,
+html[data-theme='dark'] .agent-market-icon,
+html[data-theme='dark'] .market-icon,
+html[data-theme='dark'] .agent-option-btn img,
+html[data-theme='dark'] .agent-option-item:not(.agent-option-delete) img {
+  filter: brightness(1.85);
+}
+
+html[data-theme='dark'] .conversation-option-item.conversation-delete img,
+html[data-theme='dark'] .agent-option-item.agent-option-delete img,
+html[data-theme='dark'] .delete-kb img,
+html[data-theme='dark'] .delete-doc img {
+  filter: brightness(1.65);
+}

@@ -2298,4 +2298,122 @@ defineExpose({
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
 }
+
+html[data-theme='dark'] .upload-option,
+html[data-theme='dark'] .settings-select-btn,
+html[data-theme='dark'] .agent-select-btn,
+html[data-theme='dark'] .kb-select-btn,
+html[data-theme='dark'] .voice-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #d1d5db;
+}
+html[data-theme='dark'] .upload-option:hover:not(:disabled),
+html[data-theme='dark'] .settings-select-btn:hover,
+html[data-theme='dark'] .agent-select-btn:hover,
+html[data-theme='dark'] .kb-select-btn:hover,
+html[data-theme='dark'] .voice-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f9fafb;
+}
+html[data-theme='dark'] .settings-select-btn.settings-active,
+html[data-theme='dark'] .settings-select-btn.settings-active:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+html[data-theme='dark'] .agent-select-btn.agent-active,
+html[data-theme='dark'] .agent-select-btn.agent-active:hover,
+html[data-theme='dark'] .settings-row-trigger.kb-active,
+html[data-theme='dark'] .settings-row-trigger.kb-active:hover,
+html[data-theme='dark'] .kb-active {
+  background: #383838 !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+html[data-theme='dark'] .settings-panel,
+html[data-theme='dark'] .settings-right-dropdown,
+html[data-theme='dark'] .agent-dropdown,
+html[data-theme='dark'] .kb-dropdown {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 20px 44px -10px rgba(0, 0, 0, 0.55);
+}
+html[data-theme='dark'] .settings-row-label {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .settings-row-trigger {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .settings-row-trigger:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+html[data-theme='dark'] .settings-right-dropdown .model-option,
+html[data-theme='dark'] .mode-item,
+html[data-theme='dark'] .agent-checkbox,
+html[data-theme='dark'] .kb-checkbox {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .settings-right-dropdown .model-option:hover,
+html[data-theme='dark'] .mode-item:hover,
+html[data-theme='dark'] .agent-checkbox:hover,
+html[data-theme='dark'] .kb-checkbox:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+html[data-theme='dark'] .settings-right-dropdown .model-option.active,
+html[data-theme='dark'] .mode-item.active,
+html[data-theme='dark'] .mode-item.active:hover {
+  background: #383838;
+  color: #ffffff;
+}
+html[data-theme='dark'] .agent-dropdown-left.has-right {
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .agent-dropdown-block-header {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .agent-dropdown-block-header:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+html[data-theme='dark'] .confirm-btn-wrapper {
+  background: #262626;
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .confirm-btn {
+  background: #f3f4f6;
+  border-color: #f3f4f6;
+  color: #111827;
+}
+html[data-theme='dark'] .confirm-btn:not(:disabled):hover {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+html[data-theme='dark'] .confirm-btn:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: #6b7280;
+}
+html[data-theme='dark'] .selected-file-name {
+  color: #cbd5e1;
+}
+html[data-theme='dark'] .voice-btn--recording,
+html[data-theme='dark'] .voice-btn--recording:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}
+html[data-theme='dark'] .query--mobile .voice-mode-toggle {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #d1d5db;
+}
+html[data-theme='dark'] .query--mobile .input_field,
+html[data-theme='dark'] .query--mobile .hold-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f3f4f6;
+}
 </style>

@@ -525,6 +525,13 @@ import VueOfficePptx from '@vue-office/pptx'
 import mammoth from 'mammoth';
 import ToolCallsBlock from './ToolCallsBlock.vue'
 import { buildToolCallItems } from '../utils/toolCallDisplay'
+import {
+  buildWorkspaceFileContentUrl,
+  isWorkspaceRelativeUrl,
+  normalizeWorkspaceFilePath,
+  preprocessMarkdownImages,
+} from '../utils/userFileDisplay'
+import { isDark } from '@/utils/theme.js'
 
 // Toast UI Editor imports
 import Editor from '@toast-ui/editor'
@@ -857,12 +864,35 @@ md.renderer.rules.fence = (tokens, idx, options, env, slf) => {
 md.renderer.rules.table_open = () => '<table class="markdown-table">'
 md.renderer.rules.table_close = () => '</table>'
 
+const defaultExtraImageRenderer =
+  md.renderer.rules.image ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options)
+  }
+
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const rawSrc = token.attrGet('src') || ''
+  if (isWorkspaceRelativeUrl(rawSrc)) {
+    const cleanPath = normalizeWorkspaceFilePath(rawSrc)
+    const cid = env?.conversationId || ''
+    if (cleanPath && cid) {
+      token.attrSet('src', buildWorkspaceFileContentUrl(cleanPath, cid))
+    }
+  } else if (/^https?:\/\//i.test(rawSrc)) {
+    token.attrSet('referrerpolicy', 'no-referrer')
+  }
+  return defaultExtraImageRenderer(tokens, idx, options, env, self)
+}
+
 // renderMarkdown 结果缓存：流式时大量内容不变，避免重复解析
 const markdownCache = new Map<string, string>()
 const MARKDOWN_CACHE_MAX = 150
 
 function renderMarkdown(content: string) {
-  const key = content ?? ''
+  const cid = props.conversationId || ''
+  const raw = preprocessMarkdownImages(content ?? '')
+  const key = `${cid}::${raw}`
   const cached = markdownCache.get(key)
   if (cached !== undefined) return cached
 
@@ -871,7 +901,7 @@ function renderMarkdown(content: string) {
     const parsed = JSON.parse(content)
     html = renderStructured(parsed)
   } catch (e) {
-    html = md.render(content ?? '')
+    html = md.render(raw, { conversationId: cid })
     html = html.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ')
   }
 
@@ -1214,21 +1244,23 @@ const showUnsavedChangesDialog = (): Promise<'save' | 'discard' | 'cancel'> => {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `
 
+    const dark = isDark.value
     const dialogContent = document.createElement('div')
     dialogContent.style.cssText = `
-      background: white;
+      background: ${dark ? '#181c26' : 'white'};
+      border: 1px solid ${dark ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
       border-radius: 12px;
       padding: 24px;
       max-width: 400px;
       width: 90%;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, ${dark ? '0.5' : '0.2'});
     `
 
     const title = document.createElement('h3')
     title.textContent = t('extraInfo.unsavedTitle')
     title.style.cssText = `
       margin: 0 0 16px 0;
-      color: #1f2937;
+      color: ${dark ? '#f3f4f6' : '#1f2937'};
       font-size: 18px;
       font-weight: 600;
     `
@@ -1237,7 +1269,7 @@ const showUnsavedChangesDialog = (): Promise<'save' | 'discard' | 'cancel'> => {
     message.textContent = t('extraInfo.unsavedMessage')
     message.style.cssText = `
       margin: 0 0 24px 0;
-      color: #6b7280;
+      color: ${dark ? '#9ca3af' : '#6b7280'};
       line-height: 1.5;
     `
 
@@ -1251,24 +1283,27 @@ const showUnsavedChangesDialog = (): Promise<'save' | 'discard' | 'cancel'> => {
     const createButton = (text: string, primary = false) => {
       const button = document.createElement('button')
       button.textContent = text
+      const defaultBg = primary ? '#3b82f6' : (dark ? '#222734' : 'white')
+      const defaultBorder = primary ? '#3b82f6' : (dark ? 'rgba(255,255,255,0.14)' : '#d1d5db')
+      const defaultColor = primary ? 'white' : (dark ? '#e5e7eb' : '#374151')
       button.style.cssText = `
         padding: 8px 16px;
-        border: 1px solid ${primary ? '#3b82f6' : '#d1d5db'};
+        border: 1px solid ${defaultBorder};
         border-radius: 6px;
-        background: ${primary ? '#3b82f6' : 'white'};
-        color: ${primary ? 'white' : '#374151'};
+        background: ${defaultBg};
+        color: ${defaultColor};
         cursor: pointer;
         font-size: 14px;
         font-weight: 500;
         transition: all 0.2s;
       `
       button.onmouseover = () => {
-        button.style.background = primary ? '#2563eb' : '#f9fafb'
-        button.style.borderColor = primary ? '#2563eb' : '#9ca3af'
+        button.style.background = primary ? '#2563eb' : (dark ? '#2b3140' : '#f9fafb')
+        button.style.borderColor = primary ? '#2563eb' : (dark ? 'rgba(255,255,255,0.22)' : '#9ca3af')
       }
       button.onmouseout = () => {
-        button.style.background = primary ? '#3b82f6' : 'white'
-        button.style.borderColor = primary ? '#3b82f6' : '#d1d5db'
+        button.style.background = defaultBg
+        button.style.borderColor = defaultBorder
       }
       return button
     }
@@ -1413,7 +1448,7 @@ const fileExtension = computed(() => {
   return selectedFile.value?.split('.').pop()?.toLowerCase() || ''
 })
 
-const isImage = computed(() => ['jpg', 'jpeg', 'png'].includes(fileExtension.value))
+const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(fileExtension.value))
 const isHtml = computed(() => selectedFile.value?.endsWith('.html'))
 const isDocx = computed(() => ['doc', 'docx'].includes(fileExtension.value))
 const isExcel = computed(() => ['xls', 'xlsx'].includes(fileExtension.value))
@@ -5129,5 +5164,245 @@ const handleKeyDown = (event: KeyboardEvent) => {
 :deep(.toastui-editor-defaultUI .ProseMirror) {
   font-size: 16px !important;
   line-height: 1.6 !important;
+}
+
+/* ─── Dark Mode (ExtraInfo) ─────────────────────── */
+html[data-theme='dark'] .extra-info,
+html[data-theme='dark'] .preview-tab-bar,
+html[data-theme='dark'] .preview-main,
+html[data-theme='dark'] .web-preview-loading,
+html[data-theme='dark'] .file-library-full-panel,
+html[data-theme='dark'] .full-panel-header,
+html[data-theme='dark'] .full-panel-main,
+html[data-theme='dark'] .file-library-full-panel .preview-header,
+html[data-theme='dark'] .file-library-full-panel .preview-content {
+  background-color: #171717;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .preview-tab-switch,
+html[data-theme='dark'] .edit-mode-switch {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .preview-tab-thumb,
+html[data-theme='dark'] .edit-mode-thumb {
+  background-color: #333333;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .preview-tab-option,
+html[data-theme='dark'] .edit-mode-option {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .preview-tab-option:hover:not(.preview-tab-option--active),
+html[data-theme='dark'] .edit-mode-option:hover:not(.edit-mode-option--active) {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .preview-tab-option--active,
+html[data-theme='dark'] .preview-tab-option--active:hover,
+html[data-theme='dark'] .edit-mode-option--active,
+html[data-theme='dark'] .edit-mode-option--active:hover {
+  color: #ffffff;
+}
+html[data-theme='dark'] .file-list-float,
+html[data-theme='dark'] .file-list-rail,
+html[data-theme='dark'] .full-panel-sidebar {
+  background: rgba(34, 34, 34, 0.96);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .file-list-rail:hover {
+  background: #2b2b2b;
+}
+html[data-theme='dark'] .file-list-rail:hover .file-list-rail-icon {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .file-list-float-head {
+  background: #212121;
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .file-list-float-collapse,
+html[data-theme='dark'] .file-list-float-refresh,
+html[data-theme='dark'] .full-panel-close {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .file-list-float-collapse:hover,
+html[data-theme='dark'] .file-list-float-refresh:hover,
+html[data-theme='dark'] .full-panel-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .file-list-float-title,
+html[data-theme='dark'] .full-panel-title,
+html[data-theme='dark'] .preview-header-title,
+html[data-theme='dark'] .preview-header h4 {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .file-list-float-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .fl-tree-item {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .fl-tree-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+html[data-theme='dark'] .fl-tree-item--selected {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+html[data-theme='dark'] .fl-tree-item--folder {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .fl-tree-item--selected .fl-tree-leading {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .preview-header {
+  background: #212121;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+html[data-theme='dark'] .preview-content {
+  background: #1c1c1c;
+  color: #d4d4d4;
+  box-shadow: none;
+}
+html[data-theme='dark'] .preview-content::-webkit-scrollbar-thumb,
+html[data-theme='dark'] .agent-messages::-webkit-scrollbar-thumb,
+html[data-theme='dark'] .file-list-float-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+html[data-theme='dark'] .preview-content :deep(table),
+html[data-theme='dark'] .preview-content :deep(.markdown-table),
+html[data-theme='dark'] :deep(.p-content-markdown table) {
+  background-color: #242424;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .preview-content :deep(table th),
+html[data-theme='dark'] .preview-content :deep(.markdown-table th),
+html[data-theme='dark'] :deep(.p-content-markdown table th) {
+  background: linear-gradient(180deg, #2b2b2b 0%, #242424 100%);
+  color: #f5f5f5;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  border-right-color: rgba(255, 255, 255, 0.08) !important;
+}
+html[data-theme='dark'] .preview-content :deep(table td),
+html[data-theme='dark'] .preview-content :deep(.markdown-table td),
+html[data-theme='dark'] :deep(.p-content-markdown table td) {
+  color: #d4d4d4;
+  border-right-color: rgba(255, 255, 255, 0.06) !important;
+}
+html[data-theme='dark'] .preview-content :deep(table tr:nth-child(even) td),
+html[data-theme='dark'] .preview-content :deep(.markdown-table tr:nth-child(even) td),
+html[data-theme='dark'] :deep(.p-content-markdown table tr:nth-child(even) td) {
+  background-color: #202020;
+}
+html[data-theme='dark'] .preview-content :deep(table tr:nth-child(odd) td),
+html[data-theme='dark'] .preview-content :deep(.markdown-table tr:nth-child(odd) td),
+html[data-theme='dark'] :deep(.p-content-markdown table tr:nth-child(odd) td) {
+  background-color: #242424;
+}
+html[data-theme='dark'] .preview-content :deep(table tr:hover td),
+html[data-theme='dark'] .preview-content :deep(.markdown-table tr:hover td),
+html[data-theme='dark'] :deep(.p-content-markdown table tr:hover td) {
+  background-color: #2e2e2e !important;
+  color: #ffffff;
+}
+html[data-theme='dark'] .sub-agent-card {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, #262626 0%, #202020 100%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .sub-agent-header {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .sub-agent-avatar {
+  background: rgba(34, 201, 157, 0.14);
+  color: #22c99d;
+}
+html[data-theme='dark'] .sub-agent-name {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .sub-agent-live-badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .sub-agent-body:not(.sub-agent-body--expanded)::after {
+  background: linear-gradient(to bottom, transparent, #202020);
+}
+html[data-theme='dark'] .sub-agent-footer {
+  border-top-color: rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(32, 32, 32, 0.6) 0%, #202020 100%);
+}
+html[data-theme='dark'] .sub-agent-expand-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+}
+html[data-theme='dark'] .sub-agent-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .sub-agent-reasoner {
+  background: rgba(255, 255, 255, 0.04);
+  border-left-color: rgba(34, 201, 157, 0.45);
+}
+html[data-theme='dark'] :deep(.sub-agent-body .p-content-markdown),
+html[data-theme='dark'] :deep(.p-content-markdown) {
+  color: #d1d5db;
+}
+html[data-theme='dark'] .edit-button,
+html[data-theme='dark'] .export-button {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+  box-shadow: none;
+}
+html[data-theme='dark'] .edit-button:hover,
+html[data-theme='dark'] .export-button:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+html[data-theme='dark'] .export-dropdown {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .dropdown-item {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+html[data-theme='dark'] .save-button {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+html[data-theme='dark'] .save-button:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.26);
+  color: #6ee7b7;
+}
+html[data-theme='dark'] .cancel-button {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.32);
+}
+html[data-theme='dark'] .cancel-button:hover {
+  background: rgba(239, 68, 68, 0.24);
+}
+html[data-theme='dark'] .file-library-full-panel .edit-content,
+html[data-theme='dark'] .file-library-full-panel .markdown-editor-container,
+html[data-theme='dark'] .file-library-full-panel .edit-textarea,
+html[data-theme='dark'] .edit-textarea {
+  background: #212121;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .edit-textarea:focus {
+  background: #262626;
+  box-shadow: inset 0 0 0 2px rgba(34, 201, 157, 0.45);
 }
 </style>

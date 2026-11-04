@@ -7,7 +7,10 @@
           <span class="logo-text">Soulprout</span>
         </router-link>
         <h1 class="docs-title">{{ t('productDocs.title') }}</h1>
-        <LocaleSwitcher class="docs-locale" />
+        <div class="docs-header-actions">
+          <ThemeSwitcher />
+          <LocaleSwitcher class="docs-locale" />
+        </div>
       </div>
     </header>
 
@@ -63,6 +66,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import logo from '@/assets/images/soulprout_logo.png'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 
 import zhPart1 from '@/utils/docs/zh-CN/01-meet-soulprout.md?raw'
 import zhPart2 from '@/utils/docs/zh-CN/02-quick-start.md?raw'
@@ -305,8 +309,15 @@ onUnmounted(() => {
   gap: 2rem;
 }
 
-.docs-locale {
+.docs-header-actions {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.docs-locale {
+  margin-left: 0;
 }
 
 .logo-link {
@@ -564,5 +575,100 @@ onUnmounted(() => {
   .doc-part {
     padding: 1.5rem 1.5rem;
   }
+}
+
+/* ─── Dark Mode ─────────────────────────────── */
+html[data-theme='dark'] .product-docs {
+  background: #111113;
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .docs-header {
+  background: rgba(17, 17, 19, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .logo-link {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .logo-link:hover {
+  color: #72b8a4;
+}
+html[data-theme='dark'] .docs-title {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .docs-toc::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+html[data-theme='dark'] .toc-part-title {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .toc-part-title:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #8cc4b3;
+}
+html[data-theme='dark'] .toc-part-title.active {
+  background: rgba(46, 108, 90, 0.18);
+  color: #8cc4b3;
+}
+html[data-theme='dark'] .toc-sections {
+  border-left-color: rgba(255, 255, 255, 0.1);
+}
+html[data-theme='dark'] .toc-section {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .toc-section:hover {
+  color: #8cc4b3;
+  background: rgba(255, 255, 255, 0.04);
+}
+html[data-theme='dark'] .toc-section.active {
+  color: #8cc4b3;
+  background: rgba(46, 108, 90, 0.15);
+}
+html[data-theme='dark'] .doc-part {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .doc-part-content :deep(h1),
+html[data-theme='dark'] .doc-part-content :deep(h2) {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .doc-part-content :deep(h1) {
+  border-bottom-color: #4d8f7c;
+}
+html[data-theme='dark'] .doc-part-content :deep(h3),
+html[data-theme='dark'] .doc-part-content :deep(p),
+html[data-theme='dark'] .doc-part-content :deep(li) {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .doc-part-content :deep(strong) {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .doc-part-content :deep(blockquote) {
+  background: #202024;
+  color: #a3a3a3;
+  border-left-color: #4d8f7c;
+}
+html[data-theme='dark'] .doc-part-content :deep(th),
+html[data-theme='dark'] .doc-part-content :deep(td) {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .doc-part-content :deep(th) {
+  background: #222226;
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .doc-part-content :deep(tr:hover td) {
+  background: rgba(255, 255, 255, 0.04);
+}
+html[data-theme='dark'] .doc-part-content :deep(pre) {
+  background: #121214;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .doc-part-content :deep(a) {
+  color: #72b8a4;
+}
+html[data-theme='dark'] .doc-part-content :deep(hr) {
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 </style>

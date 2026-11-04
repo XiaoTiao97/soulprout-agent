@@ -487,4 +487,57 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 }
+
+html[data-theme='dark'] .bp-summary-pill {
+  background: #292929;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .bp-summary-pill:hover {
+  background: #303030;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+html[data-theme='dark'] .bp-summary-pill--active {
+  background: #363636;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .bp-summary-pill--pending::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 45%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.14) 55%,
+    transparent 100%
+  );
+}
+html[data-theme='dark'] .bp-pill-icon,
+html[data-theme='dark'] .bp-pill-chevron {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .bp-detail-panel {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .bp-progress-wrap {
+  background: rgba(24, 24, 24, 0.75);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .bp-progress-layer {
+  color: rgba(212, 212, 212, 0.65);
+}
+html[data-theme='dark'] .bp-detail-block-title {
+  color: #737373;
+}
+html[data-theme='dark'] .bp-result-content {
+  background: #1c1c1c;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #d4d4d4;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+html[data-theme='dark'] .bp-result-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
 </style>

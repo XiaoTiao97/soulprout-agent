@@ -300,4 +300,55 @@ watch(
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+html[data-theme='dark'] .pz-mask {
+  background: rgba(0, 0, 0, 0.65);
+}
+html[data-theme='dark'] .pz-dialog {
+  background: #242424;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+html[data-theme='dark'] .pz-head,
+html[data-theme='dark'] .pz-foot {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .pz-close {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .pz-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .pz-label,
+html[data-theme='dark'] .pz-count {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .pz-input,
+html[data-theme='dark'] .pz-textarea {
+  background: #1a1a1a;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .pz-input:focus,
+html[data-theme='dark'] .pz-textarea:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+html[data-theme='dark'] .pz-btn {
+  background: #2e2e2e;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .pz-btn:hover {
+  background: #383838;
+}
+html[data-theme='dark'] .pz-btn--primary {
+  background: #f5f5f5;
+  border-color: #f5f5f5;
+  color: #171717;
+}
+html[data-theme='dark'] .pz-btn--primary:hover {
+  background: #ffffff;
+}
 </style>

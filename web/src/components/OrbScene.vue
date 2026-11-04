@@ -6,9 +6,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 'postprocessing'
+import { isDark } from '@/utils/theme.js'
 
 const COLORS = [
   '#1eb48c', '#1aaa84', '#169c7a',
@@ -32,7 +33,7 @@ onMounted(() => {
   const canvasContainer = container.querySelector('.orb-canvas-container')
 
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color('#ffffff')
+  scene.background = new THREE.Color(isDark.value ? '#090b10' : '#ffffff')
 
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100)
   camera.position.set(0, 0, 6)
@@ -47,13 +48,18 @@ onMounted(() => {
 
   const uniforms = {
     uTime: { value: 0 },
-    uGlowIntensity: { value: 0.55 },
+    uGlowIntensity: { value: isDark.value ? 0.68 : 0.55 },
     uColorA: { value: new THREE.Color(COLORS[0]) },
     uColorB: { value: new THREE.Color(COLORS[1]) },
     uColorC: { value: new THREE.Color(COLORS[2]) },
     uMouse: { value: new THREE.Vector2(0.5, 0.5) },
     uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
   }
+
+  const stopWatchTheme = watch(isDark, (dark) => {
+    scene.background = new THREE.Color(dark ? '#090b10' : '#ffffff')
+    uniforms.uGlowIntensity.value = dark ? 0.68 : 0.55
+  })
 
   const sphereVertexShader = `
     varying vec2 vUv;
@@ -195,6 +201,7 @@ onMounted(() => {
 
   cleanupFn = () => {
     running = false
+    stopWatchTheme()
     window.removeEventListener('resize', onResize)
     renderer.dispose()
     composer.dispose()
@@ -235,5 +242,8 @@ onUnmounted(() => {
   background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 255, 255, 0.3) 100%);
   pointer-events: none;
   z-index: 1;
+}
+html[data-theme='dark'] .vignette {
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(9, 11, 16, 0.65) 100%);
 }
 </style>

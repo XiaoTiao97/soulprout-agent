@@ -229,4 +229,24 @@ onMounted(() => {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+html[data-theme='dark'] .market-title,
+html[data-theme='dark'] .market-card-name {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .market-card {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .market-card:hover {
+  background: #2e2e2e;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .market-card-desc {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .market-card-by {
+  color: #737373;
+}
 </style>

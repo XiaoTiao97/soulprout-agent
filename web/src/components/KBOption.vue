@@ -1875,4 +1875,118 @@ onUnmounted(() => {
 .doc-item.selected {
   background: rgba(0, 0, 0, 0.04);
 }
+
+html[data-theme='dark'] .kb-option-overlay {
+  background-color: rgba(0, 0, 0, 0.68);
+}
+html[data-theme='dark'] .kb-option-container {
+  background: #212121;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 60px -12px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='dark'] .kb-option-header,
+html[data-theme='dark'] .preview-header {
+  background: #212121;
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .kb-option-header h2,
+html[data-theme='dark'] .kb-name,
+html[data-theme='dark'] .name-wrapper h3,
+html[data-theme='dark'] .preview-header h4,
+html[data-theme='dark'] .doc-name {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .kb-content,
+html[data-theme='dark'] .kb-main,
+html[data-theme='dark'] .file-preview-panel {
+  background: #191919;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .kb-sidebar {
+  background: #1c1c1c;
+  border-right-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .plus-box {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .plus-box:hover {
+  background: #303030;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+html[data-theme='dark'] .kb-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+html[data-theme='dark'] .kb-item.selected {
+  background: #2e2e2e;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+html[data-theme='dark'] .kb-info,
+html[data-theme='dark'] .docs-list,
+html[data-theme='dark'] .progress-area,
+html[data-theme='dark'] .pending-area {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .kb-info p {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .doc-item {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .doc-item:hover,
+html[data-theme='dark'] .doc-item.selected {
+  background: rgba(255, 255, 255, 0.04);
+}
+html[data-theme='dark'] .add-file,
+html[data-theme='dark'] .save-edit,
+html[data-theme='dark'] .upload-btn,
+html[data-theme='dark'] .retry-btn {
+  background: #f5f5f5;
+  color: #171717;
+}
+html[data-theme='dark'] .cancel-edit,
+html[data-theme='dark'] .cancel-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .edit-input,
+html[data-theme='dark'] .edit-textarea {
+  background: #1a1a1a;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .progress-item,
+html[data-theme='dark'] .pending-item {
+  background: #1d1d1d;
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .preview-content {
+  background: #1c1c1c;
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .preview-content :deep(.p-content-markdown) {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .confirm-content {
+  background: #262626;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .confirm-content h3 {
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .confirm-content p {
+  color: #9ca3af;
+}
 </style> 

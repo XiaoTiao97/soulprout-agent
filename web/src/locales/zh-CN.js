@@ -8,6 +8,15 @@ export default {
     start: '立即体验',
     langSwitch: 'English',
   },
+  theme: {
+    switchLabel: '外观主题',
+    system: '跟随系统',
+    light: '白天模式',
+    dark: '夜晚模式',
+    systemShort: '跟随系统',
+    lightShort: '白天',
+    darkShort: '夜晚',
+  },
   init: {
     heroTitle: '思想种下，自有森林',
     heroSub: '我无法触碰你，但能帮你去触碰整个世界',
@@ -22,24 +31,23 @@ export default {
     scenesList: [
       {
         key: 'nearby',
-        tag: '耳机',
+        tag: '全天候待命 一句话唤醒',
         say: '「你好小芽」',
-        title: '打开助手，只需要一声唤醒',
       },
       {
         key: 'whole-day',
-        tag: '人格',
-        title: '他/她的名字和人设，由你来定义',
-      },
-      {
-        key: 'all-devices',
-        tag: '随处',
-        title: '在哪里都能找到我',
+        tag: '名字-人设-唤醒词 由你定义',
+        say: '「嗨xx 你的人设是一位...」',
       },
       {
         key: 'does-work',
-        tag: '交付',
-        title: '交付，而不只是回答',
+        tag: '全托管执行 定时定向交付',
+        say: '「执行已定制的任务 明早把报告发我微信」',
+      },
+      {
+        key: 'all-devices',
+        tag: '哪里都有我',
+        say: ' 「小爱同学  召唤小芽」',
       },
       {
         key: 'remembers',
@@ -67,7 +75,7 @@ export default {
       {
         key: 'mobile',
         name: '手机端',
-        tag: '待命模式',
+        tag: '语音模式',
         desc: '戴上耳机，随时唤醒语音通话，「贾维斯」就在身边。',
       },
     ],

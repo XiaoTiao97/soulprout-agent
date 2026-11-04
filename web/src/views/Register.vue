@@ -4,9 +4,12 @@
     <header class="register-header">
       <div class="header-inner">
         <a href="/" class="logo-link">
-          <img src="@/assets/images/logo.png" alt="Soulprout" class="header-logo" />
+          <img :src="isDark ? logoDark : logoLight" alt="Soulprout" class="header-logo" />
         </a>
-        <LocaleSwitcher />
+        <div class="header-actions">
+          <ThemeSwitcher />
+          <LocaleSwitcher />
+        </div>
       </div>
     </header>
 
@@ -76,7 +79,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { isDark } from '@/utils/theme.js'
+import logoLight from '@/assets/images/logo.png'
+import logoDark from '@/assets/images/logo_dark.png'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -231,6 +238,11 @@ async function submitForm() {
 
 .logo-link { display: inline-flex; align-items: center; text-decoration: none; }
 .header-logo { height: 2.5rem; width: auto; }
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 
 /* Main */
 .register-main {
@@ -384,5 +396,74 @@ async function submitForm() {
   .register-title { font-size: 1.5rem; }
   .code-row { flex-direction: column; }
   .code-btn { width: 100%; padding: 0.7rem; }
+}
+
+/* ─── Dark Mode ─────────────────────────────── */
+html[data-theme='dark'] .soulprout-register-page {
+  background:
+    radial-gradient(ellipse 36% 30% at 50% 42%, rgba(46, 102, 86, 0.14) 0%, transparent 72%),
+    #0b0b0c;
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .bg-ring-1,
+html[data-theme='dark'] .bg-ring-2 {
+  display: none;
+}
+html[data-theme='dark'] .register-header {
+  background: rgba(11, 11, 12, 0.78);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .register-card {
+  background: rgba(24, 24, 27, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+}
+html[data-theme='dark'] .register-title {
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .register-desc,
+html[data-theme='dark'] .hint-text {
+  color: rgba(212, 212, 216, 0.52);
+}
+html[data-theme='dark'] .input-field {
+  background: #141416;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f2f2f2;
+}
+html[data-theme='dark'] .input-field::placeholder {
+  color: rgba(212, 212, 216, 0.32);
+}
+html[data-theme='dark'] .input-field:focus {
+  border-color: rgba(106, 176, 156, 0.55);
+  box-shadow: 0 0 0 3px rgba(78, 148, 128, 0.14);
+}
+html[data-theme='dark'] .code-btn {
+  background: #1a1a1e;
+  color: #7ab8a6;
+  border-color: rgba(106, 176, 156, 0.3);
+}
+html[data-theme='dark'] .code-btn:hover:not(:disabled) {
+  background: rgba(78, 148, 128, 0.12);
+  border-color: rgba(106, 176, 156, 0.5);
+}
+html[data-theme='dark'] .code-btn:disabled {
+  color: rgba(212, 212, 216, 0.28);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #141416;
+}
+html[data-theme='dark'] .submit-btn {
+  background: rgba(34, 122, 98, 0.85);
+  border: 1px solid rgba(110, 185, 162, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+html[data-theme='dark'] .submit-btn:hover:not(:disabled) {
+  background: rgba(40, 138, 112, 0.95);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+html[data-theme='dark'] .bg-ring-1 {
+  border-color: rgba(34, 201, 157, 0.06);
+}
+html[data-theme='dark'] .bg-ring-2 {
+  border-color: rgba(34, 201, 157, 0.09);
 }
 </style>

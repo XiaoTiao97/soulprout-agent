@@ -30,7 +30,15 @@ from agent.database.crud.user_channel_binding import (
 from agent.database.models.user import UserInfo
 from agent.tool.file_process import AsyncFileProcess
 from agent.tool.registry import get_all_tool_schemas, get_registered_tool_names
-from agent.services.desktop_bridge import LOCAL_TOOL_NAMES, NOT_ROUTED, describe_devices, route_local_tool, sync_to_device
+from agent.services.desktop_bridge import (
+    LOCAL_TOOL_NAMES,
+    NOT_ROUTED,
+    describe_devices,
+    read_local_picture_bytes,
+    route_local_tool,
+    sync_to_device,
+    write_local_picture_bytes,
+)
 from agent.utils.vdb_client import VDBClient
 
 
@@ -232,13 +240,68 @@ class SoulproutToolFunction:
             return "image/webp"
         return None
 
+    @staticmethod
+    def _seedream_ref_format(data: bytes, file_name: str = "") -> str | None:
+        """识别火山方舟 Seedream 5.0 Pro 参考图支持的格式名称（用于 data:image/<format>;base64,...）。"""
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "png"
+        if data.startswith(b"\xff\xd8\xff"):
+            return "jpeg"
+        if data.startswith((b"GIF87a", b"GIF89a")):
+            return "gif"
+        if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+            return "webp"
+        if data.startswith(b"BM"):
+            return "bmp"
+        if data.startswith((b"II*\x00", b"MM\x00*")):
+            return "tiff"
+        if len(data) >= 12 and data[4:8] == b"ftyp":
+            brand = data[8:12].lower()
+            if brand in (b"heic", b"heix", b"hevc", b"hevx"):
+                return "heic"
+            if brand in (b"mif1", b"msf1", b"heif"):
+                return "heif"
+        ext = os.path.splitext(file_name or "")[1].lower().lstrip(".")
+        if ext == "jpg":
+            return "jpeg"
+        if ext == "tif":
+            return "tiff"
+        if ext in ("jpeg", "png", "webp", "bmp", "tiff", "gif", "heic", "heif"):
+            return ext
+        return None
+
+    SEEDREAM_MODEL_ID = "doubao-seedream-5-0-pro-260628"
+
     async def read_picture(self, file_name, conversation_id):
-        target = os.path.join(self._workspace_dir(conversation_id), file_name)
-        if not os.path.exists(target):
-            return {"ok": False, "message": "路径不存在", "base64": None, "media_type": None}
+        raw_name = str(file_name or "").strip()
+        if raw_name.lower().startswith(("http://", "https://")):
+            try:
+                headers = {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                }
+                timeout = httpx.Timeout(20.0, connect=8.0)
+                async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, verify=False) as client:
+                    resp = await client.get(raw_name, headers=headers)
+                if resp.status_code >= 400 or not resp.content:
+                    return {"ok": False, "message": f"无法下载网络图片（HTTP {resp.status_code}）", "base64": None, "media_type": None}
+                raw = resp.content
+            except Exception as e:
+                return {"ok": False, "message": f"读取网络图片失败: {e}", "base64": None, "media_type": None}
+        else:
+            target = os.path.join(self._workspace_dir(conversation_id), raw_name)
+            if not os.path.exists(target):
+                return {"ok": False, "message": "路径不存在", "base64": None, "media_type": None}
+            try:
+                async with aiofiles.open(target, "rb") as image_file:
+                    raw = await image_file.read()
+            except Exception as e:
+                return {"ok": False, "message": f"读取图片失败: {e}", "base64": None, "media_type": None}
+
         try:
-            async with aiofiles.open(target, "rb") as image_file:
-                raw = await image_file.read()
             media_type = self._image_media_type(raw)
             if not media_type:
                 return {
@@ -256,6 +319,308 @@ class SoulproutToolFunction:
             }
         except Exception as e:
             return {"ok": False, "message": f"读取图片失败: {e}", "base64": None, "media_type": None}
+
+    async def picture(
+        self,
+        module="read",
+        conversation_id=None,
+        file_name=None,
+        prompt=None,
+        image=None,
+        size=None,
+        output_format=None,
+        background=None,
+        optimize_prompt_mode=None,
+        layer_decomposition=False,
+        watermark=False,
+        _local_device=None,
+    ):
+        mod = str(module or "read").strip().lower()
+        if mod == "read":
+            if not file_name:
+                return {"ok": False, "message": "错误：module=read 时必须提供 file_name", "base64": None, "media_type": None}
+            return await self.read_picture(file_name=file_name, conversation_id=conversation_id)
+        if mod == "generate":
+            return await self._generate_picture(
+                conversation_id=conversation_id,
+                file_name=file_name,
+                prompt=prompt,
+                image=image,
+                size=size,
+                output_format=output_format,
+                background=background,
+                optimize_prompt_mode=optimize_prompt_mode,
+                layer_decomposition=layer_decomposition,
+                watermark=watermark,
+                local_device=_local_device,
+            )
+        return f"错误：picture 工具的 module 仅支持 read 或 generate（收到：{module}）"
+
+    async def _resolve_seedream_reference_images(
+        self,
+        image_inputs,
+        conversation_id: str,
+        local_device: dict | None = None,
+    ) -> tuple[bool, list[str] | str]:
+        """将模型传入的 image 参数（支持工作区本地文件路径、URL、data: URI）统一解析为方舟 API 接受的 URL 或 data:image/<fmt>;base64,... 列表。"""
+        if image_inputs is None:
+            return True, []
+        if isinstance(image_inputs, str):
+            raw_list = [image_inputs] if image_inputs.strip() else []
+        elif isinstance(image_inputs, list):
+            raw_list = [str(item).strip() for item in image_inputs if item is not None and str(item).strip()]
+        else:
+            return False, "错误：image 参数必须是字符串数组或字符串"
+
+        resolved: list[str] = []
+        root = self._workspace_dir(conversation_id)
+        for item in raw_list:
+            lower = item.lower()
+            if lower.startswith(("http://", "https://", "data:image/")):
+                resolved.append(item)
+                continue
+
+            # 本地工作区文件路径 -> 读取二进制并编码为 data:image/<格式>;base64,<编码>
+            clean_rel = item.replace("\\", "/").lstrip("/")
+            if clean_rel.startswith("workspace/"):
+                clean_rel = clean_rel[len("workspace/"):].lstrip("/")
+
+            if local_device:
+                ok, data_or_err = await read_local_picture_bytes(local_device, clean_rel, conversation_id)
+                if not ok:
+                    return False, str(data_or_err)
+                raw_bytes = data_or_err
+            else:
+                target = os.path.join(root, clean_rel)
+                if not os.path.exists(target) or not os.path.isfile(target):
+                    return False, f"错误：参考图片文件不存在：{clean_rel}"
+                try:
+                    async with aiofiles.open(target, "rb") as fh:
+                        raw_bytes = await fh.read()
+                except Exception as exc:
+                    return False, f"错误：读取参考图片 {clean_rel} 失败：{exc}"
+
+            if len(raw_bytes) > 30 * 1024 * 1024:
+                return False, f"错误：参考图片 {clean_rel} 超过 30MB 上限"
+
+            fmt = self._seedream_ref_format(raw_bytes, clean_rel)
+            if not fmt:
+                return (
+                    False,
+                    f"错误：参考图片 {clean_rel} 格式不受支持（仅支持 jpeg、png、webp、bmp、tiff、gif、heic、heif）",
+                )
+            b64_str = base64.b64encode(raw_bytes).decode("ascii")
+            resolved.append(f"data:image/{fmt};base64,{b64_str}")
+
+        return True, resolved
+
+    async def _save_generated_image_bytes(
+        self,
+        rel_path: str,
+        raw_bytes: bytes,
+        conversation_id: str,
+        local_device: dict | None = None,
+    ) -> tuple[bool, str]:
+        clean_rel = rel_path.replace("\\", "/").lstrip("/")
+        if clean_rel.startswith("workspace/"):
+            clean_rel = clean_rel[len("workspace/"):].lstrip("/")
+        if not clean_rel:
+            clean_rel = f"generated_{int(datetime.now().timestamp())}.png"
+
+        if local_device:
+            ok, msg = await write_local_picture_bytes(local_device, clean_rel, raw_bytes, conversation_id)
+            return ok, clean_rel if ok else msg
+
+        root = self._workspace_dir(conversation_id)
+        target = os.path.join(root, clean_rel)
+        os.makedirs(os.path.dirname(target) or root, exist_ok=True)
+        async with aiofiles.open(target, "wb") as fh:
+            await fh.write(raw_bytes)
+        return True, clean_rel
+
+    async def _generate_picture(
+        self,
+        conversation_id,
+        file_name=None,
+        prompt=None,
+        image=None,
+        size=None,
+        output_format=None,
+        background=None,
+        optimize_prompt_mode=None,
+        layer_decomposition=False,
+        watermark=False,
+        local_device=None,
+    ) -> str:
+        api_key = (
+            getattr(self.config, "ark_key", None)
+            or os.getenv("ARK_API_KEY")
+            or ""
+        ).strip()
+        if not api_key or api_key == "sk-xxx":
+            return "错误：未配置火山方舟（ark）API Key，请在 agent/.model.json 的 ark 配置项中填写有效的 api_key。"
+
+        base_url = (
+            getattr(self.config, "ark_base_url", None)
+            or os.getenv("ARK_BASE_URL")
+            or "https://ark.cn-beijing.volces.com/api/v3"
+        ).rstrip("/")
+        endpoint = f"{base_url}/images/generations"
+
+        is_layer_decomp = bool(layer_decomposition)
+        prompt_str = str(prompt or "").strip()
+        if not is_layer_decomp and not prompt_str:
+            return "错误：图片生成模式（layer_decomposition=false）下 prompt 不能为空。"
+
+        ok, ref_images_or_err = await self._resolve_seedream_reference_images(
+            image, conversation_id, local_device=local_device
+        )
+        if not ok:
+            return str(ref_images_or_err)
+        ref_images: list[str] = ref_images_or_err  # type: ignore[assignment]
+
+        if is_layer_decomp:
+            if len(ref_images) != 1:
+                return f"错误：图层拆分模式（layer_decomposition=true）必须且只能传入 1 张参考图片（当前传入 {len(ref_images)} 张）。"
+        else:
+            if len(ref_images) > 10:
+                return f"错误：Seedream 5.0 Pro 最多支持传入 10 张参考图（当前传入 {len(ref_images)} 张）。"
+
+        fmt = str(output_format or "png").strip().lower()
+        if fmt == "jpg":
+            fmt = "jpeg"
+        if fmt not in ("png", "jpeg"):
+            fmt = "png"
+
+        bg = str(background or "opaque").strip().lower()
+        if bg not in ("opaque", "transparent"):
+            bg = "opaque"
+        if bg == "transparent":
+            fmt = "png"
+
+        resolved_size = str(size or ("auto" if is_layer_decomp else "2K")).strip()
+
+        payload: dict = {
+            "model": self.SEEDREAM_MODEL_ID,
+            "size": resolved_size,
+            "output_format": fmt,
+            "response_format": "b64_json",
+            "watermark": bool(watermark) if watermark is not None else False,
+        }
+        if prompt_str:
+            payload["prompt"] = prompt_str
+        if is_layer_decomp:
+            payload["layer_decomposition"] = True
+        else:
+            payload["background"] = bg
+            opt_mode = str(optimize_prompt_mode or "standard").strip().lower()
+            if opt_mode in ("standard", "fast"):
+                payload["optimize_prompt_options"] = {"mode": opt_mode}
+
+        if len(ref_images) == 1:
+            payload["image"] = ref_images[0]
+        elif len(ref_images) > 1:
+            payload["image"] = ref_images
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+
+        try:
+            timeout = httpx.Timeout(180.0, connect=15.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(endpoint, headers=headers, json=payload)
+                resp_json = resp.json() if resp.content else {}
+                if resp.status_code >= 400 or "error" in resp_json:
+                    err_obj = resp_json.get("error") or {}
+                    err_msg = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj or resp.text)
+                    err_code = err_obj.get("code") if isinstance(err_obj, dict) else resp.status_code
+                    return f"错误：调用豆包 Seedream 5.0 Pro 生图失败（{err_code}）：{err_msg}"
+
+                data_list = resp_json.get("data") or []
+                if not data_list:
+                    return "错误：豆包 Seedream 5.0 Pro 未返回任何图像数据。"
+
+                ext_map = {"jpeg": ".jpg", "png": ".png"}
+                default_ext = ext_map.get(fmt, ".png")
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                if file_name and str(file_name).strip():
+                    base_rel = str(file_name).strip().replace("\\", "/").lstrip("/")
+                    if base_rel.startswith("workspace/"):
+                        base_rel = base_rel[len("workspace/"):].lstrip("/")
+                    stem, user_ext = os.path.splitext(base_rel)
+                    if not user_ext:
+                        base_rel = f"{stem}{default_ext}"
+                else:
+                    stem = f"seedream_{ts}"
+                    base_rel = f"{stem}{default_ext}"
+
+                saved_items = []
+                for idx, item in enumerate(data_list):
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("error"):
+                        saved_items.append({"index": idx, "error": item["error"]})
+                        continue
+
+                    item_fmt = str(item.get("output_format") or fmt).lower()
+                    item_ext = ext_map.get(item_fmt, ".png")
+                    if len(data_list) == 1:
+                        stem_single, _ = os.path.splitext(base_rel)
+                        target_rel = f"{stem_single}{item_ext}"
+                    else:
+                        z_idx = item.get("z_index", idx)
+                        stem_multi, _ = os.path.splitext(base_rel)
+                        suffix = "base" if z_idx == 0 else f"layer_{z_idx}"
+                        target_rel = f"{stem_multi}_{suffix}{item_ext}"
+
+                    raw_img_bytes = None
+                    if item.get("b64_json"):
+                        raw_img_bytes = base64.b64decode(item["b64_json"])
+                    elif item.get("url"):
+                        dl_resp = await client.get(item["url"])
+                        dl_resp.raise_for_status()
+                        raw_img_bytes = dl_resp.content
+
+                    if not raw_img_bytes:
+                        continue
+
+                    ok_save, save_res = await self._save_generated_image_bytes(
+                        target_rel, raw_img_bytes, conversation_id, local_device=local_device
+                    )
+                    if not ok_save:
+                        return f"错误：{save_res}"
+
+                    entry: dict = {
+                        "file_name": save_res,
+                        "markdown": f"![{item.get('name') or '生成图片'}]({save_res})",
+                        "size": item.get("size"),
+                        "output_format": item.get("output_format") or fmt,
+                    }
+                    if "z_index" in item:
+                        entry["z_index"] = item["z_index"]
+                    if item.get("name"):
+                        entry["name"] = item["name"]
+                    if item.get("description"):
+                        entry["description"] = item["description"]
+                    if item.get("bounding_box"):
+                        entry["bounding_box"] = item["bounding_box"]
+                    saved_items.append(entry)
+
+                result_payload = {
+                    "ok": True,
+                    "model": self.SEEDREAM_MODEL_ID,
+                    "message": (
+                        f"成功生成 {len(saved_items)} 张图片并保存至工作区。"
+                        "请在回复中使用返回的 markdown 语法（如 ![描述](文件名)）直接向用户展示图片。"
+                    ),
+                    "images": saved_items,
+                }
+                return json.dumps(result_payload, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            return f"错误：豆包 Seedream 5.0 Pro 生图异常：{exc}"
 
     async def bash(self, command, conversation_id):
         root = self._workspace_dir(conversation_id)

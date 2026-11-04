@@ -6,7 +6,7 @@
                     <img
                         v-show="!isExpanded"
                         class="sidebar-brand-logo"
-                        src="@/assets/images/logo.png"
+                        :src="isDark ? logoDark : logoLight"
                         alt="Soulprout"
                     />
                     <button class="close-sidebar hover-hint" :data-tip="t('conversation.toggleSidebar')" @click="$emit('SidebarChange')" :aria-label="t('conversation.closeSidebar')" data-testid="close-sidebar-button">
@@ -280,6 +280,20 @@
                 </svg>
                 <span>{{ t('conversation.downloadClients') }}</span>
               </button>
+              <button type="button" class="user-menu-item" @click.stop="handleCycleTheme">
+                <svg v-if="themeMode === 'system'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="12" rx="2" />
+                  <path d="M8 20h8M12 16v4" />
+                </svg>
+                <svg v-else-if="themeMode === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4.5" />
+                  <path d="M12 2.5v2.2M12 19.3v2.2M4.93 4.93l1.56 1.56M17.51 17.51l1.56 1.56M2.5 12h2.2M19.3 12h2.2M4.93 19.07l1.56-1.56M17.51 6.49l1.56-1.56" />
+                </svg>
+                <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+                <span>{{ t('theme.switchLabel') }}：{{ currentThemeLabel }}</span>
+              </button>
               <button type="button" class="user-menu-item" @click="toggleLocale">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
@@ -307,6 +321,9 @@ import { ref, computed, inject, onMounted, onUnmounted, nextTick, toRefs, type C
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
+import { themeMode, cycleThemeMode, isDark } from '@/utils/theme.js';
+import logoLight from '@/assets/images/logo.png';
+import logoDark from '@/assets/images/logo_dark.png';
 import PersonalizeDialog from './PersonalizeDialog.vue';
 import DownloadClientsDialog from './DownloadClientsDialog.vue';
 import type { ConversationBase, ChatRequest } from '../types/interface';
@@ -444,6 +461,16 @@ const goDocs = () => {
 const toggleLocale = () => {
   showMenu.value = false;
   setLocale(locale.value === 'zh-CN' ? 'en' : 'zh-CN');
+};
+
+const currentThemeLabel = computed(() => {
+  if (themeMode.value === 'light') return t('theme.lightShort');
+  if (themeMode.value === 'dark') return t('theme.darkShort');
+  return t('theme.systemShort');
+});
+
+const handleCycleTheme = () => {
+  cycleThemeMode();
 };
 
 const logout = async () => {
@@ -972,5 +999,73 @@ onUnmounted(() => {
   height: 1px;
   margin: 2px 4px;
   background: rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme='dark'] .running-header {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .conversation-local-tag {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+}
+html[data-theme='dark'] .chat-mode-section {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .chat-mode-header-title {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .chat-mode-header-hint {
+  color: #737373;
+}
+html[data-theme='dark'] .chat-mode-switch {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .chat-mode-switch-thumb {
+  background-color: #333333;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .chat-mode-option {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .chat-mode-option:hover:not(.chat-mode-option--active) {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .chat-mode-option--active,
+html[data-theme='dark'] .chat-mode-option--active:hover {
+  color: #fafafa;
+}
+html[data-theme='dark'] .user-option {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .user-button:hover,
+html[data-theme='dark'] .user-button--open {
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .user-display-name {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .user-chevron {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .user-menu {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .user-menu-item {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .user-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .user-menu-item--danger {
+  color: #f87171;
+}
+html[data-theme='dark'] .user-menu-item--danger:hover {
+  background: rgba(248, 113, 113, 0.12);
+}
+html[data-theme='dark'] .user-menu-divider {
+  background: rgba(255, 255, 255, 0.08);
 }
 </style>

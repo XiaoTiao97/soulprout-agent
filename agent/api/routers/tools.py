@@ -236,7 +236,12 @@ async def get_file_content(filename: str, conversation_id: str = Query(...), use
             ".xls": "application/vnd.ms-excel",
             ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
             ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".svg": "image/svg+xml",
+            ".bmp": "image/bmp",
             ".txt": "text/plain; charset=utf-8",
             ".md": "text/markdown; charset=utf-8",
             ".json": "application/json; charset=utf-8",
@@ -380,3 +385,55 @@ async def save_file(
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/image_proxy")
+async def image_proxy(
+    url: str = Query(...),
+    user: UserInfo = Depends(require_user),
+):
+    """代理加载外部图片（解决纯 HTTP 图片在浏览器中被 HTTPS 升级失败或防盗链拦截的问题）。"""
+    import ipaddress
+    from urllib.parse import urlparse
+    from fastapi.responses import Response
+
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="invalid image url")
+    host = parsed.hostname.lower()
+    if host in ("localhost", "127.0.0.1", "::1"):
+        raise HTTPException(status_code=403, detail="forbidden host")
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            raise HTTPException(status_code=403, detail="forbidden ip")
+    except ValueError:
+        pass
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    }
+    try:
+        timeout = httpx.Timeout(20.0, connect=8.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, verify=False) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code >= 400 or not resp.content:
+            raise HTTPException(status_code=404, detail="image fetch failed")
+        if len(resp.content) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="image too large")
+        content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+        if not content_type.startswith("image/"):
+            content_type = "image/jpeg"
+        return Response(
+            content=resp.content,
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

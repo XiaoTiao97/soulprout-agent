@@ -366,4 +366,71 @@ function getCount(toolCallId: string) {
     gap: 4px;
   }
 }
+
+html[data-theme='dark'] .ws-summary-pill {
+  background: #292929;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .ws-summary-pill:hover {
+  background: #303030;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+html[data-theme='dark'] .ws-summary-pill--active {
+  background: #363636;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .ws-summary-pill--pending::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 45%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.14) 55%,
+    transparent 100%
+  );
+}
+html[data-theme='dark'] .ws-pill-icon,
+html[data-theme='dark'] .ws-pill-chevron {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .ws-pill-index {
+  color: #a3a3a3;
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .ws-detail-panel {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .ws-detail-section + .ws-detail-section {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .ws-detail-head {
+  background: #1f1f1f;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .ws-detail-head-label {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .ws-source-item {
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+html[data-theme='dark'] .ws-source-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+html[data-theme='dark'] .ws-source-meta {
+  color: #737373;
+}
+html[data-theme='dark'] .ws-source-title {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .ws-source-item:hover .ws-source-title {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .ws-detail-empty {
+  color: #737373;
+}
 </style>

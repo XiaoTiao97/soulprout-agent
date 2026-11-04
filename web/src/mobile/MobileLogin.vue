@@ -1,6 +1,6 @@
 <template>
   <div class="login-screen">
-    <img src="@/assets/images/logo.png" alt="Soulprout" class="logo" />
+    <img :src="isDark ? logoDark : logoLight" alt="Soulprout" class="logo" />
     <h1>{{ t('register.title') }}</h1>
     <p class="desc">{{ t('register.desc') }}</p>
 
@@ -38,6 +38,9 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { isDark } from '@/utils/theme.js'
+import logoLight from '@/assets/images/logo.png'
+import logoDark from '@/assets/images/logo_dark.png'
 import { apiFetch, setToken } from './api'
 
 const emit = defineEmits(['logged-in'])
@@ -249,5 +252,32 @@ h1 {
 
 .submit:disabled {
   opacity: 0.7;
+}
+
+html[data-theme='dark'] .login-screen {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(30, 180, 140, 0.18), transparent 42%),
+    #0b0d12;
+}
+html[data-theme='dark'] h1 {
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .desc {
+  color: rgba(243, 244, 246, 0.5);
+}
+html[data-theme='dark'] .field {
+  background: #141821;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .code-btn {
+  background: #141821;
+  color: #22c99d;
+  border-color: rgba(34, 201, 157, 0.4);
+}
+html[data-theme='dark'] .code-btn:disabled {
+  background: #11141c;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(243, 244, 246, 0.3);
 }
 </style>

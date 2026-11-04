@@ -1248,4 +1248,58 @@ onBeforeUnmount(() => {
 .sheet-leave-to {
   transform: translateY(100%);
 }
+
+html[data-theme='dark'] .yavis {
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .yavis--live {
+  background: #0b0d13;
+}
+html[data-theme='dark'] .yavis--gate .gate {
+  background: rgba(20, 24, 33, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 28px 70px rgba(0, 0, 0, 0.55);
+}
+html[data-theme='dark'] .yavis--gate .gate-foot,
+html[data-theme='dark'] .gate-foot {
+  background: linear-gradient(to top, rgba(20, 24, 33, 0.98) 68%, rgba(20, 24, 33, 0));
+}
+html[data-theme='dark'] .round-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+}
+html[data-theme='dark'] .group {
+  background: #171b26;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .row + .row,
+html[data-theme='dark'] .field + .field {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .stage-bg {
+  background:
+    radial-gradient(80% 50% at 50% 38%, rgba(30, 180, 140, 0.08) 0%, transparent 70%),
+    linear-gradient(180deg, #0b0d13 0%, #0f1618 100%);
+}
+html[data-theme='dark'] .line {
+  color: rgba(243, 244, 246, 0.78);
+}
+html[data-theme='dark'] .sheet {
+  background: #131720;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+}
+html[data-theme='dark'] .text-input {
+  background: #0e1118;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .segment button {
+  color: #9ca3af;
+}
+html[data-theme='dark'] .segment .segment--on {
+  background: #252b3a;
+  color: #f3f4f6;
+}
 </style>

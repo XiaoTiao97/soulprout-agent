@@ -2,9 +2,12 @@ import { createApp } from 'vue'
 import DesktopApp from './DesktopApp.vue'
 import router from './router'
 import i18n from '@/i18n'
+import { initTheme } from '@/utils/theme.js'
 import '@/assets/css/init.css'
 import './desktop.css'
+import '@/assets/css/dark.css'
 
+initTheme()
 document.documentElement.classList.add('soulprout-desktop')
 
 createApp(DesktopApp).use(router).use(i18n).mount('#app')

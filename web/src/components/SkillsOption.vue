@@ -907,4 +907,94 @@ onMounted(() => {
     padding: 20px 20px 24px;
   }
 }
+
+html[data-theme='dark'] .skills-option-overlay {
+  background-color: rgba(0, 0, 0, 0.68);
+}
+html[data-theme='dark'] .skills-option-container {
+  background: #212121;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 60px -12px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='dark'] .skills-option-header,
+html[data-theme='dark'] .tabs-container {
+  background: #212121;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .skills-option-header h2,
+html[data-theme='dark'] .skill-name {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .tabs-track {
+  background: #171717;
+}
+html[data-theme='dark'] .tab-indicator {
+  background: #303030;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .tab-btn {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tab-btn:hover:not(.active),
+html[data-theme='dark'] .tab-btn.active {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .tab-count {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tab-btn.active .tab-count {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .skills-content {
+  background: #191919;
+}
+html[data-theme='dark'] .personal-toolbar-inner,
+html[data-theme='dark'] .skills-list {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .toolbar-upload-label,
+html[data-theme='dark'] .skill-description {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .upload-folder-btn,
+html[data-theme='dark'] .retry-btn {
+  background: #f5f5f5;
+  color: #171717;
+}
+html[data-theme='dark'] .upload-folder-btn:hover:not(:disabled),
+html[data-theme='dark'] .retry-btn:hover {
+  background: #ffffff;
+}
+html[data-theme='dark'] .skill-item + .skill-item {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .skill-shell:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+html[data-theme='dark'] .skill-shell:hover .skill-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .skill-delete-btn {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.28);
+}
+html[data-theme='dark'] .skill-delete-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.45);
+}
 </style>

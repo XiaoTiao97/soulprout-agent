@@ -3,7 +3,7 @@
     <div class="sp-nav-inner">
       <!-- Logo -->
       <a href="/" class="sp-nav-logo" @click.prevent="scrollToTop">
-        <img src="@/assets/images/logo.png" alt="Soulprout" />
+        <img :src="isDark ? logoDark : logoLight" alt="Soulprout" />
       </a>
 
       <!-- Links -->
@@ -16,6 +16,7 @@
       </div>
 
       <div class="sp-nav-actions">
+        <ThemeSwitcher class="sp-nav-theme" />
         <LocaleSwitcher class="sp-nav-locale" />
         <button type="button" class="sp-nav-cta" @click="handleStart">
           <span>{{ t('nav.start') }}</span>
@@ -33,7 +34,11 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { startExperience } from '@/utils/startExperience.js'
+import { isDark } from '@/utils/theme.js'
+import logoLight from '@/assets/images/logo.png'
+import logoDark from '@/assets/images/logo_dark.png'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -143,5 +148,29 @@ function openDocs() {
 @media (max-width: 640px) {
   .sp-nav-links { display: none; }
   .sp-nav-inner { padding: 0 1rem; }
+}
+
+html[data-theme='dark'] .sp-nav {
+  background: rgba(11, 11, 12, 0.78);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .sp-nav--scrolled {
+  background: rgba(11, 11, 12, 0.9);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .sp-nav-link {
+  color: rgba(229, 229, 229, 0.65);
+}
+html[data-theme='dark'] .sp-nav-link:hover {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .sp-nav-cta {
+  background: rgba(34, 122, 98, 0.85);
+  border: 1px solid rgba(110, 185, 162, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .sp-nav-cta:hover {
+  background: rgba(40, 138, 112, 0.95);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 </style>

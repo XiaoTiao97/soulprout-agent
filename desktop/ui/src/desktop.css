@@ -17,6 +17,18 @@
   --dk-danger: #b91c1c;
 }
 
+html[data-theme='dark'] {
+  --dk-accent: #22c99d;
+  --dk-accent-soft: rgba(34, 201, 157, 0.14);
+  --dk-page: #171717;
+  --dk-bg: #212121;
+  --dk-fg: #f5f5f5;
+  --dk-muted: #a3a3a3;
+  --dk-line: rgba(255, 255, 255, 0.08);
+  --dk-hover: rgba(255, 255, 255, 0.06);
+  --dk-danger: #f87171;
+}
+
 html,
 body {
   background: transparent !important;

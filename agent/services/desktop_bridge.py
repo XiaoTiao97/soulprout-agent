@@ -30,9 +30,9 @@ from agent.services.desktop_hub import DeviceCallTimeout, DeviceOffline, hub
 
 logger = logging.getLogger(__name__)
 
-LOCAL_TOOL_NAMES = frozenset({"read", "write", "edit", "read_picture", "bash"})
+LOCAL_TOOL_NAMES = frozenset({"read", "write", "edit", "picture", "read_picture", "bash"})
 # 会产生写入/执行效果的工具（沙盒升级参数的词汇沿用 deepseek-harness，见 desktop/NOTICE.md）。
-MUTATING_TOOL_NAMES = frozenset({"write", "edit", "bash"})
+MUTATING_TOOL_NAMES = frozenset({"write", "edit", "picture", "bash"})
 ESCALATION_TARGETS = ("workspace-write", "danger-full-access")
 
 # route_local_tool 的返回哨兵：表示「不归桌面端管，继续走云端原逻辑」
@@ -310,6 +310,27 @@ async def route_local_tool(config, name: str, arguments: Dict[str, Any]) -> Any:
     if conversation_id in _pending_sync:
         # 之前设备离线没推送成功的智能体文件 / 技能，趁设备回来先补上
         await sync_to_device(config, conversation_id)
+
+    # picture(module=read) 若读取的是网络 URL，直接走云端拉取，无需唤醒本地电脑
+    if name in ("picture", "read_picture") and str(arguments.get("module") or "read").strip().lower() == "read":
+        fn_arg = str(arguments.get("file_name") or "").strip().lower()
+        if fn_arg.startswith(("http://", "https://")):
+            arguments.pop("sandbox_permissions", None)
+            arguments.pop("justification", None)
+            return NOT_ROUTED
+
+    # picture(module=generate) 需使用云端的火山方舟 API Key 调用生图接口，
+    # 但参考图读取和产出图落盘都在用户电脑工作区执行。
+    if name == "picture" and str(arguments.get("module") or "read").strip().lower() == "generate":
+        arguments["_local_device"] = {
+            "user_id": user_id,
+            "device_id": device_id,
+            "kind": kind,
+            "sandbox_permissions": arguments.pop("sandbox_permissions", None),
+            "justification": arguments.pop("justification", None),
+        }
+        return NOT_ROUTED
+
     try:
         return await hub.call(
             user_id,
@@ -327,9 +348,75 @@ async def route_local_tool(config, name: str, arguments: Dict[str, Any]) -> Any:
     except Exception as exc:
         logger.warning("[DesktopBridge] 本地工具调用失败 tool=%s: %s", name, exc)
         message = f"错误：本地工具调用失败：{exc}"
-    if name == "read_picture":
+    if name in ("read_picture", "picture"):
         return {"ok": False, "message": message, "base64": None, "media_type": None}
     return message
+
+
+async def read_local_picture_bytes(local_device: Dict[str, Any], file_name: str, conversation_id: str) -> tuple[bool, Any]:
+    """在本地工作区读取参考图片的原始字节（供 picture module=generate 使用）。"""
+    import base64
+
+    payload: Dict[str, Any] = {"module": "read_ref", "file_name": file_name}
+    if local_device.get("sandbox_permissions"):
+        payload["sandbox_permissions"] = local_device["sandbox_permissions"]
+        payload["justification"] = local_device.get("justification")
+    try:
+        res = await hub.call(
+            str(local_device.get("user_id") or ""),
+            "picture",
+            payload,
+            device_id=local_device.get("device_id"),
+            conversation_id=conversation_id,
+            context={"kind": local_device.get("kind") or "task"},
+            timeout=OTHER_CALL_TIMEOUT_S,
+        )
+        if isinstance(res, dict) and res.get("ok") and res.get("base64"):
+            return True, base64.b64decode(res["base64"])
+        msg = res.get("message") if isinstance(res, dict) else str(res)
+        return False, msg or f"无法读取本地参考图片：{file_name}"
+    except DeviceOffline as exc:
+        return False, _offline_message(exc)
+    except DeviceCallTimeout:
+        return False, "错误：读取本地参考图片超时。"
+    except Exception as exc:
+        return False, f"错误：读取本地参考图片失败：{exc}"
+
+
+async def write_local_picture_bytes(local_device: Dict[str, Any], file_name: str, data: bytes, conversation_id: str) -> tuple[bool, str]:
+    """把云端生成的图片字节写入用户电脑的本地工作区。"""
+    import base64
+
+    payload: Dict[str, Any] = {
+        "module": "write_output",
+        "file_name": file_name,
+        "b64": base64.b64encode(data).decode("ascii"),
+    }
+    if local_device.get("sandbox_permissions"):
+        payload["sandbox_permissions"] = local_device["sandbox_permissions"]
+        payload["justification"] = local_device.get("justification")
+    try:
+        res = await hub.call(
+            str(local_device.get("user_id") or ""),
+            "picture",
+            payload,
+            device_id=local_device.get("device_id"),
+            conversation_id=conversation_id,
+            context={"kind": local_device.get("kind") or "task"},
+            timeout=OTHER_CALL_TIMEOUT_S,
+        )
+        if isinstance(res, dict) and res.get("ok"):
+            return True, res.get("message") or "ok"
+        if isinstance(res, str) and res.startswith("成功"):
+            return True, res
+        msg = res.get("message") if isinstance(res, dict) else str(res)
+        return False, msg or f"写入本地图片失败：{file_name}"
+    except DeviceOffline as exc:
+        return False, _offline_message(exc)
+    except DeviceCallTimeout:
+        return False, "错误：写入本地图片超时。"
+    except Exception as exc:
+        return False, f"错误：写入本地图片失败：{exc}"
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +564,7 @@ async def prepare_request(chat_request, user_id: str) -> None:
 
 _DEVICE_PROMPT_STATIC = (
     "# LOCAL DEVICE\n"
-    "read/write/edit/read_picture/bash take an optional `target`: \"cloud\" (default, your sandbox on the "
+    "read/write/edit/picture/bash take an optional `target`: \"cloud\" (default, your sandbox on the "
     "server) or \"local\" (the user's own computer, when the desktop app is online). The two are separate "
     "file systems; a file created in one is not visible in the other. Local operations may be blocked by "
     "the user's permission settings or need their approval; that is the user's decision, so explain it "

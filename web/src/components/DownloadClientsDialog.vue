@@ -282,4 +282,57 @@ watch(
     max-width: none;
   }
 }
+
+html[data-theme='dark'] .dl-mask {
+  background: rgba(0, 0, 0, 0.65);
+}
+html[data-theme='dark'] .dl-dialog {
+  background: #242424;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+html[data-theme='dark'] .dl-head {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .dl-head-text span,
+html[data-theme='dark'] .dl-pane p {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .dl-close {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .dl-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .dl-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .dl-btn {
+  background: #2e2e2e;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .dl-btn--primary {
+  background: #f5f5f5;
+  border-color: #f5f5f5;
+  color: #171717;
+}
+html[data-theme='dark'] .dl-btn--primary:hover {
+  background: #ffffff;
+}
+html[data-theme='dark'] .dl-btn--ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+}
+html[data-theme='dark'] .dl-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .dl-qr-wrap {
+  background: #ffffff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
 </style>

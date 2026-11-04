@@ -385,4 +385,25 @@ watch(
 .preview-html :deep(img) {
   max-width: 100%;
 }
+
+html[data-theme='dark'] .file-screen {
+  background: #0b0d12;
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .file-bar {
+  background: #141720;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .bar-btn,
+html[data-theme='dark'] .bar-title,
+html[data-theme='dark'] .file-name {
+  color: #f3f4f6;
+}
+html[data-theme='dark'] .file-list,
+html[data-theme='dark'] .file-row,
+html[data-theme='dark'] .file-body--preview {
+  background: #141720;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+}
 </style>

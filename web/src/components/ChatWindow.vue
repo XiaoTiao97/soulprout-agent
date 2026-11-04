@@ -101,12 +101,25 @@
                         v-for="(fileName, fIdx) in parseUserFileNames(message)"
                         :key="`${message.created_at}-${fIdx}-${fileName}`"
                         class="selected-file-item"
+                        :class="{ 'selected-file-item--image': isImageFileName(fileName) }"
+                        @click="handleUserFileClick(fileName)"
                       >
-                        <img
-                          class="selected-file-icon"
-                          :src="getFileIconUrlForName(fileName)"
-                          :alt="fileName"
-                        />
+                        <template v-if="isImageFileName(fileName)">
+                          <img
+                            class="selected-file-thumb"
+                            :src="getUserFileImageUrl(fileName)"
+                            :data-workspace-file="!hasLocalUploadBlob(fileName) ? normalizeWorkspaceFilePath(fileName) : undefined"
+                            :data-conversation-id="!hasLocalUploadBlob(fileName) ? activeConversationId : undefined"
+                            :alt="fileName"
+                          />
+                        </template>
+                        <template v-else>
+                          <img
+                            class="selected-file-icon"
+                            :src="getFileIconUrlForName(fileName)"
+                            :alt="fileName"
+                          />
+                        </template>
                         <div class="selected-file-name" :title="fileName">{{ fileName }}</div>
                       </div>
                     </div>
@@ -398,6 +411,48 @@
       <div class="conversation-view-block">
       </div>
     </div>
+
+    <!-- 当前页全屏大图预览 Lightbox（支持滚轮缩放 + 拖拽平移 + 双击复位） -->
+    <Teleport to="body">
+      <Transition name="img-lightbox-fade">
+        <div
+          v-if="lightboxImageUrl"
+          class="img-lightbox-backdrop"
+          role="dialog"
+          aria-modal="true"
+          @click.self="closeImageLightbox"
+          @wheel.prevent="handleLightboxWheel"
+        >
+          <button
+            type="button"
+            class="img-lightbox-close"
+            aria-label="关闭预览"
+            @click="closeImageLightbox"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+          <img
+            class="img-lightbox-img"
+            :class="{ 'is-dragging': lightboxDragging }"
+            :style="{
+              transform: `translate3d(${lightboxTranslateX}px, ${lightboxTranslateY}px, 0) scale(${lightboxScale})`,
+            }"
+            :src="lightboxImageUrl"
+            :alt="lightboxImageAlt"
+            referrerpolicy="no-referrer"
+            draggable="false"
+            @pointerdown.prevent="handleLightboxPointerDown"
+            @pointermove="handleLightboxPointerMove"
+            @pointerup="handleLightboxPointerUp"
+            @pointercancel="handleLightboxPointerUp"
+            @dblclick.prevent="resetLightboxTransform"
+          />
+          <div v-if="lightboxImageAlt" class="img-lightbox-caption">{{ lightboxImageAlt }}</div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -413,9 +468,14 @@ import type { UserFeedbackPayload } from './UserFeedbackBlock.vue'
 import type { WebSearchCallItem } from './WebSearchBlock.vue'
 import { buildGenericToolCallItems, buildWebSearchCallItems } from '../utils/toolCallDisplay'
 import {
+  buildWorkspaceFileContentUrl,
   getFileIconUrlForName,
+  isImageFileName,
   isUserTextMessageType,
+  isWorkspaceRelativeUrl,
+  normalizeWorkspaceFilePath,
   parseUserFileNames,
+  preprocessMarkdownImages,
 } from '../utils/userFileDisplay'
 import type { ConversationBase, ChatRequest, AgentMessage, ToolCalls } from '../types/interface.ts'
 import { AgentCard } from '../types/interface.ts'
@@ -559,6 +619,133 @@ const handleOpenWebPreview = (url: string) => {
 
 const handleOpenFilePreview = (filePath: string) => {
   if (filePath) emit('openFilePreview', filePath)
+}
+
+/** 当前会话有效 conversation_id（Soulprout 模式下兜底为 userId） */
+const activeConversationId = computed<string>(() => {
+  const cid = String(props.chat_request?.conversation_id || '').trim()
+  if (cid) return cid
+  if (props.chatMode === 'soulprout' && props.userId) return String(props.userId).trim()
+  return ''
+})
+
+/** 本轮刚从本地选择发送的图片临时 ObjectURL 缓存（解决新建会话首轮尚未拿到 conversation_id 或无需重复请求的问题） */
+const localUploadedFileBlobUrls = ref(new Map<string, string>())
+/** 通过 axios 异步拉取的工作区图片 Blob URL 缓存（兼容移动端 Bearer Token 鉴权） */
+const fetchedWorkspaceBlobUrls = new Map<string, string>()
+
+function revokeAllImageBlobUrls() {
+  localUploadedFileBlobUrls.value.forEach((url) => URL.revokeObjectURL(url))
+  localUploadedFileBlobUrls.value.clear()
+  fetchedWorkspaceBlobUrls.forEach((url) => URL.revokeObjectURL(url))
+  fetchedWorkspaceBlobUrls.clear()
+}
+
+function hasLocalUploadBlob(fileName: string): boolean {
+  return localUploadedFileBlobUrls.value.has(fileName)
+}
+
+function getUserFileImageUrl(fileName: string): string {
+  const localBlob = localUploadedFileBlobUrls.value.get(fileName)
+  if (localBlob) return localBlob
+  const cid = activeConversationId.value
+  const clean = normalizeWorkspaceFilePath(fileName)
+  const cacheKey = `${cid}:${clean}`
+  const cachedBlob = fetchedWorkspaceBlobUrls.get(cacheKey)
+  if (cachedBlob) return cachedBlob
+  if (cid) return buildWorkspaceFileContentUrl(clean, cid)
+  return getFileIconUrlForName(fileName)
+}
+
+/** 当前页大图预览（Lightbox）状态：支持滚轮缩放与拖拽移动视角 */
+const lightboxImageUrl = ref<string | null>(null)
+const lightboxImageAlt = ref<string>('')
+const lightboxScale = ref(1)
+const lightboxTranslateX = ref(0)
+const lightboxTranslateY = ref(0)
+const lightboxDragging = ref(false)
+let lightboxDragStartX = 0
+let lightboxDragStartY = 0
+let lightboxOriginX = 0
+let lightboxOriginY = 0
+
+function resetLightboxTransform() {
+  lightboxScale.value = 1
+  lightboxTranslateX.value = 0
+  lightboxTranslateY.value = 0
+  lightboxDragging.value = false
+}
+
+function openImageLightbox(url: string, alt = '') {
+  if (!url) return
+  resetLightboxTransform()
+  lightboxImageUrl.value = url
+  lightboxImageAlt.value = alt && alt !== '图片' ? alt : ''
+}
+
+function closeImageLightbox() {
+  lightboxImageUrl.value = null
+  lightboxImageAlt.value = ''
+  resetLightboxTransform()
+}
+
+function handleLightboxWheel(e: WheelEvent) {
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+  const nextScale = Math.min(8, Math.max(0.25, Number((lightboxScale.value * factor).toFixed(3))))
+  const ratio = nextScale / lightboxScale.value
+  const cx = window.innerWidth / 2
+  const cy = window.innerHeight / 2
+  const dx = e.clientX - cx
+  const dy = e.clientY - cy
+  lightboxTranslateX.value = dx - (dx - lightboxTranslateX.value) * ratio
+  lightboxTranslateY.value = dy - (dy - lightboxTranslateY.value) * ratio
+  lightboxScale.value = nextScale
+}
+
+function handleLightboxPointerDown(e: PointerEvent) {
+  if (e.button !== 0) return
+  const target = e.currentTarget as HTMLElement | null
+  target?.setPointerCapture?.(e.pointerId)
+  lightboxDragging.value = true
+  lightboxDragStartX = e.clientX
+  lightboxDragStartY = e.clientY
+  lightboxOriginX = lightboxTranslateX.value
+  lightboxOriginY = lightboxTranslateY.value
+}
+
+function handleLightboxPointerMove(e: PointerEvent) {
+  if (!lightboxDragging.value) return
+  lightboxTranslateX.value = lightboxOriginX + (e.clientX - lightboxDragStartX)
+  lightboxTranslateY.value = lightboxOriginY + (e.clientY - lightboxDragStartY)
+}
+
+function handleLightboxPointerUp(e: PointerEvent) {
+  if (!lightboxDragging.value) return
+  const target = e.currentTarget as HTMLElement | null
+  try {
+    if (target?.hasPointerCapture?.(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId)
+    }
+  } catch {
+    // ignore
+  }
+  lightboxDragging.value = false
+}
+
+function handleLightboxKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && lightboxImageUrl.value) {
+    closeImageLightbox()
+  }
+}
+
+function handleUserFileClick(fileName: string) {
+  const clean = normalizeWorkspaceFilePath(fileName)
+  if (!clean) return
+  if (isImageFileName(fileName)) {
+    openImageLightbox(getUserFileImageUrl(fileName), fileName)
+    return
+  }
+  handleOpenFilePreview(clean)
 }
 
 const submittedFeedbackAnswers = ref<Record<string, string>>({})
@@ -971,15 +1158,46 @@ md.renderer.rules.fence = (tokens, idx, options, env, slf) => {
   return `<div class="code-wrapper">${titleBar}${codeBlock}</div>`
 }
 
+const defaultImageRenderer =
+  md.renderer.rules.image ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options)
+  }
+
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const rawSrc = token.attrGet('src') || ''
+  if (isWorkspaceRelativeUrl(rawSrc)) {
+    const cleanPath = normalizeWorkspaceFilePath(rawSrc)
+    const cid = env?.conversationId || ''
+    if (cleanPath && cid) {
+      const cacheKey = `${cid}:${cleanPath}`
+      const resolvedUrl =
+        fetchedWorkspaceBlobUrls.get(cacheKey) || buildWorkspaceFileContentUrl(cleanPath, cid)
+      token.attrSet('src', resolvedUrl)
+      token.attrSet('data-workspace-file', cleanPath)
+      token.attrSet('data-conversation-id', cid)
+      token.attrJoin('class', 'workspace-inline-image')
+    }
+  } else if (/^https?:\/\//i.test(rawSrc)) {
+    token.attrSet('referrerpolicy', 'no-referrer')
+    token.attrSet('data-external-image', rawSrc)
+    token.attrJoin('class', 'external-inline-image')
+  }
+  return defaultImageRenderer(tokens, idx, options, env, self)
+}
+
 // 渲染markdown内容（结果缓存，避免重复解析）
 const markdownCache = new Map<string, string>()
 const MARKDOWN_CACHE_MAX = 80
 const renderMarkdown = (content: string | undefined) => {
-  const key = content ?? ''
+  const cid = activeConversationId.value
+  const raw = preprocessMarkdownImages(content ?? '')
+  const key = `${cid}::${raw}`
   const cached = markdownCache.get(key)
   if (cached) return cached
   if (markdownCache.size >= MARKDOWN_CACHE_MAX) markdownCache.clear()
-  let html = md.render(key)
+  let html = md.render(raw, { conversationId: cid })
   html = html.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ')
   markdownCache.set(key, html)
   return html
@@ -1037,7 +1255,7 @@ function groupDomKey(group: MessageGroup): string {
 /** 历史分组内容不变时跳过整段重绘，避免流式 token 把已展开的历史再算一遍 */
 function groupRenderKey(group: MessageGroup): string {
   const editingId = editingUserMessageId.value
-  let sig = isConfirmEditPending.value ? '1' : '0'
+  let sig = `v2:${activeConversationId.value}:${isConfirmEditPending.value ? '1' : '0'}`
   let editingHere = false
   for (const message of group.messages) {
     const feedbackKey = message.tool_call_id || String(message.created_at)
@@ -1364,6 +1582,13 @@ const handleSendMessage = (
   props.agent_message_list.push(userMsg)
 
   if (files.length > 0) {
+    for (const f of files) {
+      if (isImageFileName(f.name)) {
+        const prev = localUploadedFileBlobUrls.value.get(f.name)
+        if (prev) URL.revokeObjectURL(prev)
+        localUploadedFileBlobUrls.value.set(f.name, URL.createObjectURL(f))
+      }
+    }
     const fileNames = files.map((f) => f.name)
     props.agent_message_list.push({
       user_id: '',
@@ -1538,13 +1763,94 @@ const copyToClipboard = (text: string | undefined, timestamp: number) => {
      }
    }
 
-// Function to attach copy listeners to code block buttons
+const handleWorkspaceImageClick = (e: Event) => {
+  const img = e.currentTarget as HTMLImageElement | null
+  if (!img) return
+  const src = img.currentSrc || img.src
+  const alt = img.alt || img.getAttribute('data-workspace-file') || ''
+  if (src) {
+    openImageLightbox(src, alt)
+  }
+}
+
+const handleWorkspaceImageError = async (e: Event) => {
+  const img = e.currentTarget as HTMLImageElement | null
+  if (!img || img.dataset.blobTried === '1') return
+  img.dataset.blobTried = '1'
+  const filePath = img.getAttribute('data-workspace-file')
+  const cid = img.getAttribute('data-conversation-id') || activeConversationId.value
+  if (!filePath || !cid) return
+  const cacheKey = `${cid}:${filePath}`
+  const existingBlob = fetchedWorkspaceBlobUrls.get(cacheKey)
+  if (existingBlob) {
+    img.src = existingBlob
+    return
+  }
+  try {
+    const apiUrl = buildWorkspaceFileContentUrl(filePath, cid)
+    const resp = await axios.get(apiUrl, { responseType: 'blob' })
+    if (resp.data instanceof Blob && resp.data.size > 0) {
+      const blobUrl = URL.createObjectURL(resp.data)
+      fetchedWorkspaceBlobUrls.set(cacheKey, blobUrl)
+      img.src = blobUrl
+    }
+  } catch {
+    // 静默忽略加载失败
+  }
+}
+
+const handleExternalImageClick = (e: Event) => {
+  const img = e.currentTarget as HTMLImageElement | null
+  if (!img) return
+  const src = img.currentSrc || img.src || img.getAttribute('data-external-image') || ''
+  if (src) {
+    openImageLightbox(src, img.alt || '')
+  }
+}
+
+const handleExternalImageError = (e: Event) => {
+  const img = e.currentTarget as HTMLImageElement | null
+  if (!img) return
+  const url = img.getAttribute('data-external-image') || img.src
+  if (!url) return
+  // 第一次失败（如 http:// 网站不支持浏览器自动升级 https:// 或被防盗链拦截）：尝试走后端 /api/image_proxy
+  if (img.dataset.proxyTried !== '1') {
+    img.dataset.proxyTried = '1'
+    img.src = `/api/image_proxy?url=${encodeURIComponent(url)}`
+    return
+  }
+  if (img.dataset.fallbackApplied === '1') return
+  img.dataset.fallbackApplied = '1'
+  const link = document.createElement('a')
+  link.href = url
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  link.textContent = url
+  img.replaceWith(link)
+}
+
+// Function to attach copy listeners to code block buttons and workspace image handlers
 const attachCopyListeners = () => {
   nextTick(() => {
-    const buttons = (answerContainer.value ?? document).querySelectorAll('.code-copy-btn')
+    const root = answerContainer.value ?? document
+    const buttons = root.querySelectorAll('.code-copy-btn')
     buttons.forEach(btn => {
       btn.removeEventListener('click', handleCodeCopy)
       btn.addEventListener('click', handleCodeCopy)
+    })
+    const workspaceImages = root.querySelectorAll('img[data-workspace-file]')
+    workspaceImages.forEach(img => {
+      img.removeEventListener('click', handleWorkspaceImageClick)
+      img.addEventListener('click', handleWorkspaceImageClick)
+      img.removeEventListener('error', handleWorkspaceImageError)
+      img.addEventListener('error', handleWorkspaceImageError)
+    })
+    const externalImages = root.querySelectorAll('img[data-external-image]')
+    externalImages.forEach(img => {
+      img.removeEventListener('click', handleExternalImageClick)
+      img.addEventListener('click', handleExternalImageClick)
+      img.removeEventListener('error', handleExternalImageError)
+      img.addEventListener('error', handleExternalImageError)
     })
   })
 }
@@ -1610,13 +1916,16 @@ onMounted(() => {
   answerContainer.value?.addEventListener('wheel', handleHistoryWheel, { passive: false })
   answerContainer.value?.addEventListener('touchstart', handleHistoryTouchStart, { passive: true })
   answerContainer.value?.addEventListener('touchmove', handleHistoryTouchMove, { passive: false })
+  window.addEventListener('keydown', handleLightboxKeydown)
 })
 onUpdated(attachCopyListeners)
 onUnmounted(() => {
   clearWelcomeAnimationTimers()
+  revokeAllImageBlobUrls()
   answerContainer.value?.removeEventListener('wheel', handleHistoryWheel)
   answerContainer.value?.removeEventListener('touchstart', handleHistoryTouchStart)
   answerContainer.value?.removeEventListener('touchmove', handleHistoryTouchMove)
+  window.removeEventListener('keydown', handleLightboxKeydown)
 })
 
 const hasMessages = computed(
@@ -1764,6 +2073,31 @@ const handleCreateAgentClick = () => {
   align-items: center;
   gap: 4px;
   padding: 2px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.user-uploaded-files .selected-file-item:hover {
+  transform: translateY(-1px);
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.user-uploaded-files .selected-file-item--image {
+  width: auto;
+  max-width: 180px;
+}
+
+.user-uploaded-files .selected-file-thumb {
+  max-width: 160px;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  display: block;
 }
 
 .user-uploaded-files .selected-file-icon {
@@ -1775,7 +2109,7 @@ const handleCreateAgentClick = () => {
 }
 
 .user-uploaded-files .selected-file-name {
-  max-width: 64px;
+  max-width: 150px;
   text-align: center;
   font-size: 11px;
   color: #374151;
@@ -2215,6 +2549,82 @@ const handleCreateAgentClick = () => {
   cursor: default;
 }
 
+html[data-theme='dark'] .answer-robot-reasoner {
+  background-color: #292929;
+  color: #a3a3a3;
+  border-left-color: rgba(34, 201, 157, 0.45);
+}
+html[data-theme='dark'] .user-uploaded-files .selected-file-name {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .message-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .user-edit-btn-cancel {
+  background: #292929;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .user-edit-btn-cancel:hover {
+  background: #333333;
+}
+html[data-theme='dark'] .answer-robot-error {
+  background-color: rgba(220, 38, 38, 0.14);
+  color: #fca5a5;
+  border-left-color: #ef4444;
+}
+html[data-theme='dark'] .card-desc-highlight {
+  color: #7ab8a6;
+}
+html[data-theme='dark'] .card-desc-slogan {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .view-hint {
+  color: #d4d4d4;
+  background: linear-gradient(135deg, rgba(42, 42, 42, 0.95) 0%, rgba(34, 34, 34, 0.92) 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html[data-theme='dark'] .view-hint::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 30%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.1) 70%,
+    transparent 100%
+  );
+}
+html[data-theme='dark'] .no-history-container .no-history-content1 {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .soul-channel-desc,
+html[data-theme='dark'] .soul-channel-desc-label {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .soul-channel-item {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .soul-channel-box {
+  background: rgba(38, 38, 38, 0.9);
+  border-color: rgba(163, 163, 163, 0.4);
+}
+html[data-theme='dark'] .soul-channel-box--checked {
+  border-color: rgba(106, 176, 156, 0.45);
+  background: rgba(46, 108, 90, 0.22);
+  color: #8cc4b3;
+}
+html[data-theme='dark'] .soul-load-more-btn {
+  border-color: rgba(106, 176, 156, 0.3);
+  background: rgba(46, 108, 90, 0.15);
+  color: #8cc4b3;
+}
+html[data-theme='dark'] .soul-load-more-btn:hover:not(:disabled) {
+  background: rgba(46, 108, 90, 0.24);
+  border-color: rgba(106, 176, 156, 0.45);
+}
 </style>
 
 <style>
@@ -2261,5 +2671,92 @@ pre.hljs {
   overflow: auto;
   background: #fff;
   border-top: none;
+}
+
+.img-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: zoom-out;
+}
+
+.img-lightbox-img {
+  max-width: min(92vw, 1280px);
+  max-height: 84vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  background: transparent;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transform-origin: center center;
+  transition: transform 0.06s ease-out;
+  will-change: transform;
+}
+
+.img-lightbox-img.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.img-lightbox-caption {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  max-width: 80vw;
+  text-align: center;
+  word-break: break-word;
+  pointer-events: none;
+}
+
+.img-lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.img-lightbox-close:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: scale(1.05);
+}
+
+.img-lightbox-fade-enter-active,
+.img-lightbox-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.img-lightbox-fade-enter-from,
+.img-lightbox-fade-leave-to {
+  opacity: 0;
 }
 </style>

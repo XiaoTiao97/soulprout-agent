@@ -179,7 +179,7 @@ function onPillClick(item: ToolCallItem) {
   if (getToolIconKind(item.toolName, item.messageType) === 'agent') {
     emit('scrollTo', item.toolCallId)
   }
-  const filePath = getToolFilePath(item.toolName, item.arguments)
+  const filePath = getToolFilePath(item.toolName, item.arguments, getRawResult(item.toolCallId))
   if (filePath) {
     emit('openFilePreview', filePath)
   }
@@ -554,5 +554,83 @@ function isPending(item: ToolCallItem): boolean {
   .tc-pill-text {
     max-width: 200px;
   }
+}
+
+html[data-theme='dark'] .tc-summary-pill {
+  background: #292929;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .tc-summary-pill:hover {
+  background: #303030;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+html[data-theme='dark'] .tc-summary-pill--active {
+  background: #363636;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .tc-summary-pill--pending::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 45%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.14) 55%,
+    transparent 100%
+  );
+}
+html[data-theme='dark'] .tc-pill-icon,
+html[data-theme='dark'] .tc-pill-chevron {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tc-pill-index {
+  color: #a3a3a3;
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .tc-detail-panel {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .tc-detail-section + .tc-detail-section {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+html[data-theme='dark'] .tc-detail-head {
+  background: rgba(28, 28, 28, 0.8);
+  border-color: rgba(255, 255, 255, 0.07);
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tc-detail-head-label {
+  color: #d4d4d4;
+}
+html[data-theme='dark'] .tc-detail-head-query {
+  color: #a3a3a3;
+}
+html[data-theme='dark'] .tc-detail-block-title {
+  color: #737373;
+}
+html[data-theme='dark'] .tc-arg-row,
+html[data-theme='dark'] .tc-result-content {
+  background: #1c1c1c;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #d4d4d4;
+  box-shadow: none;
+}
+html[data-theme='dark'] .tc-arg-key {
+  color: #737373;
+}
+html[data-theme='dark'] .tc-arg-value {
+  color: #d4d4d4;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+html[data-theme='dark'] .tc-result-resize-grip {
+  border-right-color: rgba(255, 255, 255, 0.28);
+  border-bottom-color: rgba(255, 255, 255, 0.28);
+}
+html[data-theme='dark'] .tc-detail-empty {
+  background: rgba(28, 28, 28, 0.65);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #737373;
 }
 </style>

@@ -73,7 +73,7 @@
     <div v-if="drawerOpen" class="backdrop" @click="drawerOpen = false"></div>
     <aside class="drawer" :class="{ 'drawer--open': drawerOpen }">
       <div class="drawer-head">
-        <img src="@/assets/images/logo.png" alt="Soulprout" class="drawer-logo" />
+        <img :src="isDark ? logoDark : logoLight" alt="Soulprout" class="drawer-logo" />
         <button type="button" class="icon-btn" :aria-label="t('mobile.close')" @click="drawerOpen = false">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -130,7 +130,12 @@
         </div>
       </template>
 
-      <div class="drawer-user">{{ currentUsername || t('conversation.defaultUser') }}</div>
+      <div class="drawer-user">
+        <span>{{ currentUsername || t('conversation.defaultUser') }}</span>
+        <button type="button" class="drawer-theme-btn" @click="cycleThemeMode">
+          {{ t('theme.switchLabel') }}：{{ currentThemeLabel }}
+        </button>
+      </div>
     </aside>
 
     <div v-if="confirmDeleteId" class="confirm-mask" @click.self="confirmDeleteId = ''">
@@ -178,6 +183,9 @@ import ChatWindow from '@/components/ChatWindow.vue'
 import MobileFiles from './MobileFiles.vue'
 import YavisPage from './standby/YavisPage.vue'
 import { useChatSession } from './useChatSession'
+import { themeMode, cycleThemeMode, isDark } from '@/utils/theme.js'
+import logoLight from '@/assets/images/logo.png'
+import logoDark from '@/assets/images/logo_dark.png'
 
 const emit = defineEmits(['logout'])
 const { t } = useI18n()
@@ -629,6 +637,12 @@ const headerTitle = computed(() => {
   if (chatMode.value === 'soulprout') return t('conversation.soulLabel')
   const current = taskConversationList.value.find((item) => item.conversation_id === chat_request.value.conversation_id)
   return current?.abstract || t('conversation.newTask')
+})
+
+const currentThemeLabel = computed(() => {
+  if (themeMode.value === 'light') return t('theme.lightShort')
+  if (themeMode.value === 'dark') return t('theme.darkShort')
+  return t('theme.systemShort')
 })
 
 const activeConversationId = computed(() => {
@@ -1216,6 +1230,19 @@ function openWebPreview(url) {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   color: #6b7280;
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.drawer-theme-btn {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  color: #374151;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
 .confirm-mask {
@@ -1267,5 +1294,63 @@ function openWebPreview(url) {
   background: #111 !important;
   color: #fff;
   border-color: #111 !important;
+}
+
+html[data-theme='dark'] .phone {
+  background: #171717;
+}
+html[data-theme='dark'] .topbar {
+  background: rgba(28, 28, 28, 0.94);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .topbar-title strong,
+html[data-theme='dark'] .icon-btn {
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .entry-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .entry-btn--yavis {
+  border-color: rgba(34, 201, 157, 0.4);
+  color: #22c99d;
+}
+html[data-theme='dark'] .file-btn {
+  background: #333333;
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .mobile-chat {
+  background: #212121;
+}
+html[data-theme='dark'] .drawer {
+  background: #1f1f1f;
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .new-task {
+  background: #333333;
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .task-row {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .task-row--active {
+  background: #2b2b2b;
+}
+html[data-theme='dark'] .mini-menu,
+html[data-theme='dark'] .mini-menu button,
+html[data-theme='dark'] .confirm-card {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .drawer-user {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+}
+html[data-theme='dark'] .drawer-theme-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e5e7eb;
 }
 </style>

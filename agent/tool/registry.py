@@ -123,16 +123,75 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "read_picture",
-            "description": "View the content of an image",
+            "name": "picture",
+            "description": (
+                "Unified image tool; switch sub-actions via module:\n"
+                "- module=read: inspect the visual content of an image (supports workspace file paths OR http/https image URLs). "
+                "Note: simply displaying an existing image or web image URL to the user does NOT require calling picture at all—just write Markdown `![alt](file_or_url)` in your reply.\n"
+                "- module=generate: AI image generation / AI image editing ONLY. Never use module=generate to download, copy, or display an existing image."
+            ),
             "parameters": {
                 "type": "object",
-                "required": ["file_name"],
+                "required": ["module"],
                 "properties": {
+                    "module": {
+                        "type": "string",
+                        "enum": ["read", "generate"],
+                        "description": "Sub-action: read (view workspace or URL image) / generate (AI text-to-image or AI image-to-image editing ONLY)",
+                    },
                     "file_name": {
                         "type": "string",
-                        "description": "Full image file name, e.g. xxx.png/jpg/jpeg",
-                    }
+                        "description": (
+                            "[Required for module=read; optional for module=generate] "
+                            "For module=read: workspace image file path (e.g. a.png) OR http/https image URL. "
+                            "For module=generate: output file name to save in workspace (e.g. out.png)."
+                        ),
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": (
+                            "[Required for module=generate unless layer_decomposition=true] "
+                            "Image generation/editing prompt (describe aspect ratio in natural language when using 1K/1.5K/2K)."
+                        ),
+                    },
+                    "image": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "[Optional for module=generate] Reference image(s) (1–10 items; 1 item for layer_decomposition=true). "
+                            "Pass workspace file paths (e.g. ref.png) or public URLs."
+                        ),
+                    },
+                    "size": {
+                        "type": "string",
+                        "description": (
+                            "[Optional for module=generate] Resolution tier (`1K`, `1.5K`, `2K`, default `2K`; "
+                            "or `auto` for layer_decomposition) or pixel size `WxH` (e.g. `2048x1024`)."
+                        ),
+                    },
+                    "output_format": {
+                        "type": "string",
+                        "enum": ["png", "jpeg"],
+                        "description": "[Optional for module=generate] Output format: png (default) / jpeg",
+                    },
+                    "background": {
+                        "type": "string",
+                        "enum": ["opaque", "transparent"],
+                        "description": (
+                            "[Optional for module=generate] Background: opaque (default) / transparent "
+                            "(only for 1-image img2img with transparent PNG input and output_format=png)."
+                        ),
+                    },
+                    "layer_decomposition": {
+                        "type": "boolean",
+                        "description": (
+                            "[Optional for module=generate] Split 1 input image into a base image and up to 16 PNG layers (default false)."
+                        ),
+                    },
+                    "watermark": {
+                        "type": "boolean",
+                        "description": "[Optional for module=generate] Add watermark (default false).",
+                    },
                 },
             },
         },
@@ -759,5 +818,7 @@ def get_all_tool_schemas() -> list[dict]:
 
 
 def get_registered_tool_names() -> set[str]:
-    return {item["function"]["name"] for item in TOOL_SCHEMAS}
+    names = {item["function"]["name"] for item in TOOL_SCHEMAS}
+    names.add("read_picture")
+    return names
 
