@@ -152,6 +152,7 @@ class LocalToolRunner:
             "read": self._read,
             "write": self._write,
             "edit": self._edit,
+            "media": self._picture,
             "picture": self._picture,
             "read_picture": self._read_picture,
             "bash": self._bash,
@@ -320,17 +321,17 @@ class LocalToolRunner:
             fh.write(dst)
         return True
 
-    # ------------------------------------------------------------------ picture / read_picture
+    # ------------------------------------------------------------------ media / picture / read_picture
 
     async def _picture(self, args: Dict[str, Any], ctx: CallContext) -> Dict[str, Any]:
         module = str(args.get("module") or "read").strip().lower()
-        if module == "read":
+        if module in ("read", "read_image", "read_picture"):
             return await self._read_picture(args, ctx)
         if module == "read_ref":
             return await self._read_ref_picture(args, ctx)
         if module == "write_output":
             return await self._write_output_picture(args, ctx)
-        return {"ok": False, "message": f"错误：不支持的 picture module：{module}", "base64": None, "media_type": None}
+        return {"ok": False, "message": f"错误：不支持的 media/picture module：{module}", "base64": None, "media_type": None}
 
     async def _read_ref_picture(self, args: Dict[str, Any], ctx: CallContext) -> Dict[str, Any]:
         file_name = str(args.get("file_name") or "")

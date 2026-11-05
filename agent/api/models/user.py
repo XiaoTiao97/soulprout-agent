@@ -35,3 +35,23 @@ class SsoTokenRequest(BaseModel):
     """企业 SSO 通过 user_id 免密换取 JWT。"""
 
     user_id: str = Field(..., max_length=64)
+
+
+class SaveUserApiKeyRequest(BaseModel):
+    """保存单个模型平台的 API Key。"""
+
+    model_source: str = Field(..., max_length=64)
+    api_key: str = Field(..., min_length=1, max_length=512)
+
+
+class UpdateApiKeyPreferencesRequest(BaseModel):
+    """更新是否启用自定义 API Key 及指定模型配置。"""
+
+    use_custom_key: bool = False
+    custom_soulprout_source: Optional[str] = Field(default=None, max_length=64)
+    custom_soulprout_model: Optional[str] = Field(default=None, max_length=128)
+    custom_pro_source: Optional[str] = Field(default=None, max_length=64)
+    custom_pro_model: Optional[str] = Field(default=None, max_length=128)
+    custom_flash_source: Optional[str] = Field(default=None, max_length=64)
+    custom_flash_model: Optional[str] = Field(default=None, max_length=128)
+

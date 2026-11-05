@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,12 +10,32 @@ from agent.api.models.agent_card import AgentCard
 # 固定加载 agent/.env，不依赖启动时的工作目录（start.sh 从仓库根启动）
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+
+def build_mongodb_url(default_host: str = "localhost") -> str:
+    """构建 MongoDB 连接 URI，支持用户名密码认证（MONGO_USER / MONGO_PASSWORD）。"""
+    explicit_uri = (os.getenv("MONGODB_URI") or "").strip()
+    if explicit_uri:
+        return explicit_uri
+
+    host = (os.getenv("MONGO_HOST") or os.getenv("DOCKER_SERVER_HOST") or default_host).strip()
+    port = (os.getenv("MONGO_PORT") or "27017").strip()
+    user = (os.getenv("MONGO_USER") or "").strip()
+    password = (os.getenv("MONGO_PASSWORD") or "").strip()
+    auth_source = (os.getenv("MONGO_AUTH_SOURCE") or "admin").strip()
+
+    if user and password:
+        u = quote_plus(user)
+        p = quote_plus(password)
+        return f"mongodb://{u}:{p}@{host}:{port}/?authSource={quote_plus(auth_source)}"
+    return f"mongodb://{host}:{port}"
+
+
 class Config:
     def __init__(self):
         self.docker_server_host = os.getenv("DOCKER_SERVER_HOST", "localhost")
         self._load_model()
-        self.mongodb_url = f"mongodb://{self.docker_server_host}:27017"
-        self.mongodb_database = "soulprout"
+        self.mongodb_url = build_mongodb_url(self.docker_server_host)
+        self.mongodb_database = os.getenv("MONGO_DATABASE", "soulprout").strip() or "soulprout"
         self.client = AsyncIOMotorClient(self.mongodb_url)
         self.database = self.client[self.mongodb_database]
         self.db_conversation = self.database["conversations"]
@@ -67,7 +88,7 @@ class Config:
         self.kb_file_path = os.getenv("KB_FILE_PATH", "/home/soulprout_data/knowledge/")
         self.kb_collection = os.getenv("VDB_KB_COLLECTION", "kb_collection")
         self.agent_file_path = "/home/soulprout_agent_files/"
-        self.agent_default_tools = ["read", "write", "edit", "bash", "picture"]
+        self.agent_default_tools = ["read", "write", "edit", "bash", "media"]
 
         # ─── 深度研究（Deep Research）────────────────────────────────────────
         # 目标/验收标准文件名（相对当前会话工作区），由主智能体在开启深度研究后写入
@@ -110,6 +131,17 @@ class Config:
                     "model_use": False if api_key in [default_key, None, ""] else True,
                     "models": models,
                 })
+
+    def system_builtin_agent_ids(self) -> set[str]:
+        """从 kb_agent_card() 与 default_agent_cards() 动态提取所有系统内置智能体 ID / 名称集合。"""
+        cards = [self.kb_agent_card(), *self.default_agent_cards()]
+        ids: set[str] = set()
+        for card in cards:
+            if getattr(card, "agent_id", None):
+                ids.add(card.agent_id)
+            if getattr(card, "name", None):
+                ids.add(card.name)
+        return ids
 
     def kb_agent_card(self):
         return AgentCard(
@@ -380,7 +412,7 @@ class Config:
 # Workflow
 1. 读取 `{self.research_file_name}`，提取目标、交付物、验收标准、约束，以及 Progress Log 中的轮次与历史尝试。
 2. 打开所有交付物和参考文件，实际阅读；不要凭主智能体的描述下结论。
-3. 对影响结论的关键点做必要验证（bash 跑代码、web_search / web_fetch 核实关键事实、picture(module=read) 查看图片），验证到"足以判断方向和可用性"为止，不必逐字逐句核对。
+3. 对影响结论的关键点做必要验证（bash 跑代码、web_search / web_fetch 核实关键事实、media(module=read) 查看图片），验证到"足以判断方向和可用性"为止，不必逐字逐句核对。
 4. 按 Perspective 的优先级形成判断；如果打算 FAIL，先用 skills / list_info / base_memory 了解可用能力，再写建议。
 5. 应用 Stop Rule，决定是要求改进、建议标注局限性，还是建议向用户求助。
 6. 输出结论。
@@ -412,7 +444,7 @@ FAIL 时：一句话说明距离通过还差什么。
 - 建议要能落地：写名称、写用途、写预期结果，不写"进一步完善""继续优化"这类空话。""",
                 supervisor_history=True,
                 files=[],
-                tools=["read", "bash", "picture", "web_search", "web_fetch", "knowledge_base", "skills", "list_info", "base_memory"],
+                tools=["read", "bash", "media", "web_search", "web_fetch", "knowledge_base", "skills", "list_info", "base_memory"],
                 skills=None,
                 kbs=[],
                 agents=None,

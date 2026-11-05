@@ -1,6 +1,12 @@
 <template>
   <div class="login-screen">
-    <img :src="isDark ? logoDark : logoLight" alt="Soulprout" class="logo" />
+    <div class="login-top">
+      <img :src="isDark ? logoDark : logoLight" alt="Soulprout" class="logo" />
+      <div class="login-actions">
+        <ThemeSwitcher />
+        <LocaleSwitcher />
+      </div>
+    </div>
     <h1>{{ t('register.title') }}</h1>
     <p class="desc">{{ t('register.desc') }}</p>
 
@@ -41,6 +47,8 @@ import { useI18n } from 'vue-i18n'
 import { isDark } from '@/utils/theme.js'
 import logoLight from '@/assets/images/logo.png'
 import logoDark from '@/assets/images/logo_dark.png'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
+import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 import { apiFetch, setToken } from './api'
 
 const emit = defineEmits(['logged-in'])
@@ -158,11 +166,24 @@ async function submitForm() {
     #f7f7f7;
 }
 
+.login-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.login-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .logo {
   width: 132px;
   height: auto;
   display: block;
-  margin-bottom: 28px;
 }
 
 h1 {

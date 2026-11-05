@@ -2,7 +2,12 @@
   <div class="query" :class="{ 'query--mobile': mobileLayout }">
     <form class="query-form" @submit.prevent="submitMessage">
       <div class="selected-files" v-if="selectedFiles.length > 0">
-        <div class="selected-file-item" v-for="(file, idx) in selectedFiles" :key="getFileKey(file)">
+        <div
+          class="selected-file-item"
+          :class="{ 'selected-file-item--image': isImageFile(file) }"
+          v-for="(file, idx) in selectedFiles"
+          :key="getFileKey(file)"
+        >
           <button class="remove-file-btn" type="button" @click="removeFile(idx)" :title="t('messageInput.removeFile')">
             <img :src="DeleteFileIconUrl" :alt="t('messageInput.removeFile')" />
           </button>
@@ -11,8 +16,8 @@
           </template>
           <template v-else>
             <img class="selected-file-icon" :src="getFileIconUrl(file)" :alt="file.name" />
+            <div class="selected-file-name" :title="file.name">{{ file.name }}</div>
           </template>
-          <div class="selected-file-name" :title="file.name">{{ file.name }}</div>
         </div>
       </div>
       <!-- 手机端：输入栏最左侧，切换语音 / 打字 -->
@@ -1944,11 +1949,13 @@ defineExpose({
 }
 
 .selected-files {
+  width: 100%;
+  max-width: 100%;
   font-size: 12px;
   color: #666;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 10px;
   background: transparent;
@@ -1972,6 +1979,21 @@ defineExpose({
   object-fit: cover;
   border: none;
   background: transparent;
+}
+
+.selected-file-item--image {
+  width: auto;
+  max-width: min(100%, 480px);
+  min-width: 0;
+}
+
+.selected-file-item--image .selected-file-thumb {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .selected-file-icon {
@@ -2073,6 +2095,14 @@ defineExpose({
   grid-area: files;
   justify-content: flex-start;
   margin-bottom: 8px;
+}
+
+.query--mobile .selected-file-item--image {
+  max-width: min(100%, 220px);
+}
+
+.query--mobile .selected-file-item--image .selected-file-thumb {
+  max-height: 140px;
 }
 
 .query--mobile .input-options {
@@ -2415,5 +2445,16 @@ html[data-theme='dark'] .query--mobile .hold-btn {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: #f3f4f6;
+}
+html[data-theme='dark'] .query--mobile .hold-btn--active {
+  background: rgba(255, 255, 255, 0.14);
+}
+html[data-theme='dark'] .query--mobile .hold-btn--cancel {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+}
+html[data-theme='dark'] .query--mobile .agent-dropdown-left.has-right {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 </style>

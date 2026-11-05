@@ -29,7 +29,8 @@ class AgentsBox:
         prompt = await self.prompt(agent)
         prompt = prompt.format(context=context) if context else prompt
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": input_text}]
-        client = ZhipuAiClient(api_key=self.config.glm_key)
+        glm_key = getattr(self.config, "system_glm_key", None) or self.config.glm_key
+        client = ZhipuAiClient(api_key=glm_key)
         response = client.chat.completions.create(
             model=self._model,
             messages=messages,

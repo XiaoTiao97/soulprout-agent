@@ -123,12 +123,13 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "picture",
+            "name": "media",
             "description": (
-                "Unified image tool; switch sub-actions via module:\n"
+                "Unified media tool (image & video); switch sub-actions via module:\n"
                 "- module=read: inspect the visual content of an image (supports workspace file paths OR http/https image URLs). "
-                "Note: simply displaying an existing image or web image URL to the user does NOT require calling picture at all—just write Markdown `![alt](file_or_url)` in your reply.\n"
-                "- module=generate: AI image generation / AI image editing ONLY. Never use module=generate to download, copy, or display an existing image."
+                "Note: simply displaying an existing image/video or web URL to the user does NOT require calling media at all—just write Markdown `![alt](file_or_url)` in your reply.\n"
+                "- module=generate_image: AI image generation / AI image editing ONLY (Doubao Seedream 5.0 Pro). Never use it to download, copy, or display an existing image.\n"
+                "- module=generate_video: AI video generation / editing / extension ONLY (Doubao Seedance 2.5)."
             ),
             "parameters": {
                 "type": "object",
@@ -136,61 +137,121 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "module": {
                         "type": "string",
-                        "enum": ["read", "generate"],
-                        "description": "Sub-action: read (view workspace or URL image) / generate (AI text-to-image or AI image-to-image editing ONLY)",
+                        "enum": ["read", "generate_image", "generate_video"],
+                        "description": (
+                            "Sub-action: read (view workspace or URL image) / "
+                            "generate_image (AI text-to-image or image-to-image editing) / "
+                            "generate_video (AI video generation, editing, or extension)"
+                        ),
                     },
                     "file_name": {
                         "type": "string",
                         "description": (
-                            "[Required for module=read; optional for module=generate] "
+                            "[Required for module=read; optional for generate_image/generate_video] "
                             "For module=read: workspace image file path (e.g. a.png) OR http/https image URL. "
-                            "For module=generate: output file name to save in workspace (e.g. out.png)."
+                            "For generate_image/generate_video: output file name to save in workspace (e.g. out.png, out.mp4)."
                         ),
                     },
                     "prompt": {
                         "type": "string",
                         "description": (
-                            "[Required for module=generate unless layer_decomposition=true] "
-                            "Image generation/editing prompt (describe aspect ratio in natural language when using 1K/1.5K/2K)."
+                            "[Required for generate_image (unless layer_decomposition=true) and generate_video] "
+                            "Prompt describing the image or video to generate/edit (for multi-modal video reference, use @图片1, @视频1, @音频1)."
                         ),
                     },
                     "image": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            "[Optional for module=generate] Reference image(s) (1–10 items; 1 item for layer_decomposition=true). "
+                            "[Optional for generate_image / generate_video] Reference image(s) (1–10 for generate_image; 1–30 for generate_video omni-reference). "
                             "Pass workspace file paths (e.g. ref.png) or public URLs."
                         ),
+                    },
+                    "first_frame": {
+                        "type": "string",
+                        "description": (
+                            "[Optional for module=generate_video] First-frame image (workspace file path or public URL) for first-frame / first-last-frame video generation "
+                            "(mutually exclusive with omni-reference image/video/audio)."
+                        ),
+                    },
+                    "last_frame": {
+                        "type": "string",
+                        "description": (
+                            "[Optional for module=generate_video] Last-frame image (workspace file path or public URL), used together with first_frame."
+                        ),
+                    },
+                    "video": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "[Optional for module=generate_video] Reference video public URLs (1–10 items, mp4/mov) for omni-reference, video editing, or video extension."
+                        ),
+                    },
+                    "audio": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "[Optional for module=generate_video] Reference audio files (1–10 items, workspace wav/mp3 paths or public URLs)."
+                        ),
+                    },
+                    "duration": {
+                        "type": "integer",
+                        "description": (
+                            "[Optional for module=generate_video] Video duration in seconds: 4 to 30, or -1 for automatic duration (default -1; must be -1 for video edit)."
+                        ),
+                    },
+                    "ratio": {
+                        "type": "string",
+                        "enum": ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+                        "description": (
+                            "[Optional for module=generate_video] Video aspect ratio (default adaptive; must be adaptive for first/last-frame, edit, or extend tasks)."
+                        ),
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "enum": ["480p", "720p", "1080p"],
+                        "description": "[Optional for module=generate_video] Video resolution: 480p / 720p (default) / 1080p.",
+                    },
+                    "generate_audio": {
+                        "type": "boolean",
+                        "description": "[Optional for module=generate_video] Generate synchronized audio/voice/SFX/BGM (default true).",
+                    },
+                    "omni_reference_task_type": {
+                        "type": "string",
+                        "enum": ["auto", "reference", "edit", "extend"],
+                        "description": "[Optional for module=generate_video] Omni-reference sub-task type: auto (default) / reference / edit / extend.",
                     },
                     "size": {
                         "type": "string",
                         "description": (
-                            "[Optional for module=generate] Resolution tier (`1K`, `1.5K`, `2K`, default `2K`; "
+                            "[Optional for module=generate_image] Resolution tier (`1K`, `1.5K`, `2K`, default `2K`; "
                             "or `auto` for layer_decomposition) or pixel size `WxH` (e.g. `2048x1024`)."
                         ),
                     },
                     "output_format": {
                         "type": "string",
-                        "enum": ["png", "jpeg"],
-                        "description": "[Optional for module=generate] Output format: png (default) / jpeg",
+                        "enum": ["png", "jpeg", "mp4", "mov"],
+                        "description": (
+                            "[Optional] Output format: png (default) / jpeg for generate_image; mp4 (default) / mov for generate_video."
+                        ),
                     },
                     "background": {
                         "type": "string",
                         "enum": ["opaque", "transparent"],
                         "description": (
-                            "[Optional for module=generate] Background: opaque (default) / transparent "
+                            "[Optional for module=generate_image] Background: opaque (default) / transparent "
                             "(only for 1-image img2img with transparent PNG input and output_format=png)."
                         ),
                     },
                     "layer_decomposition": {
                         "type": "boolean",
                         "description": (
-                            "[Optional for module=generate] Split 1 input image into a base image and up to 16 PNG layers (default false)."
+                            "[Optional for module=generate_image] Split 1 input image into a base image and up to 16 PNG layers (default false)."
                         ),
                     },
                     "watermark": {
                         "type": "boolean",
-                        "description": "[Optional for module=generate] Add watermark (default false).",
+                        "description": "[Optional] Add watermark (default false).",
                     },
                 },
             },
@@ -819,6 +880,7 @@ def get_all_tool_schemas() -> list[dict]:
 
 def get_registered_tool_names() -> set[str]:
     names = {item["function"]["name"] for item in TOOL_SCHEMAS}
+    names.add("picture")
     names.add("read_picture")
     return names
 

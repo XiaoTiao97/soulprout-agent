@@ -51,7 +51,8 @@ COOKIE_NAME = "soulprout_desktop"
 _BOOT_PAGE = (
     '<!doctype html><html><head><meta charset="utf-8">'
     '<meta http-equiv="refresh" content="0;url=/">'
-    "<style>html,body{margin:0;height:100%;background:#f2f2f2}</style>"
+    "<style>html,body{margin:0;height:100%;background:#f2f2f2}"
+    "@media (prefers-color-scheme:dark){html,body{background:#171717}}</style>"
     "</head><body><script>location.replace('/')</script></body></html>"
 )
 
@@ -86,6 +87,13 @@ _CONTENT_TYPES = {
     ".webp": "image/webp",
     ".svg": "image/svg+xml",
     ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".avif": "image/avif",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
     ".txt": "text/plain; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
     ".json": "application/json; charset=utf-8",

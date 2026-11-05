@@ -117,10 +117,16 @@ export function getToolSummaryLabel(
       return hasResult ? `已编辑 ${file || '文件'}` : `正在编辑 ${file || '文件'}…`
     }
 
+    case 'media':
     case 'picture': {
       const mod = str(args.module || 'read').toLowerCase()
       const file = basename(args.file_name)
-      if (mod === 'generate') {
+      if (mod === 'generate_video' || mod === 'video') {
+        const promptText = truncate(str(args.prompt), 24)
+        const targetLabel = file || (promptText ? `：${promptText}` : '')
+        return hasResult ? `已生成视频${targetLabel ? ` ${targetLabel}` : ''}` : `正在生成视频${targetLabel ? ` ${targetLabel}` : '…'}`
+      }
+      if (mod === 'generate' || mod === 'generate_image' || mod === 'image' || mod === 'generate_picture') {
         if (args.layer_decomposition) {
           return hasResult
             ? `已拆分图片图层${file ? ` ${file}` : ''}`
@@ -306,7 +312,7 @@ export function formatToolResultContent(content: string): string {
   }
 }
 
-const FILE_PREVIEW_TOOL_NAMES = new Set(['read', 'write', 'edit', 'picture', 'read_picture'])
+const FILE_PREVIEW_TOOL_NAMES = new Set(['read', 'write', 'edit', 'media', 'picture', 'read_picture'])
 
 const EXTRA_PANEL_AUTO_EXPAND_TOOL_NAMES = new Set(['read', 'write', 'edit', 'call_sub_agent'])
 
@@ -347,7 +353,7 @@ export function normalizeToolFilePath(filePath: unknown): string {
   return str(filePath).replace(/\\/g, '/').replace(/^\/+/, '').trim()
 }
 
-/** read / write / edit / picture 工具参数或结果中的文件路径 */
+/** read / write / edit / media / picture 工具参数或结果中的文件路径 */
 export function getToolFilePath(
   toolName: string,
   args: Record<string, unknown>,
@@ -356,10 +362,10 @@ export function getToolFilePath(
   if (!FILE_PREVIEW_TOOL_NAMES.has(toolName)) return null
   const direct = normalizeToolFilePath(args.file_path ?? args.file_name)
   if (direct) return direct
-  if (toolName === 'picture' && resultContent) {
+  if ((toolName === 'media' || toolName === 'picture') && resultContent) {
     try {
       const parsed = JSON.parse(resultContent)
-      const firstFile = parsed?.images?.[0]?.file_name
+      const firstFile = parsed?.file_name || parsed?.video?.file_name || parsed?.images?.[0]?.file_name
       if (firstFile) return normalizeToolFilePath(firstFile)
     } catch {
       // ignore non-json result
@@ -373,7 +379,7 @@ export function getToolIconKind(toolName: string, messageType?: string): 'search
   if (toolName === 'call_sub_agent' || toolName === 'soulprout_kb_agent' || toolName === 'create_agent' || messageType === 'get_agents') {
     return 'agent'
   }
-  if (['read', 'write', 'edit', 'picture', 'read_picture'].includes(toolName)) return 'file'
+  if (['read', 'write', 'edit', 'media', 'picture', 'read_picture'].includes(toolName)) return 'file'
   if (toolName === 'bash') return 'shell'
   if (['base_memory', 'create_memory', 'edit_memory'].includes(toolName)) return 'memory'
   if (toolName === 'knowledge_base') return 'kb'

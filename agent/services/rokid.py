@@ -1,4 +1,4 @@
-"""Rokid / 灵珠协议：凭证管理与 Soul SSE 适配。"""
+"""Rokid / 灵珠协议：凭证管理与 Soul SSE 适配（支持信封加密）。"""
 
 from __future__ import annotations
 
@@ -14,12 +14,19 @@ from agent.api.models.message import ChatRequest
 from agent.core.logging_setup import bind_user_id
 from agent.database.models.rokid_credential import RokidCredential
 from agent.services.agent import Chat
+from agent.utils.crypto_keys import (
+    EnvelopePayload,
+    decrypt_secret,
+    encrypt_secret,
+    hash_api_key,
+)
 
 logger = logging.getLogger(__name__)
 
 # 灵珠填写用的公网 SSE（经反向代理 /api 前缀）
 ROKID_PUBLIC_SSE_URL = "https://www.soulprout.com/api/metis/agent/api/sse"
 ROKID_SSE_PATH = "/metis/agent/api/sse"
+_ROKID_PROVIDER = "rokid_credential"
 
 
 def new_api_key() -> str:
@@ -31,8 +38,49 @@ def new_agent_id() -> str:
     return secrets.token_hex(10)  # 20 hex chars
 
 
+def _apply_encrypted_key(cred: RokidCredential, plain_key: str) -> None:
+    env = encrypt_secret(plain_key, cred.user_id, _ROKID_PROVIDER)
+    cred.api_key = None
+    cred.api_key_hash = hash_api_key(plain_key)
+    cred.kek_version = env.kek_version
+    cred.dek_iv = env.dek_iv
+    cred.dek_wrapped = env.dek_wrapped
+    cred.key_iv = env.key_iv
+    cred.key_cipher = env.key_cipher
+
+
+async def _migrate_legacy_plaintext_if_needed(cred: RokidCredential) -> RokidCredential:
+    """若旧记录仍是明文 api_key，自动迁移为信封加密存储。"""
+    if cred and cred.api_key and not cred.key_cipher:
+        plain = cred.api_key
+        _apply_encrypted_key(cred, plain)
+        cred.updated_at = datetime.utcnow()
+        await cred.save()
+        logger.info("[rokid] 已将旧版明文凭证自动迁移为信封加密 user=%s", cred.user_id)
+    return cred
+
+
+def reveal_credential_api_key(cred: RokidCredential) -> str:
+    """解密并返回 Rokid 凭证的 API Key（供用户本人在配置页查看或网关同步）。"""
+    if not cred:
+        return ""
+    if cred.key_cipher and cred.dek_wrapped and cred.dek_iv and cred.key_iv:
+        payload = EnvelopePayload(
+            kek_version=cred.kek_version or 1,
+            dek_iv=cred.dek_iv,
+            dek_wrapped=cred.dek_wrapped,
+            key_iv=cred.key_iv,
+            key_cipher=cred.key_cipher,
+        )
+        return decrypt_secret(payload, cred.user_id, _ROKID_PROVIDER)
+    return cred.api_key or ""
+
+
 async def get_credential_by_user_id(user_id: str) -> Optional[RokidCredential]:
-    return await RokidCredential.find_one(Eq(RokidCredential.user_id, str(user_id)))
+    cred = await RokidCredential.find_one(Eq(RokidCredential.user_id, str(user_id)))
+    if cred:
+        cred = await _migrate_legacy_plaintext_if_needed(cred)
+    return cred
 
 
 async def heal_oversized_agent_id(cred: RokidCredential) -> RokidCredential:
@@ -56,7 +104,15 @@ async def get_credential_by_api_key(api_key: str) -> Optional[RokidCredential]:
     key = (api_key or "").strip()
     if not key:
         return None
-    return await RokidCredential.find_one(Eq(RokidCredential.api_key, key))
+    key_hash = hash_api_key(key)
+    cred = await RokidCredential.find_one(Eq(RokidCredential.api_key_hash, key_hash))
+    if cred:
+        return cred
+    # 兼容尚未迁移的旧明文记录
+    legacy = await RokidCredential.find_one(Eq(RokidCredential.api_key, key))
+    if legacy:
+        return await _migrate_legacy_plaintext_if_needed(legacy)
+    return None
 
 
 async def ensure_credential(
@@ -74,8 +130,9 @@ async def ensure_credential(
     if existing and not force_new_key:
         return existing
 
+    plain_key = (api_key or "").strip() or new_api_key()
     if existing and force_new_key:
-        existing.api_key = (api_key or "").strip() or new_api_key()
+        _apply_encrypted_key(existing, plain_key)
         existing.updated_at = now
         await existing.save()
         return existing
@@ -83,10 +140,10 @@ async def ensure_credential(
     cred = RokidCredential(
         user_id=user_id,
         agent_id=(agent_id or "").strip() or new_agent_id(),
-        api_key=(api_key or "").strip() or new_api_key(),
         created_at=now,
         updated_at=now,
     )
+    _apply_encrypted_key(cred, plain_key)
     await cred.insert()
     return cred
 
@@ -120,7 +177,7 @@ async def upload_credential(
         conflict = await get_credential_by_api_key(api_key)
         if conflict and conflict.user_id != str(user_id):
             raise ValueError("api_key 已被占用")
-        existing.api_key = api_key
+        _apply_encrypted_key(existing, api_key)
         if agent_id != existing.agent_id:
             conflict_agent = await RokidCredential.find_one(Eq(RokidCredential.agent_id, agent_id))
             if conflict_agent and conflict_agent.user_id != str(user_id):
@@ -128,7 +185,6 @@ async def upload_credential(
             existing.agent_id = agent_id
         existing.updated_at = now
         await existing.save()
-        # 再读一次，确保返回库里的最新值
         refreshed = await get_credential_by_user_id(user_id)
         return refreshed or existing
 
@@ -142,10 +198,10 @@ async def upload_credential(
     cred = RokidCredential(
         user_id=str(user_id),
         agent_id=agent_id,
-        api_key=api_key,
         created_at=now,
         updated_at=now,
     )
+    _apply_encrypted_key(cred, api_key)
     await cred.insert()
     return cred
 

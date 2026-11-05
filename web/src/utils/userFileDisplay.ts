@@ -5,6 +5,7 @@ const PdfIconUrl = new URL('@/assets/images/pdf_update.svg', import.meta.url).hr
 const FileIconUrl = new URL('@/assets/images/file_update.svg', import.meta.url).href
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'])
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm'])
 
 export function isUserTextMessageType(type?: string): boolean {
   return !type || type === 'text'
@@ -18,6 +19,10 @@ function extensionFromName(fileName: string): string {
 
 export function isImageFileName(fileName: string): boolean {
   return IMAGE_EXTENSIONS.has(extensionFromName(fileName))
+}
+
+export function isVideoFileName(fileName: string): boolean {
+  return VIDEO_EXTENSIONS.has(extensionFromName(fileName))
 }
 
 /**
@@ -76,7 +81,7 @@ export function buildWorkspaceFileContentUrl(filePath: string, conversationId?: 
  * - 将正文中的裸图片 URL（如 图：http://.../xxx.jpg）自动转为 ![图片](http://.../xxx.jpg)
  */
 const MD_IMAGE_PREPROCESS_RE =
-  /(```[\s\S]*?```|~~~[\s\S]*?~~~)|(!\[[^\]]*\]\([^)]*\))|`\s*(https?:\/\/[^`\s]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif)(?:\?[^`\s]*)?)\s*`|<((?:https?:\/\/)[^>\s]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif)(?:\?[^>\s]*)?)>|(`[^`\n]+`)|(<[a-zA-Z][^>]*>)|\[([^\]]*)\]\((https?:\/\/[^)\s]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif)(?:\?[^)\s#]*)?(?:#[^)\s]*)?)\)|(https?:\/\/[^\s<>`)"'\]】）]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif)(?:\?[^\s<>`)"'\]】）]*)?)/gi
+  /(```[\s\S]*?```|~~~[\s\S]*?~~~)|(!\[[^\]]*\]\([^)]*\))|`\s*(https?:\/\/[^`\s]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif|mp4|mov|webm)(?:\?[^`\s]*)?)\s*`|<((?:https?:\/\/)[^>\s]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif|mp4|mov|webm)(?:\?[^>\s]*)?)>|(`[^`\n]+`)|(<[a-zA-Z][^>]*>)|\[([^\]]*)\]\(([^)\s]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif|mp4|mov|webm)(?:\?[^)\s#]*)?(?:#[^)\s]*)?)\)|(https?:\/\/[^\s<>`)"'\]】）]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif|mp4|mov|webm)(?:\?[^\s<>`)"'\]】）]*)?)/gi
 
 export function preprocessMarkdownImages(markdown: string): string {
   if (!markdown) return ''
@@ -98,17 +103,21 @@ export function preprocessMarkdownImages(markdown: string): string {
         return match
       }
       if (backtickImgUrl) {
-        return `![图片](${backtickImgUrl})`
+        const label = isVideoFileName(backtickImgUrl) ? '视频' : '图片'
+        return `![${label}](${backtickImgUrl})`
       }
       if (angleImgUrl) {
-        return `![图片](${angleImgUrl})`
+        const label = isVideoFileName(angleImgUrl) ? '视频' : '图片'
+        return `![${label}](${angleImgUrl})`
       }
       if (linkImgUrl) {
-        const alt = (linkText || '').trim() || '图片'
+        const defaultLabel = isVideoFileName(linkImgUrl) ? '视频' : '图片'
+        const alt = (linkText || '').trim() || defaultLabel
         return `![${alt}](${linkImgUrl})`
       }
       if (bareImgUrl) {
-        return `![图片](${bareImgUrl})`
+        const label = isVideoFileName(bareImgUrl) ? '视频' : '图片'
+        return `![${label}](${bareImgUrl})`
       }
       return match
     },

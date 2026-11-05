@@ -111,6 +111,7 @@
                             :data-workspace-file="!hasLocalUploadBlob(fileName) ? normalizeWorkspaceFilePath(fileName) : undefined"
                             :data-conversation-id="!hasLocalUploadBlob(fileName) ? activeConversationId : undefined"
                             :alt="fileName"
+                            @error="handleWorkspaceImageError"
                           />
                         </template>
                         <template v-else>
@@ -119,8 +120,8 @@
                             :src="getFileIconUrlForName(fileName)"
                             :alt="fileName"
                           />
+                          <div class="selected-file-name" :title="fileName">{{ fileName }}</div>
                         </template>
-                        <div class="selected-file-name" :title="fileName">{{ fileName }}</div>
                       </div>
                     </div>
                   </div>
@@ -472,6 +473,7 @@ import {
   getFileIconUrlForName,
   isImageFileName,
   isUserTextMessageType,
+  isVideoFileName,
   isWorkspaceRelativeUrl,
   normalizeWorkspaceFilePath,
   parseUserFileNames,
@@ -668,12 +670,23 @@ let lightboxDragStartX = 0
 let lightboxDragStartY = 0
 let lightboxOriginX = 0
 let lightboxOriginY = 0
+const lightboxPointers = new Map<number, { x: number; y: number }>()
+let pinchStartDist = 0
+let pinchStartScale = 1
+
+function getTwoPointerDist(): number {
+  const pts = Array.from(lightboxPointers.values())
+  if (pts.length < 2) return 0
+  return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)
+}
 
 function resetLightboxTransform() {
   lightboxScale.value = 1
   lightboxTranslateX.value = 0
   lightboxTranslateY.value = 0
   lightboxDragging.value = false
+  lightboxPointers.clear()
+  pinchStartDist = 0
 }
 
 function openImageLightbox(url: string, alt = '') {
@@ -703,24 +716,56 @@ function handleLightboxWheel(e: WheelEvent) {
 }
 
 function handleLightboxPointerDown(e: PointerEvent) {
-  if (e.button !== 0) return
+  if (e.button !== 0 && e.pointerType === 'mouse') return
   const target = e.currentTarget as HTMLElement | null
   target?.setPointerCapture?.(e.pointerId)
-  lightboxDragging.value = true
-  lightboxDragStartX = e.clientX
-  lightboxDragStartY = e.clientY
-  lightboxOriginX = lightboxTranslateX.value
-  lightboxOriginY = lightboxTranslateY.value
+  lightboxPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (lightboxPointers.size === 2) {
+    lightboxDragging.value = false
+    pinchStartDist = getTwoPointerDist()
+    pinchStartScale = lightboxScale.value
+    return
+  }
+  if (lightboxPointers.size === 1) {
+    lightboxDragging.value = true
+    lightboxDragStartX = e.clientX
+    lightboxDragStartY = e.clientY
+    lightboxOriginX = lightboxTranslateX.value
+    lightboxOriginY = lightboxTranslateY.value
+  }
 }
 
 function handleLightboxPointerMove(e: PointerEvent) {
+  if (!lightboxPointers.has(e.pointerId)) return
+  lightboxPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (lightboxPointers.size === 2 && pinchStartDist > 0) {
+    const dist = getTwoPointerDist()
+    if (dist > 0) {
+      const nextScale = Math.min(8, Math.max(0.25, Number((pinchStartScale * (dist / pinchStartDist)).toFixed(3))))
+      lightboxScale.value = nextScale
+    }
+    return
+  }
   if (!lightboxDragging.value) return
   lightboxTranslateX.value = lightboxOriginX + (e.clientX - lightboxDragStartX)
   lightboxTranslateY.value = lightboxOriginY + (e.clientY - lightboxDragStartY)
 }
 
 function handleLightboxPointerUp(e: PointerEvent) {
-  if (!lightboxDragging.value) return
+  lightboxPointers.delete(e.pointerId)
+  if (lightboxPointers.size < 2) {
+    pinchStartDist = 0
+  }
+  if (lightboxPointers.size === 1) {
+    const remaining = Array.from(lightboxPointers.values())[0]
+    lightboxDragging.value = true
+    lightboxDragStartX = remaining.x
+    lightboxDragStartY = remaining.y
+    lightboxOriginX = lightboxTranslateX.value
+    lightboxOriginY = lightboxTranslateY.value
+  } else if (lightboxPointers.size === 0) {
+    lightboxDragging.value = false
+  }
   const target = e.currentTarget as HTMLElement | null
   try {
     if (target?.hasPointerCapture?.(e.pointerId)) {
@@ -729,7 +774,6 @@ function handleLightboxPointerUp(e: PointerEvent) {
   } catch {
     // ignore
   }
-  lightboxDragging.value = false
 }
 
 function handleLightboxKeydown(e: KeyboardEvent) {
@@ -1167,6 +1211,20 @@ const defaultImageRenderer =
 md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const rawSrc = token.attrGet('src') || ''
+  if (isVideoFileName(rawSrc)) {
+    if (isWorkspaceRelativeUrl(rawSrc)) {
+      const cleanPath = normalizeWorkspaceFilePath(rawSrc)
+      const cid = env?.conversationId || ''
+      if (cleanPath && cid) {
+        const cacheKey = `${cid}:${cleanPath}`
+        const resolvedUrl =
+          fetchedWorkspaceBlobUrls.get(cacheKey) || buildWorkspaceFileContentUrl(cleanPath, cid)
+        return `<video class="workspace-inline-video" controls preload="metadata" playsinline src="${md.utils.escapeHtml(resolvedUrl)}" data-workspace-file="${md.utils.escapeHtml(cleanPath)}" data-conversation-id="${md.utils.escapeHtml(cid)}"></video>`
+      }
+    } else if (/^https?:\/\//i.test(rawSrc)) {
+      return `<video class="external-inline-video" controls preload="metadata" playsinline referrerpolicy="no-referrer" src="${md.utils.escapeHtml(rawSrc)}"></video>`
+    }
+  }
   if (isWorkspaceRelativeUrl(rawSrc)) {
     const cleanPath = normalizeWorkspaceFilePath(rawSrc)
     const cid = env?.conversationId || ''
@@ -1764,6 +1822,7 @@ const copyToClipboard = (text: string | undefined, timestamp: number) => {
    }
 
 const handleWorkspaceImageClick = (e: Event) => {
+  e.stopPropagation()
   const img = e.currentTarget as HTMLImageElement | null
   if (!img) return
   const src = img.currentSrc || img.src
@@ -1773,9 +1832,10 @@ const handleWorkspaceImageClick = (e: Event) => {
   }
 }
 
-const handleWorkspaceImageError = async (e: Event) => {
-  const img = e.currentTarget as HTMLImageElement | null
+const ensureWorkspaceImageBlob = async (img: HTMLImageElement | null) => {
   if (!img || img.dataset.blobTried === '1') return
+  const currentSrc = img.getAttribute('src') || ''
+  if (currentSrc.startsWith('blob:')) return
   img.dataset.blobTried = '1'
   const filePath = img.getAttribute('data-workspace-file')
   const cid = img.getAttribute('data-conversation-id') || activeConversationId.value
@@ -1799,7 +1859,12 @@ const handleWorkspaceImageError = async (e: Event) => {
   }
 }
 
+const handleWorkspaceImageError = (e: Event) => {
+  void ensureWorkspaceImageBlob(e.currentTarget as HTMLImageElement | null)
+}
+
 const handleExternalImageClick = (e: Event) => {
+  e.stopPropagation()
   const img = e.currentTarget as HTMLImageElement | null
   if (!img) return
   const src = img.currentSrc || img.src || img.getAttribute('data-external-image') || ''
@@ -1808,16 +1873,31 @@ const handleExternalImageClick = (e: Event) => {
   }
 }
 
-const handleExternalImageError = (e: Event) => {
+const handleExternalImageError = async (e: Event) => {
   const img = e.currentTarget as HTMLImageElement | null
   if (!img) return
   const url = img.getAttribute('data-external-image') || img.src
   if (!url) return
-  // 第一次失败（如 http:// 网站不支持浏览器自动升级 https:// 或被防盗链拦截）：尝试走后端 /api/image_proxy
+  // 第一次失败（如 http:// 网站不支持浏览器自动升级 https:// 或被防盗链拦截）：尝试走后端 /api/image_proxy（用 axios 以兼容手机端 Bearer Token 与跨域 Origin）
   if (img.dataset.proxyTried !== '1') {
     img.dataset.proxyTried = '1'
-    img.src = `/api/image_proxy?url=${encodeURIComponent(url)}`
-    return
+    const cacheKey = `proxy:${url}`
+    const cachedBlob = fetchedWorkspaceBlobUrls.get(cacheKey)
+    if (cachedBlob) {
+      img.src = cachedBlob
+      return
+    }
+    try {
+      const resp = await axios.get(`/api/image_proxy?url=${encodeURIComponent(url)}`, { responseType: 'blob' })
+      if (resp.data instanceof Blob && resp.data.size > 0) {
+        const blobUrl = URL.createObjectURL(resp.data)
+        fetchedWorkspaceBlobUrls.set(cacheKey, blobUrl)
+        img.src = blobUrl
+        return
+      }
+    } catch {
+      // 代理也失败则降级为外链
+    }
   }
   if (img.dataset.fallbackApplied === '1') return
   img.dataset.fallbackApplied = '1'
@@ -1827,6 +1907,37 @@ const handleExternalImageError = (e: Event) => {
   link.rel = 'noopener noreferrer'
   link.textContent = url
   img.replaceWith(link)
+}
+
+const ensureWorkspaceVideoBlob = async (video: HTMLVideoElement | null) => {
+  if (!video || video.dataset.blobTried === '1') return
+  const currentSrc = video.getAttribute('src') || ''
+  if (currentSrc.startsWith('blob:')) return
+  video.dataset.blobTried = '1'
+  const filePath = video.getAttribute('data-workspace-file')
+  const cid = video.getAttribute('data-conversation-id') || activeConversationId.value
+  if (!filePath || !cid) return
+  const cacheKey = `${cid}:${filePath}`
+  const existingBlob = fetchedWorkspaceBlobUrls.get(cacheKey)
+  if (existingBlob) {
+    video.src = existingBlob
+    return
+  }
+  try {
+    const apiUrl = buildWorkspaceFileContentUrl(filePath, cid)
+    const resp = await axios.get(apiUrl, { responseType: 'blob' })
+    if (resp.data instanceof Blob && resp.data.size > 0) {
+      const blobUrl = URL.createObjectURL(resp.data)
+      fetchedWorkspaceBlobUrls.set(cacheKey, blobUrl)
+      video.src = blobUrl
+    }
+  } catch {
+    // 静默忽略加载失败
+  }
+}
+
+const handleWorkspaceVideoError = (e: Event) => {
+  void ensureWorkspaceVideoBlob(e.currentTarget as HTMLVideoElement | null)
 }
 
 // Function to attach copy listeners to code block buttons and workspace image handlers
@@ -1844,6 +1955,16 @@ const attachCopyListeners = () => {
       img.addEventListener('click', handleWorkspaceImageClick)
       img.removeEventListener('error', handleWorkspaceImageError)
       img.addEventListener('error', handleWorkspaceImageError)
+      const imgEl = img as HTMLImageElement
+      if (imgEl.complete && imgEl.naturalWidth === 0) {
+        void ensureWorkspaceImageBlob(imgEl)
+      }
+    })
+    const workspaceVideos = root.querySelectorAll('video[data-workspace-file]')
+    workspaceVideos.forEach(video => {
+      video.removeEventListener('error', handleWorkspaceVideoError)
+      video.addEventListener('error', handleWorkspaceVideoError)
+      void ensureWorkspaceVideoBlob(video as HTMLVideoElement)
     })
     const externalImages = root.querySelectorAll('img[data-external-image]')
     externalImages.forEach(img => {
@@ -2056,6 +2177,9 @@ const handleCreateAgentClick = () => {
 }
 
 .user-uploaded-files .selected-files--history {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   font-size: 12px;
   color: #666;
   display: flex;
@@ -2085,16 +2209,17 @@ const handleCreateAgentClick = () => {
 
 .user-uploaded-files .selected-file-item--image {
   width: auto;
-  max-width: 180px;
+  max-width: min(100%, 480px);
+  min-width: 0;
 }
 
 .user-uploaded-files .selected-file-thumb {
-  max-width: 160px;
-  max-height: 120px;
+  max-width: min(100%, 480px);
+  max-height: 360px;
   width: auto;
   height: auto;
   border-radius: 8px;
-  object-fit: cover;
+  object-fit: contain;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
   display: block;

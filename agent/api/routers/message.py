@@ -1,7 +1,8 @@
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Query
-from agent.services.auth import ensure_conversation_owner, require_user
+from agent.services.auth import ensure_conversation_owner, get_current_user, require_user
+from agent.services.api_key_service import get_effective_models_for_user
 from agent.database.crud.message import get_message_by_conv_id
 from agent.api.models.message import ChatRequest, ChatResponse
 from agent.services.run_manager import run_manager
@@ -46,12 +47,19 @@ async def _iter_subscriber(request: Request, queue: asyncio.Queue, prelude: list
 
 
 @router.get("/message/models")
-async def get_models_list():
-    models_dict = {}
-    for models_info in models_info_list:
-        if models_info.get("model_use") == True:
-            models_dict[models_info.get("model_source")] = [model.get("name") for model in models_info.get("models")]
-    return models_dict
+async def get_models_list(request: Request):
+    user = None
+    token = request.cookies.get("token")
+    if not token:
+        auth = request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+    if token:
+        try:
+            user = await get_current_user(token)
+        except Exception:
+            user = None
+    return await get_effective_models_for_user(user, config)
 
 
 @router.get("/message/runs")

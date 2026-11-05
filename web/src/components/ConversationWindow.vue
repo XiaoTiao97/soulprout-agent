@@ -216,30 +216,48 @@
             <button
               type="button"
               class="user-button"
-              :class="{ 'user-button--collapsed': isExpanded, 'user-button--open': showMenu }"
+              :class="{
+                'user-button--collapsed': isExpanded,
+                'user-button--open': showMenu,
+                'hover-hint': !showMenu,
+                'hover-hint--top': !showMenu,
+              }"
+              :data-tip="!showMenu ? t('conversation.userMenu') : undefined"
               :aria-expanded="showMenu"
+              :aria-label="t('conversation.userMenu')"
               @click.stop="toggleMenu"
-              :title="t('conversation.userMenu')"
             >
-              <img class="user-icon" width="22" height="22" src="@/assets/images/user_icon.svg" alt="" />
-              <span
-                v-if="!isExpanded"
-                class="user-display-name"
-                :title="username"
-              >{{ username || t('conversation.defaultUser') }}</span>
               <svg
-                v-if="!isExpanded"
-                class="user-chevron"
-                viewBox="0 0 16 16"
+                class="user-icon-svg"
+                viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="1.6"
+                stroke-width="1.75"
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 aria-hidden="true"
               >
-                <path d="M4 6l4 4 4-4" />
+                <circle cx="12" cy="12" r="9" />
+                <circle cx="12" cy="10" r="3" />
+                <path d="M6.7 18.2c1.3-2.1 3.1-3.2 5.3-3.2s4 1.1 5.3 3.2" />
               </svg>
+              <span
+                v-if="!isExpanded"
+                class="user-display-name"
+              >{{ username || t('conversation.defaultUser') }}</span>
+              <span v-if="!isExpanded" class="user-chevron-wrap" aria-hidden="true">
+                <svg
+                  class="user-chevron"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4.5 9.5L8 6l3.5 3.5" />
+                </svg>
+              </span>
             </button>
             <div v-if="showMenu" class="user-menu" ref="menuRef">
               <!-- 桌面端通过 provide('desktopMenu') 注入自己的入口（设置 / 多端互联）；网页端没有这个注入，行为不变 -->
@@ -271,6 +289,12 @@
                   <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="round" />
                 </svg>
                 <span>{{ t('conversation.personalize') }}</span>
+              </button>
+              <button type="button" class="user-menu-item" @click="openApiKeySettings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                </svg>
+                <span>{{ t('conversation.apiKeySettings') }}</span>
               </button>
               <button type="button" class="user-menu-item" @click="openDownloadClients">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -312,6 +336,7 @@
           </div>
         </div>
         <PersonalizeDialog v-model="showPersonalize" @saved="(p) => emit('usernameUpdated', p.username)" />
+        <ApiKeySettingsDialog v-model="showApiKeySettings" @updated="emit('apiKeyUpdated')" />
         <DownloadClientsDialog v-model="showDownloadClients" />
     </div>
 </template>
@@ -325,14 +350,20 @@ import { themeMode, cycleThemeMode, isDark } from '@/utils/theme.js';
 import logoLight from '@/assets/images/logo.png';
 import logoDark from '@/assets/images/logo_dark.png';
 import PersonalizeDialog from './PersonalizeDialog.vue';
+import ApiKeySettingsDialog from './ApiKeySettingsDialog.vue';
 import DownloadClientsDialog from './DownloadClientsDialog.vue';
 import type { ConversationBase, ChatRequest } from '../types/interface';
 
 const showPersonalize = ref(false);
+const showApiKeySettings = ref(false);
 const showDownloadClients = ref(false);
 const openPersonalize = () => {
   showMenu.value = false;
   showPersonalize.value = true;
+};
+const openApiKeySettings = () => {
+  showMenu.value = false;
+  showApiKeySettings.value = true;
 };
 
 const openDownloadClients = () => {
@@ -355,6 +386,7 @@ const emit = defineEmits([
   'switchMode',
   'openRunning',
   'usernameUpdated',
+  'apiKeyUpdated',
 ]);
 
 const props = withDefaults(defineProps<{
@@ -840,53 +872,73 @@ onUnmounted(() => {
   line-height: 1;
 }
 
-/* —— 用户区域：底部账户入口 + 紧凑上浮菜单 */
+/* —— 用户区域：底部紧凑入口 + 上浮菜单 */
 .user-option {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
-  padding: 10px 0 14px;
-  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  padding: 8px 5% 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
 }
 
 .user-option--collapsed {
+  justify-content: center;
   padding-inline: 0;
 }
 
 .user-option-inner {
   position: relative;
-  width: 90%;
-  box-sizing: border-box;
-}
-
-.user-option--collapsed .user-option-inner {
   width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .user-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
-  width: 100%;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 5px 10px 5px 8px;
   box-sizing: border-box;
   background: transparent;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
   text-align: left;
   outline: none;
-  transition: background-color 0.2s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.15s ease;
 }
 
-.user-button:hover,
+.user-button:hover {
+  background: rgba(0, 0, 0, 0.055);
+}
+
 .user-button--open {
-  background: rgba(226, 226, 226, 0.8);
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.user-button:active {
+  transform: scale(0.98);
+}
+
+/* 底部按钮的悬浮提示强制在上方弹出，避免贴底被裁剪看不见 */
+.user-button.hover-hint--top::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+  margin-top: 0;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 
 .user-button--collapsed {
@@ -894,6 +946,7 @@ onUnmounted(() => {
   height: 36px;
   padding: 0;
   justify-content: center;
+  border-radius: 10px;
 }
 
 .user-button:focus-visible {
@@ -901,14 +954,23 @@ onUnmounted(() => {
   outline-offset: 2px;
 }
 
-.user-icon {
+.user-icon-svg {
   flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: rgb(85, 85, 85);
+  transition: color 0.18s ease;
+}
+
+.user-button:hover .user-icon-svg,
+.user-button--open .user-icon-svg {
+  color: rgb(25, 25, 25);
 }
 
 .user-display-name {
   min-width: 0;
-  flex: 1;
-  font-size: 14px;
+  max-width: 136px;
+  font-size: 13.5px;
   font-weight: 500;
   color: rgb(61, 61, 61);
   overflow: hidden;
@@ -916,12 +978,23 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.user-chevron {
+.user-chevron-wrap {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(140, 140, 140);
+  transition: color 0.18s ease;
+}
+
+.user-button:hover .user-chevron-wrap {
+  color: rgb(61, 61, 61);
+}
+
+.user-chevron {
   width: 12px;
   height: 12px;
-  color: rgb(140, 140, 140);
-  transition: transform 0.22s ease;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .user-button--open .user-chevron {
@@ -1038,15 +1111,31 @@ html[data-theme='dark'] .chat-mode-option--active:hover {
 html[data-theme='dark'] .user-option {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
-html[data-theme='dark'] .user-button:hover,
+html[data-theme='dark'] .user-button {
+  background: transparent;
+  border-color: transparent;
+}
+html[data-theme='dark'] .user-button:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
 html[data-theme='dark'] .user-button--open {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+}
+html[data-theme='dark'] .user-icon-svg {
+  color: #b5b5b5;
+}
+html[data-theme='dark'] .user-button:hover .user-icon-svg,
+html[data-theme='dark'] .user-button--open .user-icon-svg {
+  color: #f5f5f5;
 }
 html[data-theme='dark'] .user-display-name {
   color: #e5e5e5;
 }
-html[data-theme='dark'] .user-chevron {
+html[data-theme='dark'] .user-chevron-wrap {
   color: #a3a3a3;
+}
+html[data-theme='dark'] .user-button:hover .user-chevron-wrap {
+  color: #f5f5f5;
 }
 html[data-theme='dark'] .user-menu {
   background: #262626;

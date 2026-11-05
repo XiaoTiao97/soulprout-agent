@@ -23,6 +23,7 @@ from agent.database.models.rokid_credential import RokidCredential
 from agent.database.models.scheduled_task import ScheduledTask
 from agent.database.models.outbound_delivery import OutboundDelivery
 from agent.database.models.user_channel_binding import UserChannelBinding
+from agent.database.models.user_api_key import UserApiKey
 from agent.core.config import Config
 from agent.core.logging_setup import bind_user_id, reset_user_id, setup_logging
 
@@ -80,6 +81,7 @@ async def lifespan(app: FastAPI):
             ScheduledTask,
             OutboundDelivery,
             UserChannelBinding,
+            UserApiKey,
         ],
     )
     for agent_card in [config.kb_agent_card(), *config.default_agent_cards()]:

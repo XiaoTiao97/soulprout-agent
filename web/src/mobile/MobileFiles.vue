@@ -37,6 +37,7 @@
       <p v-if="loadingPreview" class="file-empty">{{ t('mobile.loading') }}</p>
       <p v-else-if="previewError" class="file-empty">{{ previewError }}</p>
       <img v-else-if="isImage" :src="fileUrl" alt="" class="preview-image" />
+      <video v-else-if="isVideo" :src="fileUrl" controls preload="metadata" playsinline class="preview-video"></video>
       <iframe v-else-if="isHtml" :src="fileUrl" class="preview-frame" title="html"></iframe>
       <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" class="preview-office" />
       <VueOfficePdf v-else-if="isPdf" :src="fileUrl" class="preview-office" />
@@ -59,7 +60,14 @@ import VueOfficeExcel from '@vue-office/excel'
 import '@vue-office/excel/lib/index.css'
 import VueOfficePdf from '@vue-office/pdf'
 import VueOfficePptx from '@vue-office/pptx'
-import { getFileIconUrlForName } from '@/utils/userFileDisplay'
+import {
+  buildWorkspaceFileContentUrl,
+  getFileIconUrlForName,
+  isVideoFileName,
+  isWorkspaceRelativeUrl,
+  normalizeWorkspaceFilePath,
+  preprocessMarkdownImages,
+} from '@/utils/userFileDisplay'
 import { resolveApi } from './api'
 
 const props = defineProps({
@@ -72,6 +80,38 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 const { t } = useI18n()
 const md = new MarkdownIt({ html: false, breaks: true, linkify: true })
+const defaultImageRenderer =
+  md.renderer.rules.image ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options)
+  }
+
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const rawSrc = token.attrGet('src') || ''
+  if (isVideoFileName(rawSrc)) {
+    if (isWorkspaceRelativeUrl(rawSrc)) {
+      const cleanPath = normalizeWorkspaceFilePath(rawSrc)
+      const cid = env?.conversationId || ''
+      if (cleanPath && cid) {
+        const resolvedUrl = resolveApi(buildWorkspaceFileContentUrl(cleanPath, cid))
+        return `<video class="preview-video" controls preload="metadata" playsinline src="${md.utils.escapeHtml(resolvedUrl)}"></video>`
+      }
+    } else if (/^https?:\/\//i.test(rawSrc)) {
+      return `<video class="preview-video" controls preload="metadata" playsinline referrerpolicy="no-referrer" src="${md.utils.escapeHtml(rawSrc)}"></video>`
+    }
+  }
+  if (isWorkspaceRelativeUrl(rawSrc)) {
+    const cleanPath = normalizeWorkspaceFilePath(rawSrc)
+    const cid = env?.conversationId || ''
+    if (cleanPath && cid) {
+      token.attrSet('src', resolveApi(buildWorkspaceFileContentUrl(cleanPath, cid)))
+    }
+  } else if (/^https?:\/\//i.test(rawSrc)) {
+    token.attrSet('referrerpolicy', 'no-referrer')
+  }
+  return defaultImageRenderer(tokens, idx, options, env, self)
+}
 
 const screen = ref('list')
 const files = ref([])
@@ -84,7 +124,8 @@ const textContent = ref('')
 const docxHtml = ref('')
 
 const extension = computed(() => selectedFile.value.split('.').pop()?.toLowerCase() || '')
-const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(extension.value))
+const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(extension.value))
+const isVideo = computed(() => ['mp4', 'mov', 'webm'].includes(extension.value))
 const isHtml = computed(() => extension.value === 'html' || extension.value === 'htm')
 const isDocx = computed(() => extension.value === 'doc' || extension.value === 'docx')
 const isExcel = computed(() => ['xls', 'xlsx'].includes(extension.value))
@@ -96,7 +137,10 @@ const isText = computed(() =>
 )
 const textHtml = computed(() => {
   if (isDocx.value) return docxHtml.value
-  if (isMarkdown.value) return md.render(textContent.value || '')
+  if (isMarkdown.value) {
+    const raw = preprocessMarkdownImages(textContent.value || '')
+    return md.render(raw, { conversationId: props.conversationId || '' })
+  }
   return ''
 })
 const fileTitle = computed(() => baseName(selectedFile.value) || t('mobile.files'))
@@ -362,6 +406,16 @@ watch(
   margin: 0 auto;
 }
 
+.preview-video {
+  display: block;
+  max-width: 100%;
+  max-height: 78vh;
+  height: auto;
+  margin: 12px auto;
+  border-radius: 8px;
+  background: #000;
+}
+
 .preview-frame,
 .preview-office {
   width: 100%;
@@ -382,16 +436,18 @@ watch(
   white-space: pre-wrap;
 }
 
-.preview-html :deep(img) {
+.preview-html :deep(img),
+.preview-html :deep(video) {
   max-width: 100%;
+  height: auto;
 }
 
 html[data-theme='dark'] .file-screen {
-  background: #0b0d12;
+  background: #171717;
   color: #f3f4f6;
 }
 html[data-theme='dark'] .file-bar {
-  background: #141720;
+  background: #1f1f1f;
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 html[data-theme='dark'] .bar-btn,
@@ -399,11 +455,20 @@ html[data-theme='dark'] .bar-title,
 html[data-theme='dark'] .file-name {
   color: #f3f4f6;
 }
+html[data-theme='dark'] .file-empty,
+html[data-theme='dark'] .file-path {
+  color: #9ca3af;
+}
 html[data-theme='dark'] .file-list,
 html[data-theme='dark'] .file-row,
 html[data-theme='dark'] .file-body--preview {
-  background: #141720;
+  background: #212121;
   border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+}
+html[data-theme='dark'] .preview-html :deep(pre),
+html[data-theme='dark'] .preview-html :deep(code) {
+  background: rgba(255, 255, 255, 0.08);
   color: #e5e7eb;
 }
 </style>

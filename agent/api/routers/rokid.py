@@ -16,6 +16,7 @@ from agent.services.rokid import (
     get_credential_by_user_id,
     heal_oversized_agent_id,
     parse_bearer_api_key,
+    reveal_credential_api_key,
     stream_soul_as_rokid,
     upload_credential,
 )
@@ -36,7 +37,7 @@ def _token_from_request(request: Request) -> Optional[str]:
 def _cred_payload(cred) -> Dict[str, Any]:
     return {
         "success": True,
-        "api_key": cred.api_key,
+        "api_key": reveal_credential_api_key(cred),
         "agent_id": cred.agent_id,
         "user_id": cred.user_id,
         "sse_url": ROKID_PUBLIC_SSE_URL,

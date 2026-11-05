@@ -2448,6 +2448,20 @@ code {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
+.p-content-markdown :deep(video.workspace-inline-video),
+.p-content-markdown :deep(video.external-inline-video) {
+  max-width: min(100%, 560px);
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  display: block;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: #000;
+}
+
 .answer-robot-loading {
   display: flex;
   align-items: center;

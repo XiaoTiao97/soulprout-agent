@@ -38,6 +38,18 @@
         </svg>
         <span>{{ t('mobile.files') }}</span>
       </button>
+      <button
+        type="button"
+        class="icon-btn user-topbar-btn"
+        :aria-label="t('conversation.userMenu')"
+        @click="openUserDrawer"
+      >
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="10" r="3" />
+          <path d="M6.7 18.2c1.3-2.1 3.1-3.2 5.3-3.2s4 1.1 5.3 3.2" />
+        </svg>
+      </button>
     </header>
 
     <main class="mobile-chat">
@@ -130,11 +142,66 @@
         </div>
       </template>
 
-      <div class="drawer-user">
-        <span>{{ currentUsername || t('conversation.defaultUser') }}</span>
-        <button type="button" class="drawer-theme-btn" @click="cycleThemeMode">
-          {{ t('theme.switchLabel') }}：{{ currentThemeLabel }}
-        </button>
+      <div class="drawer-user-wrap">
+        <div v-if="userMenuOpen" class="drawer-user-menu">
+          <button type="button" class="drawer-menu-item" @click="openPersonalize">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="round" />
+            </svg>
+            <span>{{ t('conversation.personalize') }}</span>
+          </button>
+          <button type="button" class="drawer-menu-item" @click="cycleThemeMode">
+            <svg v-if="themeMode === 'system'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8M12 16v4" />
+            </svg>
+            <svg v-else-if="themeMode === 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.5" />
+              <path d="M12 2.5v2.2M12 19.3v2.2M4.93 4.93l1.56 1.56M17.51 17.51l1.56 1.56M2.5 12h2.2M19.3 12h2.2M4.93 19.07l1.56-1.56M17.51 6.49l1.56-1.56" />
+            </svg>
+            <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <span>{{ t('theme.switchLabel') }}：{{ currentThemeLabel }}</span>
+          </button>
+          <button type="button" class="drawer-menu-item" @click="toggleLocale">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18" stroke-linecap="round" />
+              <path d="M12 3c2.5 2.9 2.5 15.1 0 18" stroke-linecap="round" />
+              <path d="M12 3c-2.5 2.9-2.5 15.1 0 18" stroke-linecap="round" />
+            </svg>
+            <span>{{ t('nav.langSwitch') }}</span>
+          </button>
+          <div class="drawer-menu-divider" aria-hidden="true"></div>
+          <button type="button" class="drawer-menu-item drawer-menu-item--danger" @click="handleLogout">
+            <img width="15" height="15" src="@/assets/images/logout_icon.svg" alt="" />
+            <span>{{ t('conversation.logout') }}</span>
+          </button>
+        </div>
+
+        <div class="drawer-user">
+          <button
+            type="button"
+            class="drawer-user-btn"
+            :class="{ 'drawer-user-btn--open': userMenuOpen }"
+            @click="userMenuOpen = !userMenuOpen"
+          >
+            <svg class="drawer-user-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="10" r="3" />
+              <path d="M6.7 18.2c1.3-2.1 3.1-3.2 5.3-3.2s4 1.1 5.3 3.2" />
+            </svg>
+            <span class="drawer-user-name">{{ currentUsername || t('conversation.defaultUser') }}</span>
+            <svg class="drawer-user-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4.5 9.5L8 6l3.5 3.5" />
+            </svg>
+          </button>
+          <button type="button" class="drawer-theme-btn" @click="cycleThemeMode">
+            {{ t('theme.switchLabel') }}：{{ currentThemeLabel }}
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -170,6 +237,7 @@
       :refresh-token="fileRefreshToken"
       @close="closeFiles"
     />
+    <PersonalizeDialog v-model="showPersonalize" @saved="(p) => (currentUsername = p.username)" />
     <RtcTestPage v-if="rtcOpen" @close="rtcOpen = false" />
   </div>
 </template>
@@ -177,18 +245,21 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { setLocale } from '@/i18n'
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import ChatWindow from '@/components/ChatWindow.vue'
+import PersonalizeDialog from '@/components/PersonalizeDialog.vue'
 import MobileFiles from './MobileFiles.vue'
 import YavisPage from './standby/YavisPage.vue'
 import { useChatSession } from './useChatSession'
+import { http } from './api'
 import { themeMode, cycleThemeMode, isDark } from '@/utils/theme.js'
 import logoLight from '@/assets/images/logo.png'
 import logoDark from '@/assets/images/logo_dark.png'
 
 const emit = defineEmits(['logout'])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 // 告诉输入框用手机布局（网页端不会 provide，保持原样）
 provide('mobileLayout', true)
 const session = useChatSession()
@@ -234,6 +305,39 @@ watch(unauthorized, (value) => {
 })
 
 const drawerOpen = ref(false)
+const userMenuOpen = ref(false)
+const showPersonalize = ref(false)
+
+watch(drawerOpen, (open) => {
+  if (!open) userMenuOpen.value = false
+})
+
+function openUserDrawer() {
+  drawerOpen.value = true
+  userMenuOpen.value = true
+}
+
+function openPersonalize() {
+  userMenuOpen.value = false
+  drawerOpen.value = false
+  showPersonalize.value = true
+}
+
+function toggleLocale() {
+  const next = locale.value === 'zh-CN' ? 'en' : 'zh-CN'
+  setLocale(next)
+}
+
+async function handleLogout() {
+  userMenuOpen.value = false
+  drawerOpen.value = false
+  try {
+    await http.post('/api/user/logout')
+  } catch {
+    /* ignore */
+  }
+  emit('logout')
+}
 const yavisOpen = ref(false)
 const showGate = ref(false)
 /** 芽维斯页面本体延后挂载：它的初始化和权限检测不能和点击、动画首帧挤在一起 */
@@ -574,9 +678,13 @@ async function closeYavis() {
   refreshHistory().catch(() => {})
 }
 
-/** 安卓返回键 / 边缘滑动：优先关文件页、芽维斯、侧栏，而不是直接杀进程 */
+/** 安卓返回键 / 边缘滑动：优先关弹窗、文件页、芽维斯、侧栏，而不是直接杀进程 */
 let backButtonHandle = null
 async function onAndroidBackButton() {
+  if (showPersonalize.value) {
+    showPersonalize.value = false
+    return
+  }
   if (filesOpen.value) {
     closeFiles()
     return
@@ -998,7 +1106,8 @@ function openWebPreview(url) {
   overflow-x: auto;
 }
 
-.mobile-chat :deep(.p-content-markdown img) {
+.mobile-chat :deep(.p-content-markdown img),
+.mobile-chat :deep(.p-content-markdown video) {
   max-width: 100%;
   height: auto;
 }
@@ -1224,9 +1333,56 @@ function openWebPreview(url) {
   font-size: 13px;
 }
 
-.drawer-user {
+.drawer-user-wrap {
   margin-top: auto;
-  padding: 14px 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-user-menu {
+  margin: 0 12px 6px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawer-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13.5px;
+  color: #1f2937;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drawer-menu-item:active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.drawer-menu-item--danger {
+  color: #b91c1c;
+}
+
+.drawer-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.drawer-user {
+  padding: 12px 16px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   color: #6b7280;
   font-size: 13px;
@@ -1236,7 +1392,51 @@ function openWebPreview(url) {
   gap: 8px;
 }
 
+.drawer-user-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #374151;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.drawer-user-btn:active,
+.drawer-user-btn--open {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.drawer-user-icon {
+  flex-shrink: 0;
+  color: #4b5563;
+}
+
+.drawer-user-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-user-chevron {
+  flex-shrink: 0;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+}
+
+.drawer-user-btn--open .drawer-user-chevron {
+  transform: rotate(180deg);
+}
+
 .drawer-theme-btn {
+  flex-shrink: 0;
   border: 1px solid rgba(0, 0, 0, 0.1);
   background: rgba(0, 0, 0, 0.04);
   color: #374151;
@@ -1299,6 +1499,13 @@ function openWebPreview(url) {
 html[data-theme='dark'] .phone {
   background: #171717;
 }
+html[data-theme='dark'] .water-wash {
+  background:
+    radial-gradient(80% 55% at 50% 115%, rgba(30, 180, 140, 0.25), transparent 62%),
+    radial-gradient(46% 38% at 18% 24%, rgba(34, 201, 157, 0.12), transparent 70%),
+    radial-gradient(40% 34% at 84% 16%, rgba(30, 180, 140, 0.15), transparent 72%),
+    linear-gradient(180deg, rgba(15, 20, 24, 0.85), rgba(11, 13, 19, 0.95));
+}
 html[data-theme='dark'] .topbar {
   background: rgba(28, 28, 28, 0.94);
   border-bottom-color: rgba(255, 255, 255, 0.08);
@@ -1323,6 +1530,9 @@ html[data-theme='dark'] .file-btn {
 html[data-theme='dark'] .mobile-chat {
   background: #212121;
 }
+html[data-theme='dark'] .booting {
+  color: #9ca3af;
+}
 html[data-theme='dark'] .drawer {
   background: #1f1f1f;
   box-shadow: 8px 0 30px rgba(0, 0, 0, 0.45);
@@ -1331,11 +1541,22 @@ html[data-theme='dark'] .new-task {
   background: #333333;
   color: #f5f5f5;
 }
+html[data-theme='dark'] .section-label {
+  color: #9ca3af;
+}
 html[data-theme='dark'] .task-row {
   color: #e5e5e5;
 }
 html[data-theme='dark'] .task-row--active {
   background: #2b2b2b;
+}
+html[data-theme='dark'] .rename-input {
+  background: #141414;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .mini-btn {
+  color: #9ca3af;
 }
 html[data-theme='dark'] .mini-menu,
 html[data-theme='dark'] .mini-menu button,
@@ -1344,9 +1565,49 @@ html[data-theme='dark'] .confirm-card {
   border-color: rgba(255, 255, 255, 0.1);
   color: #f5f5f5;
 }
+html[data-theme='dark'] .confirm-sub {
+  color: #9ca3af;
+}
+html[data-theme='dark'] .confirm-actions button {
+  background: #333333;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+html[data-theme='dark'] .danger-fill {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+html[data-theme='dark'] .drawer-user-menu {
+  background: #262626;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+html[data-theme='dark'] .drawer-menu-item {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .drawer-menu-item:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .drawer-menu-item--danger {
+  color: #f87171;
+}
+html[data-theme='dark'] .drawer-menu-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
 html[data-theme='dark'] .drawer-user {
   border-top-color: rgba(255, 255, 255, 0.08);
   color: #9ca3af;
+}
+html[data-theme='dark'] .drawer-user-btn {
+  color: #e5e5e5;
+}
+html[data-theme='dark'] .drawer-user-btn:active,
+html[data-theme='dark'] .drawer-user-btn--open {
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-theme='dark'] .drawer-user-icon {
+  color: #b5b5b5;
 }
 html[data-theme='dark'] .drawer-theme-btn {
   background: rgba(255, 255, 255, 0.08);

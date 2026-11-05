@@ -45,6 +45,10 @@ export function applyThemeToDom() {
   root.setAttribute('data-theme-mode', themeMode.value)
   root.classList.toggle('dark', current === 'dark')
   root.style.colorScheme = current
+  const metaTheme = document.querySelector('meta[name="theme-color"]')
+  if (metaTheme) {
+    metaTheme.setAttribute('content', current === 'dark' ? '#171717' : '#f2f2f2')
+  }
 }
 
 export function setThemeMode(mode) {

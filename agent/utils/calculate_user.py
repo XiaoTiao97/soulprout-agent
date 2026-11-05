@@ -1,19 +1,37 @@
-from pymongo import MongoClient
+import os
+from pathlib import Path
+from urllib.parse import quote_plus
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from pymongo import MongoClient
 
-# -------------------------- 配置项，根据你实际情况修改 --------------------------
-MONGO_HOST = "localhost"  # MongoDB地址
-MONGO_PORT = 27017  # MongoDB端口
-DB_NAME = "soulprout"  # 数据库名称
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+# -------------------------- 配置项，支持从 agent/.env 读取 --------------------------
+MONGO_HOST = (os.getenv("MONGO_HOST") or os.getenv("DOCKER_SERVER_HOST") or "localhost").strip()
+MONGO_PORT = int((os.getenv("MONGO_PORT") or "27017").strip())
+MONGO_USER = (os.getenv("MONGO_USER") or "").strip()
+MONGO_PASSWORD = (os.getenv("MONGO_PASSWORD") or "").strip()
+MONGO_AUTH_SOURCE = (os.getenv("MONGO_AUTH_SOURCE") or "admin").strip()
+DB_NAME = (os.getenv("MONGO_DATABASE") or "soulprout").strip()
 USER_COLLECTION = "user_info"  # 用户信息集合名
 CONV_COLLECTION = "conversations"  # 会话集合名
+
+
+def _build_mongo_client() -> MongoClient:
+    if MONGO_USER and MONGO_PASSWORD:
+        u = quote_plus(MONGO_USER)
+        p = quote_plus(MONGO_PASSWORD)
+        uri = f"mongodb://{u}:{p}@{MONGO_HOST}:{MONGO_PORT}/?authSource={quote_plus(MONGO_AUTH_SOURCE)}"
+        return MongoClient(uri)
+    return MongoClient(host=MONGO_HOST, port=MONGO_PORT)
 
 
 # ---------------------------------------------------------------------------
 
 def get_user_stats():
     # 连接MongoDB
-    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    client = _build_mongo_client()
     db = client[DB_NAME]
 
     # 1. 获取总用户数

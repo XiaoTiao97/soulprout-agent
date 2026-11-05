@@ -9,12 +9,17 @@
 
 当前用户来自 contextvars。HTTP 中间件、WebSocket、定时任务和 Chat
 会在进入对应用户的工作时绑定它；同一任务里后续创建的子任务会继承。
+
+日志脱敏：
+所有经过 Formatter 输出的日志正文与异常堆栈均会递归脱敏 Authorization / x-api-key / api_key
+及 sk- 开头的密钥，防止明文 Key 写入日志文件或控制台。
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -29,6 +34,34 @@ _FILE_HANDLER: logging.Handler | None = None
 _STREAM_HANDLER: logging.Handler | None = None
 
 _FOREIGN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access", "uvicorn.asgi")
+
+# ── 敏感信息递归/正则脱敏规则 ────────────────────────────────────────────────
+_REDACT_PATTERNS = [
+    # Bearer <token>
+    (re.compile(r"(Bearer\s+)[A-Za-z0-9._\-]{10,}", re.IGNORECASE), r"\1[REDACTED]"),
+    # sk-xxxx 形式的 API Key（排除默认占位符 sk-xxx）
+    (re.compile(r"\bsk-(?!xxx\b)[A-Za-z0-9._\-]{10,}"), "sk-[REDACTED]"),
+    # JSON / Dict / Query 中的敏感字段：api_key, x-api-key, authorization, password, secret
+    (
+        re.compile(
+            r"""(['"]?(?:api[-_]?key|x-api-key|authorization|mongo_password|api_key_master_key[s]?)['"]?\s*[:=]\s*['"])([^'"]{6,})(['"])""",
+            re.IGNORECASE,
+        ),
+        r"\1[REDACTED]\3",
+    ),
+    # 火山方舟 / 千帆 bce-v3 等前缀
+    (re.compile(r"\bbce-v3/[A-Za-z0-9._\-/]{12,}"), "bce-v3/[REDACTED]"),
+]
+
+
+def redact_sensitive_text(text: str) -> str:
+    """对日志文本和异常堆栈中的敏感密钥做脱敏替换。"""
+    if not text or not isinstance(text, str):
+        return text
+    out = text
+    for pattern, repl in _REDACT_PATTERNS:
+        out = pattern.sub(repl, out)
+    return out
 
 
 def _clean_user_id(user_id: str | None) -> str | None:
@@ -62,12 +95,13 @@ def user_log_scope(user_id: str | None):
 
 
 class UserIdFormatter(logging.Formatter):
-    """有 user_id 时把它放在整行最前面。"""
+    """有 user_id 时把它放在整行最前面，并对整条输出（含异常堆栈）执行敏感词脱敏。"""
 
     def format(self, record: logging.LogRecord) -> str:
         user_id = _clean_user_id(getattr(record, "user_id", None)) or current_user_id()
         record.user_prefix = f"[{user_id}] " if user_id else ""
-        return super().format(record)
+        formatted = super().format(record)
+        return redact_sensitive_text(formatted)
 
 
 def _retention_days() -> int:

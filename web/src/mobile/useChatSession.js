@@ -301,6 +301,7 @@ export function useChatSession() {
       await loadSoulproutConversation()
     } else {
       chatMode.value = 'task'
+      await fetchConversations()
       if (cachedTaskChatRequest.value) {
         chat_request.value = { ...cachedTaskChatRequest.value }
         cachedTaskChatRequest.value = null
@@ -784,11 +785,15 @@ export function useChatSession() {
               const existing = conversation_list.value.find((item) => item.conversation_id === chunk.conversation_id)
               if (existing) {
                 existing.abstract = abstract.value
+                if (chunk.workspace) existing.workspace = chunk.workspace
+                if (chunk.device_name) existing.device_name = chunk.device_name
               } else {
                 conversation_list.value.unshift({
                   user_id: chunk.user_id,
                   conversation_id: chunk.conversation_id,
                   abstract: abstract.value,
+                  workspace: chunk.workspace,
+                  device_name: chunk.device_name,
                   create_at: '',
                   updated_at: '',
                 })
@@ -1111,5 +1116,6 @@ export function useChatSession() {
     updateConversationAbstract,
     openRunningConversation,
     refreshHistory,
+    getLLMmodels,
   }
 }

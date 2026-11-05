@@ -74,7 +74,7 @@ body {
   overflow: hidden;
   background: var(--dk-page);
   color: var(--dk-fg);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--dk-line);
   border-radius: var(--dk-radius);
   box-sizing: border-box;
   font-family: 'Microsoft YaHei UI', system-ui, sans-serif;
@@ -291,7 +291,7 @@ html.soulprout-desktop .user-menu-item {
 
 .dk-back:hover {
   color: var(--dk-fg);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--dk-hover);
 }
 
 .dk-page h1 {
@@ -339,7 +339,7 @@ html.soulprout-desktop .user-menu-item {
   margin: 0 0 12px;
   font-size: 14px;
   line-height: 1.6;
-  color: rgb(120, 120, 120);
+  color: var(--dk-muted);
 }
 
 .dk-block-desc.dk-tight {
@@ -433,11 +433,11 @@ html.soulprout-desktop .user-menu-item {
 .dk-choice-desc {
   font-size: 13px;
   line-height: 1.5;
-  color: rgb(140, 140, 140);
+  color: var(--dk-muted);
 }
 
 .dk-choice:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--dk-hover);
 }
 
 .dk-tag {
@@ -454,7 +454,7 @@ html.soulprout-desktop .user-menu-item {
 
 .dk-tag.is-muted {
   color: var(--dk-muted);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--dk-hover);
 }
 
 .dk-link,
@@ -494,7 +494,7 @@ html.soulprout-desktop .user-menu-item {
 }
 
 .dk-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--dk-hover);
   color: var(--dk-fg);
 }
 
@@ -599,7 +599,7 @@ html.soulprout-desktop .user-menu-item {
 }
 
 .dk-channel-head:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--dk-hover);
 }
 
 .dk-channel-logo {
@@ -625,7 +625,7 @@ html.soulprout-desktop .user-menu-item {
 
 .dk-channel-desc {
   font-size: 13px;
-  color: rgb(140, 140, 140);
+  color: var(--dk-muted);
 }
 
 .dk-channel-status {
@@ -954,3 +954,41 @@ html.soulprout-desktop .dk-panel .hover-hint::after,
 html.soulprout-desktop .dk-titlebar .hover-hint::after {
   display: none !important;
 }
+
+/* ---- 桌面外壳暗色细节适配 ---- */
+html[data-theme='dark'] .dk-check {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+html[data-theme='dark'] .dk-choice.is-active:not(.is-danger) .dk-check {
+  color: #171717;
+}
+
+html[data-theme='dark'] .dk-choice.is-danger.is-active .dk-check {
+  color: #ffffff;
+}
+
+html[data-theme='dark'] .dk-tag:not(.is-muted),
+html[data-theme='dark'] .dk-channel-status.is-on {
+  color: var(--dk-accent);
+}
+
+html[data-theme='dark'] .dk-dot:not(.is-online) {
+  background: #525252;
+}
+
+html[data-theme='dark'] .dk-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+html[data-theme='dark'] .dk-dialog {
+  border: 1px solid var(--dk-line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme='dark'] .dk-btn.is-primary:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #171717;
+}
+

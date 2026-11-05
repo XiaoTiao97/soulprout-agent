@@ -62,6 +62,7 @@
             <div class="preview-content">
               <div v-if="previewError" class="error">{{ previewError }}</div>
               <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
+              <video v-else-if="isVideo" :src="fileUrl" controls preload="metadata" playsinline class="preview-video"></video>
               <iframe v-else-if="isHtml" :src="fileUrl" class="html-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
               <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" />
               <VueOfficePdf v-else-if="isPdf" :src="fileUrl" />
@@ -480,6 +481,7 @@
                 <div v-if="saveError" class="save-feedback error">{{ saveError }}</div>
               </div>
               <img v-else-if="isImage" :src="fileUrl" alt="Image Preview" class="preview-image" />
+              <video v-else-if="isVideo" :src="fileUrl" controls preload="metadata" playsinline class="preview-video"></video>
               <iframe v-else-if="isHtml" :src="fileUrl" class="html-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
               <VueOfficeExcel v-else-if="isExcel" :src="fileUrl" />
               <VueOfficePdf v-else-if="isPdf" :src="fileUrl" />
@@ -527,6 +529,7 @@ import ToolCallsBlock from './ToolCallsBlock.vue'
 import { buildToolCallItems } from '../utils/toolCallDisplay'
 import {
   buildWorkspaceFileContentUrl,
+  isVideoFileName,
   isWorkspaceRelativeUrl,
   normalizeWorkspaceFilePath,
   preprocessMarkdownImages,
@@ -873,6 +876,18 @@ const defaultExtraImageRenderer =
 md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const rawSrc = token.attrGet('src') || ''
+  if (isVideoFileName(rawSrc)) {
+    if (isWorkspaceRelativeUrl(rawSrc)) {
+      const cleanPath = normalizeWorkspaceFilePath(rawSrc)
+      const cid = env?.conversationId || ''
+      if (cleanPath && cid) {
+        const resolvedUrl = buildWorkspaceFileContentUrl(cleanPath, cid)
+        return `<video class="preview-video" controls preload="metadata" playsinline src="${md.utils.escapeHtml(resolvedUrl)}"></video>`
+      }
+    } else if (/^https?:\/\//i.test(rawSrc)) {
+      return `<video class="preview-video" controls preload="metadata" playsinline referrerpolicy="no-referrer" src="${md.utils.escapeHtml(rawSrc)}"></video>`
+    }
+  }
   if (isWorkspaceRelativeUrl(rawSrc)) {
     const cleanPath = normalizeWorkspaceFilePath(rawSrc)
     const cid = env?.conversationId || ''
@@ -1449,6 +1464,7 @@ const fileExtension = computed(() => {
 })
 
 const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(fileExtension.value))
+const isVideo = computed(() => ['mp4', 'mov', 'webm'].includes(fileExtension.value))
 const isHtml = computed(() => selectedFile.value?.endsWith('.html'))
 const isDocx = computed(() => ['doc', 'docx'].includes(fileExtension.value))
 const isExcel = computed(() => ['xls', 'xlsx'].includes(fileExtension.value))
@@ -1456,7 +1472,7 @@ const isPdf = computed(() => fileExtension.value === 'pdf')
 const isPpt = computed(() => ['ppt', 'pptx'].includes(fileExtension.value))
 const isTextFile = computed(() => {
   // Files that can be opened with open() or markdown - assuming txt, md, etc.
-  return ['txt', 'md', 'json', 'csv'].includes(fileExtension.value) || (!isImage.value && !isHtml.value && !isDocx.value && !isExcel.value && !isPdf.value && !isPpt.value)
+  return ['txt', 'md', 'json', 'csv'].includes(fileExtension.value) || (!isImage.value && !isVideo.value && !isHtml.value && !isDocx.value && !isExcel.value && !isPdf.value && !isPpt.value)
 })
 const isEditableFile = computed(() => {
   // Files that can be edited as text
@@ -4111,6 +4127,17 @@ const handleKeyDown = (event: KeyboardEvent) => {
 .preview-image:hover {
   transform: scale(1.01);
   box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+.preview-video {
+  max-width: 100%;
+  max-height: 75vh;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  background: #000;
 }
 
 .unsupported {

@@ -32,6 +32,15 @@ class UserInfo(Document):
     agentname: str = Field(default=DEFAULT_AGENT_NAME, max_length=64)
     agentinfo: str = Field(default=DEFAULT_AGENT_INFO, max_length=1024)
 
+    # ─── 用户自定义 API Key 模式与指定模型配置 ───────────────────────────────
+    use_custom_key: bool = Field(default=False)
+    custom_soulprout_source: Optional[str] = Field(default=None, max_length=64)
+    custom_soulprout_model: Optional[str] = Field(default=None, max_length=128)
+    custom_pro_source: Optional[str] = Field(default=None, max_length=64)
+    custom_pro_model: Optional[str] = Field(default=None, max_length=128)
+    custom_flash_source: Optional[str] = Field(default=None, max_length=64)
+    custom_flash_model: Optional[str] = Field(default=None, max_length=128)
+
     class Settings:
         name = "user_info"
         indexes = [

@@ -28,6 +28,7 @@ from agent.skill.manager import load_skill_to_workspace
 from agent.tool.tools import ToolExecutor
 from agent.services import desktop_bridge
 from agent.services import exception_handler, prompt
+from agent.services.api_key_service import apply_user_model_settings
 from agent.services.blueprint import Blueprint
 from agent.services.compress import Compress
 from agent.services.memory import Memory
@@ -97,6 +98,7 @@ class Chat:
         self.agent_card = None
         self.sub_agents = []
         self.picture_base64_result = []
+        self.model_fallback_notices: list[str] = []
         self.pause_for_user_feedback = False
         self.stop_after_conversation_clear = False
         self.stop_after_silent = False
@@ -115,7 +117,7 @@ class Chat:
             "read",
             "write",
             "edit",
-            "picture",
+            "media",
             "bash",
             "list_info",
             "skills",
@@ -266,6 +268,40 @@ class Chat:
         if isinstance(value, list):
             return [str(item) for item in value if item is not None and str(item).strip()]
         return []
+
+    def _resolve_agent_card_model(self, agent_card: AgentCard) -> tuple[str, str]:
+        """
+        当用户开启自定义 API Key 时，解析智能体卡片实际使用的 (model_source, model)：
+        1. 若是系统内置智能体（见 config.system_builtin_agent_ids()），直接使用用户指定的 flash 模型；
+        2. 若是用户自建/市场订阅的专家智能体：
+           - 若用户已配置该专家原 model_source 的 Key，继续使用原模型；
+           - 若用户未配置该平台的 Key，自动回退到用户指定的 flash 模型，并追加前端提示。
+        """
+        src = agent_card.model_source
+        mod = agent_card.model
+        if not getattr(self.config, "user_custom_key_enabled", False):
+            return src, mod
+
+        builtin_ids = self.config.system_builtin_agent_ids()
+        if (
+            getattr(agent_card, "user_id", None) == "soulprout"
+            or agent_card.agent_id in builtin_ids
+            or agent_card.name in builtin_ids
+        ):
+            return self.config.flash_model_source, self.config.flash_model
+
+        configured = getattr(self.config, "user_configured_sources", set()) or set()
+        if src in configured:
+            return src, mod
+
+        display = agent_card.name_zh or agent_card.name or agent_card.agent_id
+        notice = (
+            f"提示：专家「{display}」原模型平台（{src}）未配置自定义 API Key，"
+            f"已自动切换为您指定的 Flash 模型（{self.config.flash_model_source}: {self.config.flash_model}）。"
+        )
+        if notice not in self.model_fallback_notices:
+            self.model_fallback_notices.append(notice)
+        return self.config.flash_model_source, self.config.flash_model
 
     # llm_stream/大模型流式输出
     async def llm_stream(self, messages, model_config):
@@ -651,8 +687,8 @@ class Chat:
 
         self.system_prompt = agent_card.system_prompt
         tools_use_list = list(agent_card.tools or [])
-        if "read_picture" in tools_use_list and "picture" not in tools_use_list:
-            tools_use_list.append("picture")
+        if any(t in tools_use_list for t in ("read_picture", "picture")) and "media" not in tools_use_list:
+            tools_use_list.append("media")
 
         if agent_card.agents:
             sub_agent_name_list = []
@@ -671,8 +707,7 @@ class Chat:
         skills_list = await self.expert_load_skills(skills_use_dict) if skills_use_dict else []
         self.system_prompt += f"\nThe following skills has been loaded to workspace: {skills_list}" if skills_use_dict else ""
         self.system_prompt += prompt.SUB_AGENT_PROMPT.format(agents_dict=self.agents_dict)
-        self.model_source = agent_card.model_source
-        self.model = agent_card.model
+        self.model_source, self.model = self._resolve_agent_card_model(agent_card)
         self.kb_use = agent_card.kbs
 
         tools = await self.mcp_list_tools()
@@ -900,8 +935,8 @@ class Chat:
             ).model_dump_json()
 
     async def process_single_tool(self, name, arguments, message, tool_id):
-        if name in ("read_picture", "picture") and (
-            name == "read_picture" or str(arguments.get("module") or "read").strip().lower() == "read"
+        if name in ("read_picture", "picture", "media") and (
+            name == "read_picture" or str(arguments.get("module") or "read").strip().lower() in ("read", "read_image", "read_picture")
         ):
             result = await self.mcp_call_tool(name=name, arguments=arguments)
             if not ("deepseek" in self.model or "doubao" in self.model or "kimi" in self.model or "mimo" in self.model):
@@ -1281,15 +1316,14 @@ class Chat:
         skills_use_dict = agent_card.skills
         skills_list = await self.expert_load_skills(skills_use_dict) if skills_use_dict else []
         self.system_prompt += f"\n已加载以下skills至工作区: {skills_list}" if skills_use_dict else ""
-        self.model_source = agent_card.model_source
-        self.model = agent_card.model
+        self.model_source, self.model = self._resolve_agent_card_model(agent_card)
         self.kb_use = preserve_kb_use if preserve_kb_use is not None else agent_card.kbs
 
         tools_use_final = []
         tools = await self.mcp_list_tools()
         tools_use_list = list(agent_card.tools or [])
-        if "read_picture" in tools_use_list and "picture" not in tools_use_list:
-            tools_use_list.append("picture")
+        if any(t in tools_use_list for t in ("read_picture", "picture")) and "media" not in tools_use_list:
+            tools_use_list.append("media")
         for tool in tools:
             tool_name = tool.get("function").get("name")
             if tool_name in tools_use_list:
@@ -1326,7 +1360,17 @@ class Chat:
         ))
 
     async def run_sub_agent(self):
+        await apply_user_model_settings(self.config, self.user_id)
         tools = await self.sub_agent_process()
+        for notice in self.model_fallback_notices:
+            yield ChatResponse(
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                type="event",
+                role="assistant",
+                content=notice,
+            ).model_dump_json()
+        self.model_fallback_notices.clear()
         self.system_prompt += await self.get_kb_prompt() if len(self.kb_use) > 0 else ""
         tool_name_list = [tool.get("function").get("name") for tool in tools]
         logger.info("子智能体加载tools数量：%s，加载的tool:%s", len(tools), tool_name_list)
@@ -1493,10 +1537,21 @@ class Chat:
             await self.history_check()
 
     async def run(self):
+        await apply_user_model_settings(self.config, self.user_id)
         if self.is_sub_agent:
             async for chunk in self.run_sub_agent():
                 yield chunk
             return
+
+        # 若用户在普通任务模式下传入的 model_source 未配置自定义 Key，回退到用户的 pro 模型
+        if (
+            getattr(self.config, "user_custom_key_enabled", False)
+            and self.agent_use not in ("soulprout", "expert-agent")
+        ):
+            configured = getattr(self.config, "user_configured_sources", set()) or set()
+            if not self.model_source or self.model_source not in configured:
+                self.model_source = self.config.pro_model_source
+                self.model = self.config.pro_model
 
         # process edit
         if self.input_message_id:
@@ -1556,6 +1611,15 @@ class Chat:
         result = await self.save_message(AgentMessage(user_id=self.user_id, conversation_id=self.conversation_id, type=user_msg_type, role="user", content=self.input_text, created_at=datetime.utcnow(), meta=desktop_bridge.source_header(self)))
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="user_message", role="user", content=self.input_text).model_dump_json()
         yield ChatResponse(conversation_id=self.conversation_id, user_id=self.user_id, type="input_message_id", content=str(result.id)).model_dump_json()
+        for notice in self.model_fallback_notices:
+            yield ChatResponse(
+                conversation_id=self.conversation_id,
+                user_id=self.user_id,
+                type="event",
+                role="assistant",
+                content=notice,
+            ).model_dump_json()
+        self.model_fallback_notices.clear()
 
         # 处理上传文件
         await self.upload_files()

@@ -7,6 +7,21 @@
     <meta name="theme-color" content="#f2f2f2" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Soulprout</title>
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('soulprout-theme-mode') || 'system';
+          var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = mode === 'dark' || (mode === 'system' && sysDark) ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-theme-mode', mode);
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = theme;
+          var metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#171717' : '#f2f2f2');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

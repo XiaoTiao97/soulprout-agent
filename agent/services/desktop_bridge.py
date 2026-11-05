@@ -30,9 +30,9 @@ from agent.services.desktop_hub import DeviceCallTimeout, DeviceOffline, hub
 
 logger = logging.getLogger(__name__)
 
-LOCAL_TOOL_NAMES = frozenset({"read", "write", "edit", "picture", "read_picture", "bash"})
+LOCAL_TOOL_NAMES = frozenset({"read", "write", "edit", "media", "picture", "read_picture", "bash"})
 # 会产生写入/执行效果的工具（沙盒升级参数的词汇沿用 deepseek-harness，见 desktop/NOTICE.md）。
-MUTATING_TOOL_NAMES = frozenset({"write", "edit", "picture", "bash"})
+MUTATING_TOOL_NAMES = frozenset({"write", "edit", "media", "picture", "bash"})
 ESCALATION_TARGETS = ("workspace-write", "danger-full-access")
 
 # route_local_tool 的返回哨兵：表示「不归桌面端管，继续走云端原逻辑」
@@ -311,17 +311,25 @@ async def route_local_tool(config, name: str, arguments: Dict[str, Any]) -> Any:
         # 之前设备离线没推送成功的智能体文件 / 技能，趁设备回来先补上
         await sync_to_device(config, conversation_id)
 
-    # picture(module=read) 若读取的是网络 URL，直接走云端拉取，无需唤醒本地电脑
-    if name in ("picture", "read_picture") and str(arguments.get("module") or "read").strip().lower() == "read":
+    # media/picture(module=read) 若读取的是网络 URL，直接走云端拉取，无需唤醒本地电脑
+    mod_lower = str(arguments.get("module") or "read").strip().lower()
+    if name in ("media", "picture", "read_picture") and mod_lower in ("read", "read_image", "read_picture"):
         fn_arg = str(arguments.get("file_name") or "").strip().lower()
         if fn_arg.startswith(("http://", "https://")):
             arguments.pop("sandbox_permissions", None)
             arguments.pop("justification", None)
             return NOT_ROUTED
 
-    # picture(module=generate) 需使用云端的火山方舟 API Key 调用生图接口，
-    # 但参考图读取和产出图落盘都在用户电脑工作区执行。
-    if name == "picture" and str(arguments.get("module") or "read").strip().lower() == "generate":
+    # media/picture(module=generate_image/generate_video/generate) 需使用云端的火山方舟 API Key 调用生图/生视频接口，
+    # 但参考图/参考音频读取和产出文件落盘都在用户电脑工作区执行。
+    if name in ("media", "picture") and mod_lower in (
+        "generate",
+        "generate_image",
+        "image",
+        "generate_picture",
+        "generate_video",
+        "video",
+    ):
         arguments["_local_device"] = {
             "user_id": user_id,
             "device_id": device_id,
@@ -348,7 +356,7 @@ async def route_local_tool(config, name: str, arguments: Dict[str, Any]) -> Any:
     except Exception as exc:
         logger.warning("[DesktopBridge] 本地工具调用失败 tool=%s: %s", name, exc)
         message = f"错误：本地工具调用失败：{exc}"
-    if name in ("read_picture", "picture"):
+    if name in ("read_picture", "picture", "media"):
         return {"ok": False, "message": message, "base64": None, "media_type": None}
     return message
 
@@ -564,7 +572,7 @@ async def prepare_request(chat_request, user_id: str) -> None:
 
 _DEVICE_PROMPT_STATIC = (
     "# LOCAL DEVICE\n"
-    "read/write/edit/picture/bash take an optional `target`: \"cloud\" (default, your sandbox on the "
+    "read/write/edit/media/bash take an optional `target`: \"cloud\" (default, your sandbox on the "
     "server) or \"local\" (the user's own computer, when the desktop app is online). The two are separate "
     "file systems; a file created in one is not visible in the other. Local operations may be blocked by "
     "the user's permission settings or need their approval; that is the user's decision, so explain it "

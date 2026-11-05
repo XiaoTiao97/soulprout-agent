@@ -271,6 +271,47 @@ class SoulproutToolFunction:
         return None
 
     SEEDREAM_MODEL_ID = "doubao-seedream-5-0-pro-260628"
+    SEEDANCE_MODEL_ID = "doubao-seedance-2-5-260628"
+
+    @staticmethod
+    def _seedance_audio_format(data: bytes, file_name: str = "") -> str | None:
+        """识别火山方舟 Seedance 2.5 参考音频支持的格式名称（wav / mp3，用于 data:audio/<format>;base64,...）。"""
+        if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WAVE":
+            return "wav"
+        if data.startswith(b"ID3") or (len(data) >= 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0):
+            return "mp3"
+        ext = os.path.splitext(file_name or "")[1].lower().lstrip(".")
+        if ext in ("wav", "mp3"):
+            return ext
+        return None
+
+    async def _resolve_user_media_ark_api_key(self, conversation_id: str | None = None) -> tuple[bool, str]:
+        """校验当前用户是否启用并配置了自己的火山方舟（豆包）API Key。未配置自己的 API Key 时不调用生图/生视频 API。"""
+        custom_enabled = getattr(self.config, "user_custom_key_enabled", None)
+        if custom_enabled is None and conversation_id:
+            try:
+                uid = await self._get_user_id_by_conversation_id(conversation_id)
+                if uid:
+                    from agent.services.api_key_service import apply_user_model_settings
+
+                    await apply_user_model_settings(self.config, uid)
+                    custom_enabled = getattr(self.config, "user_custom_key_enabled", False)
+            except Exception:
+                custom_enabled = False
+
+        if not custom_enabled:
+            return (
+                False,
+                "使用生图和生视频功能需要配置自己的 API Key。请在左下角【API Key 设置】中开启「使用自己的 API Key」，并填入火山方舟（豆包）的 API Key。",
+            )
+
+        api_key = (getattr(self.config, "ark_key", None) or "").strip()
+        if not api_key or api_key == "sk-xxx":
+            return (
+                False,
+                "使用生图和生视频功能需要配置自己的 API Key（生图与生视频默认使用火山方舟/豆包系列模型，请在左下角【API Key 设置】中填写火山方舟的 API Key）。",
+            )
+        return True, api_key
 
     async def read_picture(self, file_name, conversation_id):
         raw_name = str(file_name or "").strip()
@@ -320,13 +361,25 @@ class SoulproutToolFunction:
         except Exception as e:
             return {"ok": False, "message": f"读取图片失败: {e}", "base64": None, "media_type": None}
 
-    async def picture(
+    async def media(
         self,
         module="read",
         conversation_id=None,
         file_name=None,
         prompt=None,
         image=None,
+        first_frame=None,
+        last_frame=None,
+        video=None,
+        audio=None,
+        duration=None,
+        ratio=None,
+        resolution=None,
+        generate_audio=True,
+        omni_reference_task_type=None,
+        draft=False,
+        draft_task_id=None,
+        return_last_frame=False,
         size=None,
         output_format=None,
         background=None,
@@ -336,11 +389,11 @@ class SoulproutToolFunction:
         _local_device=None,
     ):
         mod = str(module or "read").strip().lower()
-        if mod == "read":
+        if mod in ("read", "read_image", "read_picture"):
             if not file_name:
                 return {"ok": False, "message": "错误：module=read 时必须提供 file_name", "base64": None, "media_type": None}
             return await self.read_picture(file_name=file_name, conversation_id=conversation_id)
-        if mod == "generate":
+        if mod in ("generate_image", "generate", "image", "generate_picture"):
             return await self._generate_picture(
                 conversation_id=conversation_id,
                 file_name=file_name,
@@ -354,7 +407,32 @@ class SoulproutToolFunction:
                 watermark=watermark,
                 local_device=_local_device,
             )
-        return f"错误：picture 工具的 module 仅支持 read 或 generate（收到：{module}）"
+        if mod in ("generate_video", "video"):
+            return await self._generate_video(
+                conversation_id=conversation_id,
+                file_name=file_name,
+                prompt=prompt,
+                image=image,
+                first_frame=first_frame,
+                last_frame=last_frame,
+                video=video,
+                audio=audio,
+                duration=duration,
+                ratio=ratio,
+                resolution=resolution,
+                generate_audio=generate_audio,
+                omni_reference_task_type=omni_reference_task_type,
+                output_format=output_format,
+                watermark=watermark,
+                draft=draft,
+                draft_task_id=draft_task_id,
+                return_last_frame=return_last_frame,
+                local_device=_local_device,
+            )
+        return f"错误：media 工具的 module 仅支持 read、generate_image 或 generate_video（收到：{module}）"
+
+    async def picture(self, **kwargs):
+        return await self.media(**kwargs)
 
     async def _resolve_seedream_reference_images(
         self,
@@ -362,7 +440,7 @@ class SoulproutToolFunction:
         conversation_id: str,
         local_device: dict | None = None,
     ) -> tuple[bool, list[str] | str]:
-        """将模型传入的 image 参数（支持工作区本地文件路径、URL、data: URI）统一解析为方舟 API 接受的 URL 或 data:image/<fmt>;base64,... 列表。"""
+        """将模型传入的 image 参数（支持工作区本地文件路径、URL、asset://、data: URI）统一解析为方舟 API 接受的 URL 或 data:image/<fmt>;base64,... 列表。"""
         if image_inputs is None:
             return True, []
         if isinstance(image_inputs, str):
@@ -376,7 +454,7 @@ class SoulproutToolFunction:
         root = self._workspace_dir(conversation_id)
         for item in raw_list:
             lower = item.lower()
-            if lower.startswith(("http://", "https://", "data:image/")):
+            if lower.startswith(("http://", "https://", "data:image/", "asset://")):
                 resolved.append(item)
                 continue
 
@@ -411,6 +489,91 @@ class SoulproutToolFunction:
                 )
             b64_str = base64.b64encode(raw_bytes).decode("ascii")
             resolved.append(f"data:image/{fmt};base64,{b64_str}")
+
+        return True, resolved
+
+    @staticmethod
+    def _resolve_seedance_reference_videos(video_inputs) -> tuple[bool, list[str] | str]:
+        """解析 Seedance 2.5 参考视频列表（方舟 API 支持公网 http/https URL 或 asset:// 素材 ID）。"""
+        if video_inputs is None:
+            return True, []
+        if isinstance(video_inputs, str):
+            raw_list = [video_inputs.strip()] if video_inputs.strip() else []
+        elif isinstance(video_inputs, list):
+            raw_list = [str(item).strip() for item in video_inputs if item is not None and str(item).strip()]
+        else:
+            return False, "错误：video 参数必须是字符串数组或字符串"
+
+        if len(raw_list) > 10:
+            return False, f"错误：Seedance 2.5 最多支持传入 10 个参考视频（当前传入 {len(raw_list)} 个）。"
+
+        resolved: list[str] = []
+        for item in raw_list:
+            lower = item.lower()
+            if lower.startswith(("http://", "https://", "asset://")):
+                resolved.append(item)
+            else:
+                return (
+                    False,
+                    f"错误：火山方舟 Seedance 2.5 的参考视频（video）仅支持公网 http/https URL 或 asset:// 素材 ID，不支持直接传入本地文件路径：{item}",
+                )
+        return True, resolved
+
+    async def _resolve_seedance_reference_audios(
+        self,
+        audio_inputs,
+        conversation_id: str,
+        local_device: dict | None = None,
+    ) -> tuple[bool, list[str] | str]:
+        """解析 Seedance 2.5 参考音频列表（支持工作区本地 wav/mp3 文件自动转 Base64 Data URI、公网 URL、asset:// 素材 ID）。"""
+        if audio_inputs is None:
+            return True, []
+        if isinstance(audio_inputs, str):
+            raw_list = [audio_inputs.strip()] if audio_inputs.strip() else []
+        elif isinstance(audio_inputs, list):
+            raw_list = [str(item).strip() for item in audio_inputs if item is not None and str(item).strip()]
+        else:
+            return False, "错误：audio 参数必须是字符串数组或字符串"
+
+        if len(raw_list) > 10:
+            return False, f"错误：Seedance 2.5 最多支持传入 10 段参考音频（当前传入 {len(raw_list)} 段）。"
+
+        resolved: list[str] = []
+        root = self._workspace_dir(conversation_id)
+        for item in raw_list:
+            lower = item.lower()
+            if lower.startswith(("http://", "https://", "data:audio/", "asset://")):
+                resolved.append(item)
+                continue
+
+            clean_rel = item.replace("\\", "/").lstrip("/")
+            if clean_rel.startswith("workspace/"):
+                clean_rel = clean_rel[len("workspace/"):].lstrip("/")
+
+            if local_device:
+                ok, data_or_err = await read_local_picture_bytes(local_device, clean_rel, conversation_id)
+                if not ok:
+                    return False, str(data_or_err)
+                raw_bytes = data_or_err
+            else:
+                target = os.path.join(root, clean_rel)
+                if not os.path.exists(target) or not os.path.isfile(target):
+                    return False, f"错误：参考音频文件不存在：{clean_rel}"
+                try:
+                    async with aiofiles.open(target, "rb") as fh:
+                        raw_bytes = await fh.read()
+                except Exception as exc:
+                    return False, f"错误：读取参考音频 {clean_rel} 失败：{exc}"
+
+            if len(raw_bytes) > 15 * 1024 * 1024:
+                return False, f"错误：参考音频 {clean_rel} 超过 15MB 上限"
+
+            fmt = self._seedance_audio_format(raw_bytes, clean_rel)
+            if not fmt:
+                return False, f"错误：参考音频 {clean_rel} 格式不受支持（仅支持 wav、mp3）"
+
+            b64_str = base64.b64encode(raw_bytes).decode("ascii")
+            resolved.append(f"data:audio/{fmt};base64,{b64_str}")
 
         return True, resolved
 
@@ -452,13 +615,10 @@ class SoulproutToolFunction:
         watermark=False,
         local_device=None,
     ) -> str:
-        api_key = (
-            getattr(self.config, "ark_key", None)
-            or os.getenv("ARK_API_KEY")
-            or ""
-        ).strip()
-        if not api_key or api_key == "sk-xxx":
-            return "错误：未配置火山方舟（ark）API Key，请在 agent/.model.json 的 ark 配置项中填写有效的 api_key。"
+        ok_key, api_key_or_msg = await self._resolve_user_media_ark_api_key(conversation_id)
+        if not ok_key:
+            return api_key_or_msg
+        api_key = api_key_or_msg
 
         base_url = (
             getattr(self.config, "ark_base_url", None)
@@ -622,6 +782,329 @@ class SoulproutToolFunction:
         except Exception as exc:
             return f"错误：豆包 Seedream 5.0 Pro 生图异常：{exc}"
 
+    async def _generate_video(
+        self,
+        conversation_id,
+        file_name=None,
+        prompt=None,
+        image=None,
+        first_frame=None,
+        last_frame=None,
+        video=None,
+        audio=None,
+        duration=None,
+        ratio=None,
+        resolution=None,
+        generate_audio=True,
+        omni_reference_task_type=None,
+        output_format=None,
+        watermark=False,
+        draft=False,
+        draft_task_id=None,
+        return_last_frame=False,
+        local_device=None,
+    ) -> str:
+        ok_key, api_key_or_msg = await self._resolve_user_media_ark_api_key(conversation_id)
+        if not ok_key:
+            return api_key_or_msg
+        api_key = api_key_or_msg
+
+        base_url = (
+            getattr(self.config, "ark_base_url", None)
+            or os.getenv("ARK_BASE_URL")
+            or "https://ark.cn-beijing.volces.com/api/v3"
+        ).rstrip("/")
+        tasks_endpoint = f"{base_url}/contents/generations/tasks"
+
+        fmt = str(output_format or "mp4").strip().lower()
+        if fmt not in ("mp4", "mov"):
+            fmt = "mp4"
+
+        content: list[dict] = []
+        draft_id_str = str(draft_task_id or "").strip()
+
+        if draft_id_str:
+            content.append({"type": "draft_task", "draft_task": {"id": draft_id_str}})
+            payload: dict = {
+                "model": self.SEEDANCE_MODEL_ID,
+                "content": content,
+                "resolution": "1080p",
+                "output_format": fmt,
+                "watermark": bool(watermark) if watermark is not None else False,
+            }
+            if return_last_frame:
+                payload["return_last_frame"] = True
+        else:
+            prompt_str = str(prompt or "").strip()
+            if prompt_str:
+                content.append({"type": "text", "text": prompt_str})
+
+            first_frame_str = str(first_frame or "").strip()
+            last_frame_str = str(last_frame or "").strip()
+
+            if last_frame_str and not first_frame_str:
+                return "错误：指定尾帧图片（last_frame）时必须同时指定首帧图片（first_frame）。"
+
+            has_omni_inputs = bool(image or video or audio)
+            if first_frame_str and has_omni_inputs:
+                return (
+                    "错误：Seedance 2.5 中首帧/首尾帧生视频（first_frame / last_frame）与"
+                    "全模态参考生视频（image / video / audio）为互斥场景，不可同时传入。"
+                )
+
+            ref_images: list[str] = []
+            ref_videos: list[str] = []
+            ref_audios: list[str] = []
+
+            if first_frame_str:
+                frame_inputs = [first_frame_str] + ([last_frame_str] if last_frame_str else [])
+                ok_f, resolved_frames_or_err = await self._resolve_seedream_reference_images(
+                    frame_inputs, conversation_id, local_device=local_device
+                )
+                if not ok_f:
+                    return str(resolved_frames_or_err)
+                resolved_frames: list[str] = resolved_frames_or_err  # type: ignore[assignment]
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": resolved_frames[0]},
+                    "role": "first_frame",
+                })
+                if len(resolved_frames) > 1:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": resolved_frames[1]},
+                        "role": "last_frame",
+                    })
+            else:
+                ok_i, res_i = await self._resolve_seedream_reference_images(
+                    image, conversation_id, local_device=local_device
+                )
+                if not ok_i:
+                    return str(res_i)
+                ref_images = res_i  # type: ignore[assignment]
+                if len(ref_images) > 30:
+                    return f"错误：Seedance 2.5 最多支持传入 30 张参考图（当前传入 {len(ref_images)} 张）。"
+
+                ok_v, res_v = self._resolve_seedance_reference_videos(video)
+                if not ok_v:
+                    return str(res_v)
+                ref_videos = res_v  # type: ignore[assignment]
+
+                ok_a, res_a = await self._resolve_seedance_reference_audios(
+                    audio, conversation_id, local_device=local_device
+                )
+                if not ok_a:
+                    return str(res_a)
+                ref_audios = res_a  # type: ignore[assignment]
+
+                if len(ref_images) + len(ref_videos) + len(ref_audios) > 50:
+                    return "错误：Seedance 2.5 单次参考多模态素材总数不能超过 50 个。"
+
+                for img_url in ref_images:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": img_url},
+                        "role": "reference_image",
+                    })
+                for vid_url in ref_videos:
+                    content.append({
+                        "type": "video_url",
+                        "video_url": {"url": vid_url},
+                        "role": "reference_video",
+                    })
+                for aud_url in ref_audios:
+                    content.append({
+                        "type": "audio_url",
+                        "audio_url": {"url": aud_url},
+                        "role": "reference_audio",
+                    })
+
+            if not content:
+                return "错误：生成视频时必须提供 prompt 或参考素材（first_frame / image / video / audio）。"
+
+            has_omni_ref = bool(ref_images or ref_videos or ref_audios)
+            task_type = str(omni_reference_task_type or "auto").strip().lower()
+            if task_type not in ("auto", "reference", "edit", "extend"):
+                task_type = "auto"
+
+            if task_type in ("edit", "extend") and not ref_videos:
+                return f"错误：omni_reference_task_type={task_type}（视频编辑/延长）时必须通过 video 参数传入至少 1 个参考视频。"
+
+            # 宽高比：首帧/首尾帧、视频编辑、视频延长任务在 Seedance 2.5 中仅支持 adaptive
+            resolved_ratio = str(ratio or "adaptive").strip()
+            if resolved_ratio not in ("16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"):
+                resolved_ratio = "adaptive"
+            if first_frame_str or task_type in ("edit", "extend"):
+                resolved_ratio = "adaptive"
+
+            # 视频时长：视频编辑任务在 Seedance 2.5 中仅支持 -1；其他任务支持 [4, 30] 或 -1
+            if task_type == "edit":
+                resolved_duration = -1
+            elif duration is not None:
+                try:
+                    d_int = int(duration)
+                except (TypeError, ValueError):
+                    d_int = -1
+                if d_int != -1:
+                    d_int = max(4, min(30, d_int))
+                resolved_duration = d_int
+            else:
+                resolved_duration = -1
+
+            is_draft = bool(draft)
+            if is_draft:
+                resolved_res = "480p"
+            else:
+                resolved_res = str(resolution or "720p").strip().lower()
+                if resolved_res not in ("480p", "720p", "1080p"):
+                    resolved_res = "720p"
+
+            payload = {
+                "model": self.SEEDANCE_MODEL_ID,
+                "content": content,
+                "resolution": resolved_res,
+                "ratio": resolved_ratio,
+                "duration": resolved_duration,
+                "generate_audio": True if generate_audio is None else bool(generate_audio),
+                "output_format": fmt,
+                "watermark": bool(watermark) if watermark is not None else False,
+            }
+            if has_omni_ref:
+                payload["omni_reference_task_type"] = task_type
+            if is_draft:
+                payload["draft"] = True
+            if return_last_frame:
+                payload["return_last_frame"] = True
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+
+        try:
+            timeout = httpx.Timeout(120.0, connect=15.0)
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                create_resp = await client.post(tasks_endpoint, headers=headers, json=payload)
+                create_json = create_resp.json() if create_resp.content else {}
+                if create_resp.status_code >= 400 or "error" in create_json:
+                    err_obj = create_json.get("error") or {}
+                    err_msg = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj or create_resp.text)
+                    err_code = err_obj.get("code") if isinstance(err_obj, dict) else create_resp.status_code
+                    return f"错误：调用豆包 Seedance 2.5 创建生视频任务失败（{err_code}）：{err_msg}"
+
+                task_id = str(create_json.get("id") or "").strip()
+                if not task_id:
+                    return f"错误：豆包 Seedance 2.5 未返回有效的任务 ID：{create_json}"
+
+                # 轮询 GET /contents/generations/tasks/{task_id}（最长等待 30 分钟）
+                poll_url = f"{tasks_endpoint}/{task_id}"
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + 30 * 60
+                poll_count = 0
+                task_json: dict = {}
+
+                while loop.time() < deadline:
+                    poll_count += 1
+                    await asyncio.sleep(5.0 if poll_count <= 4 else 8.0)
+                    get_resp = await client.get(poll_url, headers=headers)
+                    task_json = get_resp.json() if get_resp.content else {}
+                    if get_resp.status_code >= 400 and "status" not in task_json:
+                        err_obj = task_json.get("error") or {}
+                        err_msg = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj or get_resp.text)
+                        err_code = err_obj.get("code") if isinstance(err_obj, dict) else get_resp.status_code
+                        return f"错误：查询豆包 Seedance 2.5 视频生成任务（{task_id}）失败（{err_code}）：{err_msg}"
+
+                    status = str(task_json.get("status") or "").strip().lower()
+                    if status == "succeeded":
+                        break
+                    if status in ("failed", "cancelled", "expired"):
+                        err_obj = task_json.get("error") or {}
+                        err_msg = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj or status)
+                        err_code = err_obj.get("code") if isinstance(err_obj, dict) else status
+                        return f"错误：豆包 Seedance 2.5 视频生成任务失败（task_id={task_id}, status={status}, code={err_code}）：{err_msg}"
+                else:
+                    return f"错误：豆包 Seedance 2.5 视频生成任务超时（超过 30 分钟仍未完成，task_id={task_id}）。"
+
+                content_obj = task_json.get("content") or {}
+                video_url = content_obj.get("video_url")
+                if not video_url:
+                    return f"错误：豆包 Seedance 2.5 任务已完成（task_id={task_id}），但未返回 video_url。"
+
+                actual_fmt = str(task_json.get("output_format") or fmt).strip().lower()
+                ext_map = {"mp4": ".mp4", "mov": ".mov"}
+                default_ext = ext_map.get(actual_fmt, ".mp4")
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                if file_name and str(file_name).strip():
+                    base_rel = str(file_name).strip().replace("\\", "/").lstrip("/")
+                    if base_rel.startswith("workspace/"):
+                        base_rel = base_rel[len("workspace/"):].lstrip("/")
+                    stem, user_ext = os.path.splitext(base_rel)
+                    if user_ext.lower() not in (".mp4", ".mov"):
+                        base_rel = f"{stem}{default_ext}"
+                else:
+                    stem = f"seedance_{ts}"
+                    base_rel = f"{stem}{default_ext}"
+
+                dl_resp = await client.get(video_url)
+                dl_resp.raise_for_status()
+                raw_video_bytes = dl_resp.content
+
+                ok_save, save_res = await self._save_generated_image_bytes(
+                    base_rel, raw_video_bytes, conversation_id, local_device=local_device
+                )
+                if not ok_save:
+                    return f"错误：{save_res}"
+
+                last_frame_file = None
+                last_frame_url = content_obj.get("last_frame_url")
+                if last_frame_url:
+                    try:
+                        lf_resp = await client.get(last_frame_url)
+                        lf_resp.raise_for_status()
+                        lf_stem, _ = os.path.splitext(save_res)
+                        lf_rel = f"{lf_stem}_last_frame.jpg"
+                        ok_lf, saved_lf = await self._save_generated_image_bytes(
+                            lf_rel, lf_resp.content, conversation_id, local_device=local_device
+                        )
+                        if ok_lf:
+                            last_frame_file = saved_lf
+                    except Exception:
+                        pass
+
+                video_entry: dict = {
+                    "task_id": task_id,
+                    "file_name": save_res,
+                    "markdown": f"![生成视频]({save_res})",
+                    "video_url": video_url,
+                    "resolution": task_json.get("resolution"),
+                    "ratio": task_json.get("ratio"),
+                    "duration": task_json.get("duration"),
+                    "output_format": task_json.get("output_format") or actual_fmt,
+                    "generate_audio": task_json.get("generate_audio"),
+                    "draft": task_json.get("draft", False),
+                }
+                if last_frame_file:
+                    video_entry["last_frame_file"] = last_frame_file
+                if task_json.get("usage"):
+                    video_entry["usage"] = task_json["usage"]
+
+                result_payload = {
+                    "ok": True,
+                    "model": self.SEEDANCE_MODEL_ID,
+                    "task_id": task_id,
+                    "file_name": save_res,
+                    "markdown": f"![生成视频]({save_res})",
+                    "message": (
+                        f"成功生成视频并保存至工作区（{save_res}）。"
+                        "请在回复中使用返回的 markdown 语法（如 ![生成视频](文件名)）直接向用户展示视频。"
+                    ),
+                    "video": video_entry,
+                }
+                return json.dumps(result_payload, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            return f"错误：豆包 Seedance 2.5 生视频异常：{exc}"
+
     async def bash(self, command, conversation_id):
         root = self._workspace_dir(conversation_id)
         os.makedirs(root, exist_ok=True)
@@ -695,9 +1178,13 @@ class SoulproutToolFunction:
         """统一信息列表查询：models / tools / agent_cards。"""
         if category == "models":
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(f"{self.main_base_url}/message/models", timeout=10.0)
-                return json.dumps(resp.json(), ensure_ascii=False, indent=2)
+                models_dict = {}
+                for models_info in self.config.models_info_list or []:
+                    if models_info.get("model_use") is True:
+                        models_dict[models_info.get("model_source")] = [
+                            model.get("name") for model in (models_info.get("models") or [])
+                        ]
+                return json.dumps(models_dict, ensure_ascii=False, indent=2)
             except Exception as e:
                 return f"错误：获取模型列表失败，失败原因：{e}"
         if category == "tools":

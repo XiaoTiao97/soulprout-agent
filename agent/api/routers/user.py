@@ -4,9 +4,21 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from agent.api.models.user import EmailCodeRequest, EmailLoginRequest, ProfileUpdateRequest, SsoTokenRequest
+from agent.api.models.user import (
+    EmailCodeRequest,
+    EmailLoginRequest,
+    ProfileUpdateRequest,
+    SaveUserApiKeyRequest,
+    SsoTokenRequest,
+    UpdateApiKeyPreferencesRequest,
+)
+from agent.services.api_key_service import (
+    delete_user_api_key,
+    get_user_api_key_settings,
+    save_user_api_key,
+    update_user_model_preferences,
+)
 from agent.services.auth import (
-    create_guest_user,
     get_current_user,
     login_or_register_by_email,
     login_or_register_by_user_id,
@@ -162,22 +174,103 @@ async def update_profile(data: ProfileUpdateRequest, user: UserInfo = Depends(re
 
 @router.post("/user/guest")
 async def guest_login():
-    """生成一个临时游客账号（自动分配 user_id）。"""
-    user = await create_guest_user()
-    token = create_access_token({"user_id": user.user_id})
-    response = JSONResponse(status_code=200, content={
-        "success": True,
-        "message": "游客登陆成功",
-        "user_id": user.user_id,
-        "token": token,
-    })
-    response.set_cookie(
-        key="token",
-        value=token,
-        httponly=True,
-        max_age=60 * 60 * 24 * 30,
+    """游客登录已禁用，请使用邮箱登录。"""
+    return JSONResponse(
+        status_code=403,
+        content={
+            "success": False,
+            "message": "游客登录已关闭，请使用邮箱验证登录",
+            "code": 2030,
+        },
     )
-    return response
+
+
+# ---------------------------------------------------------------------------
+# 用户自定义 API Key 与指定模型设置（信封加密，永不返回明文 Key）
+# ---------------------------------------------------------------------------
+
+@router.get("/user/api-keys")
+async def list_api_key_settings(user: UserInfo = Depends(require_user)):
+    """获取当前用户的 API Key 脱敏配置状态、支持平台列表与指定模型偏好。"""
+    payload = await get_user_api_key_settings(user)
+    return JSONResponse(status_code=200, content=payload)
+
+
+@router.post("/user/api-keys/key")
+async def upsert_single_api_key(
+    data: SaveUserApiKeyRequest,
+    user: UserInfo = Depends(require_user),
+):
+    """加密保存单个平台的 API Key，仅返回已保存状态与掩码前缀。"""
+    try:
+        saved = await save_user_api_key(
+            user_id=user.user_id,
+            model_source=data.model_source,
+            raw_api_key=data.api_key,
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=200,
+            content={"success": False, "message": str(exc), "code": 2041},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=200,
+            content={"success": False, "message": "保存 API Key 失败，请稍后重试", "code": 2042},
+        )
+
+    full_state = await get_user_api_key_settings(user)
+    full_state["saved_key"] = saved
+    full_state["message"] = "API Key 已加密保存"
+    return JSONResponse(status_code=200, content=full_state)
+
+
+@router.delete("/user/api-keys/key/{model_source}")
+async def remove_single_api_key(
+    model_source: str,
+    user: UserInfo = Depends(require_user),
+):
+    """删除单个平台的 API Key（立即清除数据库记录与内存缓存）。"""
+    del_info = await delete_user_api_key(user, model_source)
+    full_state = await get_user_api_key_settings(user)
+    full_state["delete_info"] = del_info
+    full_state["message"] = (
+        "已删除该 API Key，因必选模型缺少可用 Key 已自动切回官方默认模式"
+        if del_info.get("auto_disabled")
+        else "已删除该 API Key"
+    )
+    return JSONResponse(status_code=200, content=full_state)
+
+
+@router.put("/user/api-keys/preferences")
+async def save_api_key_preferences(
+    data: UpdateApiKeyPreferencesRequest,
+    user: UserInfo = Depends(require_user),
+):
+    """更新是否启用自定义 API Key 及 soulprout / pro / flash 指定模型配置。"""
+    try:
+        payload = await update_user_model_preferences(
+            user,
+            use_custom_key=data.use_custom_key,
+            custom_soulprout_source=data.custom_soulprout_source,
+            custom_soulprout_model=data.custom_soulprout_model,
+            custom_pro_source=data.custom_pro_source,
+            custom_pro_model=data.custom_pro_model,
+            custom_flash_source=data.custom_flash_source,
+            custom_flash_model=data.custom_flash_model,
+        )
+        payload["message"] = "配置已保存"
+        return JSONResponse(status_code=200, content=payload)
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=200,
+            content={"success": False, "message": str(exc), "code": 2043},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=200,
+            content={"success": False, "message": "保存配置失败，请稍后重试", "code": 2044},
+        )
 
 
 @router.post("/user/logout")
